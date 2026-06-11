@@ -45,6 +45,11 @@ export const features = new GrowthBook({
  * initialization completes.
  */
 export const init = new Promise<void>(async y => {
+  // Authority One spike: GrowthBook disabled — skip init, use defaults
+  if (!env.GROWTHBOOK_CLIENT_KEY) {
+    y()
+    return
+  }
   const res = await features.init({timeout: TIMEOUT_INIT})
   if (!res.success) {
     logger.warn('GrowthBook initialization failed or timed out', {
@@ -60,6 +65,8 @@ export const init = new Promise<void>(async y => {
  * provided account, if any.
  */
 export async function refresh({strategy}: {strategy: FeatureFetchStrategy}) {
+  // Authority One spike: GrowthBook disabled
+  if (!env.GROWTHBOOK_CLIENT_KEY) return
   await features.refreshFeatures({
     timeout:
       strategy === 'prefer-low-latency'
