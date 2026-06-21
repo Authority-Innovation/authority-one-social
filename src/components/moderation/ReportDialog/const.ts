@@ -3,10 +3,13 @@ import {
   ToolsOzoneReportDefs as OzoneReportDefs,
 } from '@atproto/api'
 
+import {AUTHORITY_ONE_SUPPORT_URL} from '#/lib/constants'
 import {type ParsedReportSubject} from '#/components/moderation/ReportDialog/types'
 
-export const DMCA_LINK = 'https://bsky.social/about/support/copyright'
-export const SUPPORT_PAGE = 'https://bsky.social/about/support'
+// Repointed off bsky.social onto our own support page.
+// TODO(legal): no dedicated copyright/DMCA page yet — falls back to support.
+export const DMCA_LINK = AUTHORITY_ONE_SUPPORT_URL
+export const SUPPORT_PAGE = AUTHORITY_ONE_SUPPORT_URL
 
 export const NEW_TO_OLD_REASON_MAPPING: Record<string, string> = {}
 

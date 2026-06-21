@@ -4,6 +4,7 @@ import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 import {type NativeStackScreenProps} from '@react-navigation/native-stack'
 
+import {AUTHORITY_ONE_SUPPORT_URL} from '#/lib/constants'
 import {type CommonNavigatorParams} from '#/lib/routes/types'
 import {useNotificationDeclarationQuery} from '#/state/queries/activity-subscriptions'
 import {useAppPasswordsQuery} from '#/state/queries/app-passwords'
@@ -127,7 +128,7 @@ export function PrivacyAndSecuritySettingsScreen({}: Props) {
                       label={_(
                         msg`Learn more about what is public on Bluesky.`,
                       )}
-                      to="https://blueskyweb.zendesk.com/hc/en-us/articles/15835264007693-Data-Privacy">
+                      to={AUTHORITY_ONE_SUPPORT_URL}>
                       <Trans>Learn more about what is public on Bluesky.</Trans>
                     </InlineLinkText>
                   </Admonition.Text>

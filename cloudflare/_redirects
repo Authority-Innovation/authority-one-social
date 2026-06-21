@@ -1,0 +1,5 @@
+# Cloudflare Pages SPA fallback for the "One" web app (react-navigation web routes).
+# Every unmatched path serves index.html with a 200 so client-side routing works
+# (e.g. /profile/handle, /notifications) and deep links / refreshes don't 404.
+# Cloudflare serves real static assets first; this only catches the misses.
+/*    /index.html    200

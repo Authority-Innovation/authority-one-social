@@ -3,6 +3,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
+import {AUTHORITY_ONE_SUPPORT_URL} from '#/lib/constants'
 import {usePalette} from '#/lib/hooks/usePalette'
 import {
   type CommonNavigatorParams,
@@ -28,13 +29,14 @@ export const CommunityGuidelinesScreen = (_props: Props) => {
       <ViewHeader title={_(msg`Community Guidelines`)} />
       <ScrollView style={[s.hContentRegion, pal.view]}>
         <View style={[s.p20]}>
+          {/* TODO(legal): no dedicated community-guidelines page yet — links to support. */}
           <Text style={pal.text}>
             <Trans>
-              The Community Guidelines have been moved to{' '}
+              For our community guidelines, please see{' '}
               <TextLink
                 style={pal.link}
-                href="https://bsky.social/about/support/community-guidelines"
-                text="bsky.social/about/support/community-guidelines"
+                href={AUTHORITY_ONE_SUPPORT_URL}
+                text={AUTHORITY_ONE_SUPPORT_URL}
               />
             </Trans>
           </Text>

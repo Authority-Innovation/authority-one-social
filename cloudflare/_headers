@@ -1,0 +1,11 @@
+# Cloudflare Pages headers for app.authority-one.com.
+# Long-cache the content-hashed webpack bundle; never cache the HTML shell so
+# new deploys are picked up immediately.
+/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/index.html
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache

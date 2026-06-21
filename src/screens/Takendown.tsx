@@ -10,6 +10,7 @@ import {useMutation} from '@tanstack/react-query'
 import {countGraphemes} from 'unicode-segmenter/grapheme'
 
 import {
+  AUTHORITY_ONE_TOS_URL,
   BLUESKY_MOD_SERVICE_HEADERS,
   MAX_REPORT_REASON_GRAPHEME_LENGTH,
 } from '#/lib/constants'
@@ -210,10 +211,10 @@ export function Takendown() {
                 <Trans>
                   Your account was found to be in violation of the{' '}
                   <SimpleInlineLinkText
-                    label={_(msg`Bluesky Social Terms of Service`)}
-                    to="https://bsky.social/about/support/tos"
+                    label={_(msg`Terms of Service`)}
+                    to={AUTHORITY_ONE_TOS_URL}
                     style={[a.text_md, a.leading_snug]}>
-                    Bluesky Social Terms of Service
+                    Terms of Service
                   </SimpleInlineLinkText>
                   . You have been sent an email outlining the specific violation
                   and suspension period, if applicable. You can appeal this

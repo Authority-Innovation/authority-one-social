@@ -3,6 +3,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
+import {AUTHORITY_ONE_TOS_URL} from '#/lib/constants'
 import {usePalette} from '#/lib/hooks/usePalette'
 import {
   type CommonNavigatorParams,
@@ -26,11 +27,11 @@ export const TermsOfServiceScreen = (_props: Props) => {
       <ScrollView style={[s.hContentRegion, pal.view]}>
         <View style={[s.p20]}>
           <Text style={pal.text}>
-            <Trans>The Terms of Service have been moved to</Trans>{' '}
+            <Trans>You can read the Terms of Service at</Trans>{' '}
             <TextLink
               style={pal.link}
-              href="https://bsky.social/about/support/tos"
-              text="bsky.social/about/support/tos"
+              href={AUTHORITY_ONE_TOS_URL}
+              text={AUTHORITY_ONE_TOS_URL}
             />
           </Text>
         </View>

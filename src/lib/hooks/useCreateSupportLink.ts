@@ -2,10 +2,14 @@ import {useCallback} from 'react'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 
+import {AUTHORITY_ONE_SUPPORT_URL} from '#/lib/constants'
 import {useSession} from '#/state/session'
 
-export const ZENDESK_SUPPORT_URL =
-  'https://blueskyweb.zendesk.com/hc/requests/new'
+// Repointed off Bluesky's Zendesk onto our own support page.
+// TODO(support): our support page is static, not a Zendesk ticket form, so the
+// tf_* prefill params below are ignored. Wire a real contact form if/when one
+// exists (and rename this constant once it's no longer Zendesk-shaped).
+export const ZENDESK_SUPPORT_URL = AUTHORITY_ONE_SUPPORT_URL
 
 export enum SupportCode {
   AA_DID = 'AA_DID',

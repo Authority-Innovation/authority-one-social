@@ -4,6 +4,11 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
+import {
+  AUTHORITY_ONE_PRIVACY_URL,
+  AUTHORITY_ONE_SUPPORT_URL,
+  AUTHORITY_ONE_TOS_URL,
+} from '#/lib/constants'
 import {useA11y} from '#/state/a11y'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
@@ -27,22 +32,23 @@ export function Content({state}: {state: PolicyUpdateState}) {
   const links = {
     terms: {
       overridePresentation: false,
-      to: `https://bsky.social/about/support/tos`,
+      to: AUTHORITY_ONE_TOS_URL,
       label: _(msg`Terms of Service`),
     },
     privacy: {
       overridePresentation: false,
-      to: `https://bsky.social/about/support/privacy-policy`,
+      to: AUTHORITY_ONE_PRIVACY_URL,
       label: _(msg`Privacy Policy`),
     },
+    // TODO(legal): no dedicated copyright/community pages yet — link to support.
     copyright: {
       overridePresentation: false,
-      to: `https://bsky.social/about/support/copyright`,
+      to: AUTHORITY_ONE_SUPPORT_URL,
       label: _(msg`Copyright Policy`),
     },
     guidelines: {
       overridePresentation: false,
-      to: `https://bsky.social/about/support/community-guidelines`,
+      to: AUTHORITY_ONE_SUPPORT_URL,
       label: _(msg`Community Guidelines`),
     },
     blog: {

@@ -12,7 +12,12 @@ import {useLingui} from '@lingui/react'
 import {Plural, Trans} from '@lingui/react/macro'
 import {StackActions, useNavigation} from '@react-navigation/native'
 
-import {FEEDBACK_FORM_URL, HELP_DESK_URL} from '#/lib/constants'
+import {
+  AUTHORITY_ONE_PRIVACY_URL,
+  AUTHORITY_ONE_TOS_URL,
+  FEEDBACK_FORM_URL,
+  HELP_DESK_URL,
+} from '#/lib/constants'
 import {type PressableScale} from '#/lib/custom-animations/PressableScale'
 import {useNavigationTabState} from '#/lib/hooks/useNavigationTabState'
 import {getTabState, TabState} from '#/lib/routes/helpers'
@@ -56,6 +61,7 @@ import {
   Message_Stroke2_Corner0_Rounded as Message,
   Message_Stroke2_Corner0_Rounded_Filled as MessageFilled,
 } from '#/components/icons/Message'
+import {Microphone_Stroke2_Corner0_Rounded as MicIcon} from '#/components/icons/Microphone'
 import {SettingsGear2_Stroke2_Corner0_Rounded as Settings} from '#/components/icons/SettingsGear2'
 import {
   UserCircle_Filled_Corner0_Rounded as UserCircleFilled,
@@ -280,6 +286,11 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     setDrawerOpen(false)
   }, [navigation, setDrawerOpen, ax])
 
+  const onPressAgentChat = useCallback(() => {
+    navigation.navigate('AgentChat', {})
+    setDrawerOpen(false)
+  }, [navigation, setDrawerOpen])
+
   const onPressBookmarks = useCallback(() => {
     ax.metric('nav:click', {item: 'saved', surface: 'drawer'})
     navigation.navigate('Bookmarks')
@@ -356,6 +367,7 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
               onPress={onPressNotifications}
             />
             <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
+            <AgentChatMenuItem onPress={onPressAgentChat} />
             <ListsMenuItem onPress={onPressLists} />
             <BookmarksMenuItem
               isActive={isAtBookmarks}
@@ -608,6 +620,20 @@ let ListsMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
 }
 ListsMenuItem = memo(ListsMenuItem)
 
+let AgentChatMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
+  const {_} = useLingui()
+  const t = useTheme()
+
+  return (
+    <MenuItem
+      icon={<MicIcon style={[t.atoms.text]} width={iconWidth} />}
+      label={_(msg`Talk to your agent`)}
+      onPress={onPress}
+    />
+  )
+}
+AgentChatMenuItem = memo(AgentChatMenuItem)
+
 let BookmarksMenuItem = ({
   isActive,
   onPress,
@@ -754,12 +780,12 @@ function ExtraLinks() {
       <InlineLinkText
         style={[a.text_md]}
         label={_(msg`Terms of Service`)}
-        to="https://bsky.social/about/support/tos">
+        to={AUTHORITY_ONE_TOS_URL}>
         <Trans>Terms of Service</Trans>
       </InlineLinkText>
       <InlineLinkText
         style={[a.text_md]}
-        to="https://bsky.social/about/support/privacy-policy"
+        to={AUTHORITY_ONE_PRIVACY_URL}
         label={_(msg`Privacy Policy`)}>
         <Trans>Privacy Policy</Trans>
       </InlineLinkText>

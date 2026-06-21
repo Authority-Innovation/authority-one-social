@@ -9,11 +9,44 @@ export const LOCAL_DEV_SERVICE =
 export const STAGING_SERVICE = 'https://staging.bsky.dev'
 export const BSKY_SERVICE = 'https://bsky.social'
 export const BSKY_SERVICE_DID = 'did:web:bsky.social'
-export const PUBLIC_BSKY_SERVICE = 'https://public.api.bsky.app'
-export const AUTHORITY_ONE_SERVICE = 'https://pds.authority-one.com'
+// Authority One: public (unauthenticated) AppView base URL. Override per-env via
+// EXPO_PUBLIC_APPVIEW_URL (set in Cloudflare Pages to https://appview.authority-one.com).
+// Falls back to Bluesky's public AppView so the local `pnpm web` dev flow is unchanged.
+export const PUBLIC_BSKY_SERVICE =
+  process.env.EXPO_PUBLIC_APPVIEW_URL || 'https://public.api.bsky.app'
+// Authority One: self-hosted PDS. Override per-env via EXPO_PUBLIC_PDS_URL.
+export const AUTHORITY_ONE_SERVICE =
+  process.env.EXPO_PUBLIC_PDS_URL || 'https://pds.authority-one.com'
 export const DEFAULT_SERVICE = AUTHORITY_ONE_SERVICE
-const HELP_DESK_LANG = 'en-us'
-export const HELP_DESK_URL = `https://blueskyweb.zendesk.com/hc/${HELP_DESK_LANG}`
+
+// Agent runtime (Cloudflare Worker): conversational chat agent + approval-gated actions.
+// Override per-env with EXPO_PUBLIC_AGENT_RUNTIME_URL (see src/lib/agent-runtime/config.ts).
+export const AGENT_RUNTIME_SERVICE =
+  'https://authority-one-agent-runtime.e-479.workers.dev'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Authority One legal / support links — single source of truth.
+//
+// All Terms / Privacy / Support / status links in the One app route through
+// these constants so the real URL only needs to be set in ONE place.
+//
+// TODO(legal): FINALIZE BEFORE PUBLIC BUILD.
+//   1. The pages live (as DRAFTS) in app-legal/ (terms / privacy / support) and
+//      have NOT been reviewed by a lawyer — see app-legal/README.md.
+//   2. The hosting domain + paths below are a PLACEHOLDER. Set
+//      AUTHORITY_ONE_LEGAL_BASE (and the /terms, /privacy, /support paths if they
+//      differ) to wherever app-legal/ ends up hosted, then this is done.
+//   3. There is no dedicated status page or community-guidelines page yet; both
+//      currently fall back to the support page (see below) — give them real URLs
+//      if/when they exist.
+// ─────────────────────────────────────────────────────────────────────────────
+export const AUTHORITY_ONE_LEGAL_BASE = 'https://authority-one.com'
+export const AUTHORITY_ONE_TOS_URL = `${AUTHORITY_ONE_LEGAL_BASE}/terms`
+export const AUTHORITY_ONE_PRIVACY_URL = `${AUTHORITY_ONE_LEGAL_BASE}/privacy`
+export const AUTHORITY_ONE_SUPPORT_URL = `${AUTHORITY_ONE_LEGAL_BASE}/support`
+
+// Was: https://blueskyweb.zendesk.com/hc/en-us — repointed to our support page.
+export const HELP_DESK_URL = AUTHORITY_ONE_SUPPORT_URL
 export const CHAT_SERVICE = 'https://api.bsky.chat'
 export const EMBED_SERVICE = 'https://embed.bsky.app'
 export const EMBED_SCRIPT = `${EMBED_SERVICE}/static/embed.js`
@@ -41,22 +74,15 @@ export const DISCOVER_DEBUG_DIDS: Record<string, true> = {
   'did:plc:2dzyut5lxna5ljiaasgeuffz': true, // darrin.bsky.team
 }
 
-const BASE_FEEDBACK_FORM_URL = `${HELP_DESK_URL}/requests/new`
-export function FEEDBACK_FORM_URL({
-  email,
-  handle,
-}: {
+// TODO(support): the old Zendesk feedback form (/requests/new + tf_* field
+// prefill) no longer applies. app-legal/support is a static page, not a ticket
+// form, so we just link to it and the email/handle prefill is dropped. Wire a
+// real contact/feedback form here if/when one exists.
+export function FEEDBACK_FORM_URL(_opts: {
   email?: string
   handle?: string
 }): string {
-  let str = BASE_FEEDBACK_FORM_URL
-  if (email) {
-    str += `?tf_anonymous_requester_email=${encodeURIComponent(email)}`
-    if (handle) {
-      str += `&tf_17205412673421=${encodeURIComponent(handle)}`
-    }
-  }
-  return str
+  return AUTHORITY_ONE_SUPPORT_URL
 }
 
 export const MAX_DISPLAY_NAME = 64
@@ -123,7 +149,9 @@ export function LINK_META_PROXY(_serviceUrl: string) {
   return PROD_LINK_META_PROXY
 }
 
-export const STATUS_PAGE_URL = 'https://status.bsky.app/'
+// TODO(infra): no dedicated One status page yet — falls back to support.
+// Was: https://status.bsky.app/
+export const STATUS_PAGE_URL = AUTHORITY_ONE_SUPPORT_URL
 
 // Hitslop constants
 export const createHitslop = (size: number): Insets => ({
@@ -220,14 +248,20 @@ export const urls = {
       searchTipsAndTricks: 'https://bsky.social/about/blog/05-31-2024-search',
     },
     support: {
-      findFriendsPrivacyPolicy:
-        'https://bsky.social/about/support/find-friends-privacy-policy',
+      // TODO(legal): no find-friends-specific policy yet — falls back to the
+      // main privacy policy. Give it its own URL if contact-sync ships.
+      findFriendsPrivacyPolicy: AUTHORITY_ONE_PRIVACY_URL,
     },
   },
 }
 
-export const PUBLIC_APPVIEW = 'https://api.bsky.app'
-export const PUBLIC_APPVIEW_DID = 'did:web:api.bsky.app'
+// Authority One: AppView base URL + DID. Override per-env via EXPO_PUBLIC_APPVIEW_URL
+// / EXPO_PUBLIC_APPVIEW_DID (Cloudflare Pages: https://appview.authority-one.com and
+// its did:web). Fallbacks keep the local `pnpm web` dev flow pointed at Bluesky's AppView.
+export const PUBLIC_APPVIEW =
+  process.env.EXPO_PUBLIC_APPVIEW_URL || 'https://api.bsky.app'
+export const PUBLIC_APPVIEW_DID =
+  process.env.EXPO_PUBLIC_APPVIEW_DID || 'did:web:api.bsky.app'
 export const PUBLIC_STAGING_APPVIEW_DID = 'did:web:api.staging.bsky.dev'
 
 export const DEV_ENV_APPVIEW = `http://localhost:2584` // always the same
@@ -256,9 +290,12 @@ export const BLUESKY_NOTIF_SERVICE_HEADERS = {
   'atproto-proxy': `${BLUESKY_PROXY_DID}#bsky_notif`,
 }
 
+// Repointed off bsky.social onto our own legal/support pages.
+// TODO(legal): no separate community-guidelines page yet — both community links
+// fall back to the support page; give them real URLs when those pages exist.
 export const webLinks = {
-  tos: `https://bsky.social/about/support/tos`,
-  privacy: `https://bsky.social/about/support/privacy-policy`,
-  community: `https://bsky.social/about/support/community-guidelines`,
-  communityDeprecated: `https://bsky.social/about/support/community-guidelines-deprecated`,
+  tos: AUTHORITY_ONE_TOS_URL,
+  privacy: AUTHORITY_ONE_PRIVACY_URL,
+  community: AUTHORITY_ONE_SUPPORT_URL,
+  communityDeprecated: AUTHORITY_ONE_SUPPORT_URL,
 }

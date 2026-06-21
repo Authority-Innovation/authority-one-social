@@ -3,6 +3,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
+import {AUTHORITY_ONE_SUPPORT_URL} from '#/lib/constants'
 import {usePalette} from '#/lib/hooks/usePalette'
 import {
   type CommonNavigatorParams,
@@ -25,13 +26,14 @@ export const CopyrightPolicyScreen = (_props: Props) => {
       <ViewHeader title={_(msg`Copyright Policy`)} />
       <ScrollView style={[s.hContentRegion, pal.view]}>
         <View style={[s.p20]}>
+          {/* TODO(legal): no dedicated copyright page yet — links to support. */}
           <Text style={pal.text}>
             <Trans>
-              The Copyright Policy has been moved to{' '}
+              For copyright matters, please see{' '}
               <TextLink
                 style={pal.link}
-                href="https://bsky.social/about/support/copyright"
-                text="bsky.social/about/support/copyright"
+                href={AUTHORITY_ONE_SUPPORT_URL}
+                text={AUTHORITY_ONE_SUPPORT_URL}
               />
             </Trans>
           </Text>

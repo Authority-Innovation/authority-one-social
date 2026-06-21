@@ -7,6 +7,8 @@ export type {NativeStackScreenProps} from '@react-navigation/native-stack'
 
 export type CommonNavigatorParams = {
   NotFound: undefined
+  // Authority One: conversational agent chat (voice + text) backed by the agent runtime.
+  AgentChat: {agent?: string}
   Lists: undefined
   Moderation: undefined
   ModerationModlists: undefined

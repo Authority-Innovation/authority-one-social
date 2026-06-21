@@ -3,6 +3,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
+import {AUTHORITY_ONE_PRIVACY_URL} from '#/lib/constants'
 import {usePalette} from '#/lib/hooks/usePalette'
 import {
   type CommonNavigatorParams,
@@ -27,11 +28,11 @@ export const PrivacyPolicyScreen = (_props: Props) => {
         <View style={[s.p20]}>
           <Text style={pal.text}>
             <Trans>
-              The Privacy Policy has been moved to{' '}
+              You can read the Privacy Policy at{' '}
               <TextLink
                 style={pal.link}
-                href="https://bsky.social/about/support/privacy-policy"
-                text="bsky.social/about/support/privacy-policy"
+                href={AUTHORITY_ONE_PRIVACY_URL}
+                text={AUTHORITY_ONE_PRIVACY_URL}
               />
             </Trans>
           </Text>

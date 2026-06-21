@@ -70,7 +70,9 @@ module.exports = function (_config) {
           NSCameraUsageDescription:
             'Used for profile pictures, posts, and other kinds of content.',
           NSMicrophoneUsageDescription:
-            'Used for posts and other kinds of content.',
+            'Used to talk to your agent by voice and for posts and other kinds of content.',
+          NSSpeechRecognitionUsageDescription:
+            'Used to transcribe your speech on-device so you can talk to your agent.',
           NSPhotoLibraryAddUsageDescription:
             'Used to save images to your library.',
           NSPhotoLibraryUsageDescription:
