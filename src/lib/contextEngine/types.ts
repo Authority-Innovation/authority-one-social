@@ -42,9 +42,32 @@ export interface Anchor {
 
 /** Local opt-in prefs + anchors. `enabled` defaults OFF. */
 export interface ContextPrefs {
+  /** Phase 1: when-in-use (foreground) capture opt-in. OFF by default. */
   enabled: boolean
+  /**
+   * Phase 1.5: SEPARATE, higher opt-in for all-day BACKGROUND place context
+   * (Always location + background updates). OFF by default and independent of
+   * `enabled` — turning it on requests the Always permission and starts background
+   * visit detection; turning it off stops it. Phase 1 foreground behavior is
+   * unaffected either way.
+   */
+  backgroundEnabled?: boolean
   home?: Anchor
   work?: Anchor
+}
+
+/**
+ * Phase 1.5 open-dwell state, persisted across background task wakes (the task is
+ * stateless between invocations). Conclusion-only — NO coordinates. `startAt` is when
+ * we arrived at this place; on departure (place change) we flush a ContextEvent with
+ * the elapsed dwell.
+ */
+export interface OpenDwell {
+  place: ContextPlace
+  placeRef?: string
+  confidence: number
+  /** Unix ms when this place dwell began. */
+  startAt: number
 }
 
 export interface Coords {

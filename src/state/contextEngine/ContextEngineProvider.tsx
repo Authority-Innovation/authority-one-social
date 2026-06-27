@@ -13,6 +13,7 @@ import {
   dwellMinutes,
   placeChanged,
   shouldCapture,
+  shouldCaptureBackground,
 } from '#/lib/contextEngine/derive'
 import {
   type ContextEvent,
@@ -21,6 +22,13 @@ import {
 } from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
 import {IS_NATIVE} from '#/env'
+import {
+  backgroundLocationSupported,
+  getBackgroundPermissionGranted,
+  requestBackgroundPermission,
+  startBackgroundUpdates,
+  stopBackgroundUpdates,
+} from './backgroundLocation'
 import {
   appendEvent,
   clearEvents,
@@ -52,6 +60,14 @@ interface ContextEngineApi {
   deleteEvent: (id: string) => void
   clearAll: () => void
   refresh: () => void
+  // ── Phase 1.5: all-day BACKGROUND place context (separate, higher opt-in) ──
+  /** Whether background place context is even possible on this platform. */
+  backgroundSupported: boolean
+  /** Always-location permission granted. */
+  backgroundPermissionGranted: boolean
+  /** True when background capture is actively running (opt-in + Always permission). */
+  backgroundActive: boolean
+  setBackgroundEnabled: (on: boolean) => void
 }
 
 const Context = createContext<ContextEngineApi>({
@@ -65,6 +81,10 @@ const Context = createContext<ContextEngineApi>({
   deleteEvent: () => {},
   clearAll: () => {},
   refresh: () => {},
+  backgroundSupported: false,
+  backgroundPermissionGranted: false,
+  backgroundActive: false,
+  setBackgroundEnabled: () => {},
 })
 
 function newId(at: number): string {
@@ -85,6 +105,9 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
   const [prefs, setPrefs] = useState<ContextPrefs>(DEFAULT_PREFS)
   const [events, setEvents] = useState<ContextEvent[]>([])
   const [permissionGranted, setPermissionGranted] = useState(false)
+  // Phase 1.5: Always-location permission, tracked separately from when-in-use.
+  const [backgroundPermissionGranted, setBackgroundPermissionGranted] =
+    useState(false)
 
   // Latest prefs for async mutators (avoids stale closures without effect churn).
   const prefsRef = useRef(prefs)
@@ -112,6 +135,14 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
         const perm = await Location.getForegroundPermissionsAsync().catch(() => null)
         if (!cancelled) setPermissionGranted(perm?.granted === true)
       }
+      // Phase 1.5: if background context was left on, re-check Always permission and
+      // (re)start the background updates so they survive an app/device restart.
+      if (IS_NATIVE && p.backgroundEnabled) {
+        const bg = await getBackgroundPermissionGranted()
+        if (cancelled) return
+        setBackgroundPermissionGranted(bg)
+        if (bg) void startBackgroundUpdates()
+      }
     })()
     return () => {
       cancelled = true
@@ -119,6 +150,10 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
   }, [])
 
   const active = shouldCapture({enabled: prefs.enabled, permissionGranted})
+  const backgroundActive = shouldCaptureBackground({
+    backgroundEnabled: prefs.backgroundEnabled === true,
+    backgroundPermissionGranted,
+  })
 
   const recordEvent = (ev: ContextEvent) => {
     void (async () => {
@@ -204,6 +239,24 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
     })()
   }
 
+  // Phase 1.5: the separate, higher background opt-in. Requests Always permission and
+  // starts/stops the OS background updates. Persists the intent even if permission is
+  // denied (the toggle then reads "on, needs permission"; backgroundActive stays false).
+  const setBackgroundEnabled = (on: boolean) => {
+    void (async () => {
+      if (on) {
+        const granted = IS_NATIVE ? await requestBackgroundPermission() : false
+        setBackgroundPermissionGranted(granted)
+        if (granted) await startBackgroundUpdates()
+      } else {
+        await stopBackgroundUpdates()
+      }
+      const next: ContextPrefs = {...prefsRef.current, backgroundEnabled: on}
+      setPrefs(next)
+      await savePrefs(next)
+    })()
+  }
+
   const setAnchor = (which: 'home' | 'work') => {
     void (async () => {
       if (!IS_NATIVE) return
@@ -274,6 +327,10 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
     deleteEvent,
     clearAll,
     refresh,
+    backgroundSupported: IS_NATIVE && backgroundLocationSupported(),
+    backgroundPermissionGranted,
+    backgroundActive,
+    setBackgroundEnabled,
   }
 
   return <Context.Provider value={value}>{children}</Context.Provider>

@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import {type ContextEvent, type ContextPrefs} from '#/lib/contextEngine/types'
+import {
+  type ContextEvent,
+  type ContextPrefs,
+  type OpenDwell,
+} from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
 
 /**
@@ -12,16 +16,24 @@ import {logger} from '#/logger'
 
 const PREFS_KEY = '@authorityOne/contextEngine/prefs'
 const EVENTS_KEY = '@authorityOne/contextEngine/events'
+// Phase 1.5: the open dwell, persisted so the (stateless) background task can compute
+// dwell across wakes. Conclusion-only, no coordinates.
+const OPEN_DWELL_KEY = '@authorityOne/contextEngine/openDwell'
 const MAX_EVENTS = 200
 
-export const DEFAULT_PREFS: ContextPrefs = {enabled: false}
+export const DEFAULT_PREFS: ContextPrefs = {enabled: false, backgroundEnabled: false}
 
 export async function loadPrefs(): Promise<ContextPrefs> {
   try {
     const raw = await AsyncStorage.getItem(PREFS_KEY)
     if (!raw) return DEFAULT_PREFS
     const p = JSON.parse(raw) as Partial<ContextPrefs>
-    return {enabled: p.enabled === true, home: p.home, work: p.work}
+    return {
+      enabled: p.enabled === true,
+      backgroundEnabled: p.backgroundEnabled === true,
+      home: p.home,
+      work: p.work,
+    }
   } catch {
     return DEFAULT_PREFS
   }
@@ -72,5 +84,40 @@ export async function clearEvents(): Promise<void> {
     await AsyncStorage.removeItem(EVENTS_KEY)
   } catch (e) {
     logger.warn('contextEngine: clearEvents failed', {safeMessage: String(e)})
+  }
+}
+
+// ── Phase 1.5: open-dwell persistence (background visit detection) ──────────────
+
+export async function loadOpenDwell(): Promise<OpenDwell | null> {
+  try {
+    const raw = await AsyncStorage.getItem(OPEN_DWELL_KEY)
+    if (!raw) return null
+    const d = JSON.parse(raw) as Partial<OpenDwell>
+    if (typeof d?.place !== 'string' || typeof d?.startAt !== 'number') return null
+    return {
+      place: d.place,
+      placeRef: d.placeRef,
+      confidence: typeof d.confidence === 'number' ? d.confidence : 0.2,
+      startAt: d.startAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function saveOpenDwell(dwell: OpenDwell): Promise<void> {
+  try {
+    await AsyncStorage.setItem(OPEN_DWELL_KEY, JSON.stringify(dwell))
+  } catch (e) {
+    logger.warn('contextEngine: saveOpenDwell failed', {safeMessage: String(e)})
+  }
+}
+
+export async function clearOpenDwell(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(OPEN_DWELL_KEY)
+  } catch (e) {
+    logger.warn('contextEngine: clearOpenDwell failed', {safeMessage: String(e)})
   }
 }

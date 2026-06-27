@@ -58,6 +58,7 @@ describe('prefs', () => {
     })
     expect(await loadPrefs()).toEqual({
       enabled: true,
+      backgroundEnabled: false,
       home: {lat: 1, lng: 2, label: 'Home'},
       work: undefined,
     })

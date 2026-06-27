@@ -5,6 +5,7 @@ import {
   type ContextPrefs,
   type Coords,
   type NormalizedGeocode,
+  type OpenDwell,
 } from './types'
 
 /**
@@ -119,4 +120,63 @@ export function shouldCapture(state: {
   permissionGranted: boolean
 }): boolean {
   return state.enabled === true && state.permissionGranted === true
+}
+
+/**
+ * Phase 1.5 BACKGROUND opt-in gate. The all-day background path captures NOTHING
+ * unless the (separate, higher) background opt-in is explicitly on AND the Always
+ * permission is granted. Checked both before starting background updates and inside
+ * the background task itself (defence in depth), and tested to guarantee "nothing
+ * captured in the background when off".
+ */
+export function shouldCaptureBackground(state: {
+  backgroundEnabled: boolean
+  backgroundPermissionGranted: boolean
+}): boolean {
+  return (
+    state.backgroundEnabled === true &&
+    state.backgroundPermissionGranted === true
+  )
+}
+
+/**
+ * Phase 1.5 visit-style dwell transition (PURE). Given the currently-open dwell and a
+ * fresh place conclusion, decide what to record:
+ *   - SAME place  -> nothing to record; keep the open dwell running.
+ *   - NEW place   -> flush the previous dwell as a ContextEvent (with its elapsed
+ *                    minutes), then open a fresh dwell at the new place.
+ * Mirrors the Phase 1 foreground flush logic, but as a stateless step so the
+ * background task can drive it across wakes using only the persisted open dwell.
+ * `idFor` injects id generation so this stays deterministic + testable.
+ */
+export function advanceDwell(
+  open: OpenDwell | null,
+  conclusion: {place: ContextPlace; placeRef?: string; confidence: number},
+  now: number,
+  idFor: (at: number) => string,
+): {events: ContextEvent[]; open: OpenDwell} {
+  const nextOpen: OpenDwell = {
+    place: conclusion.place,
+    placeRef: conclusion.placeRef,
+    confidence: conclusion.confidence,
+    startAt: now,
+  }
+  if (!placeChanged(open, conclusion)) {
+    // Still at the same place — keep the existing dwell running (or open one if none).
+    return {events: [], open: open ?? nextOpen}
+  }
+  const events: ContextEvent[] = []
+  if (open) {
+    events.push(
+      buildContextEvent({
+        id: idFor(now),
+        at: now,
+        place: open.place,
+        placeRef: open.placeRef,
+        confidence: open.confidence,
+        durationMin: dwellMinutes(open.startAt, now),
+      }),
+    )
+  }
+  return {events, open: nextOpen}
 }
