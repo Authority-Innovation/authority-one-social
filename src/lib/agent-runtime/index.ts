@@ -59,6 +59,7 @@ export {
   groupOp,
   groupOpBody,
   type GroupOpInput,
+  isCreatorIdentity,
   makeThreadTransport,
   memberOpFor,
   normalizeMember,

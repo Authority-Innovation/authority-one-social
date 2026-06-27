@@ -1182,7 +1182,7 @@ msgstr ""
 msgid "Add muted words and tags"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:180
+#: src/screens/Chats/GroupManageScreen.tsx:188
 #: src/screens/Messages/components/MessagesListGroupInfoPanel.tsx:133
 #: src/screens/Messages/components/MessagesListGroupInfoPanel.tsx:172
 #: src/screens/ProfileList/AboutSection.tsx:72
@@ -1285,7 +1285,7 @@ msgstr ""
 msgid "Additional details (limit 300 characters)"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:277
+#: src/screens/Chats/GroupManageScreen.tsx:285
 #: src/screens/Messages/ConversationSettings/Member.tsx:94
 #: src/screens/Messages/ConversationSettings/MemberMenu.tsx:155
 msgid "Admin"
@@ -1346,7 +1346,7 @@ msgid "Age assurance only takes a few minutes"
 msgstr ""
 
 #: src/screens/Chats/AddPeople.tsx:124
-#: src/screens/Chats/GroupManageScreen.tsx:272
+#: src/screens/Chats/GroupManageScreen.tsx:280
 msgid "Agent persona"
 msgstr "Agent persona"
 
@@ -3321,7 +3321,7 @@ msgstr ""
 msgid "Could not copy – please try again"
 msgstr "Could not copy – please try again"
 
-#: src/screens/Chats/GroupManageScreen.tsx:242
+#: src/screens/Chats/GroupManageScreen.tsx:250
 msgid "Could not delete the group."
 msgstr "Could not delete the group."
 
@@ -3388,11 +3388,11 @@ msgstr ""
 msgid "Could not remove member."
 msgstr "Could not remove member."
 
-#: src/screens/Chats/GroupManageScreen.tsx:89
+#: src/screens/Chats/GroupManageScreen.tsx:92
 msgid "Could not remove the member."
 msgstr "Could not remove the member."
 
-#: src/screens/Chats/GroupManageScreen.tsx:79
+#: src/screens/Chats/GroupManageScreen.tsx:82
 msgid "Could not rename the group."
 msgstr "Could not rename the group."
 
@@ -3675,7 +3675,7 @@ msgstr ""
 
 #: src/components/dms/MessageOverlays.tsx:184
 #: src/components/PostControls/PostMenu/PostMenuItems.tsx:812
-#: src/screens/Chats/GroupManageScreen.tsx:234
+#: src/screens/Chats/GroupManageScreen.tsx:242
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:275
 #: src/screens/Settings/AppPasswords.tsx:213
 #: src/screens/StarterPack/StarterPackScreen.tsx:615
@@ -3727,8 +3727,8 @@ msgstr ""
 msgid "Delete for me"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:189
-#: src/screens/Chats/GroupManageScreen.tsx:196
+#: src/screens/Chats/GroupManageScreen.tsx:197
+#: src/screens/Chats/GroupManageScreen.tsx:204
 msgid "Delete group"
 msgstr "Delete group"
 
@@ -3764,7 +3764,7 @@ msgstr ""
 msgid "Delete starter pack?"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:232
+#: src/screens/Chats/GroupManageScreen.tsx:240
 msgid "Delete this group?"
 msgstr "Delete this group?"
 
@@ -5832,8 +5832,8 @@ msgstr "Group is locked"
 
 #: src/components/dms/InitiateChatFlow.tsx:264
 #: src/components/dms/InitiateChatFlow.tsx:600
-#: src/screens/Chats/GroupManageScreen.tsx:148
-#: src/screens/Chats/GroupManageScreen.tsx:154
+#: src/screens/Chats/GroupManageScreen.tsx:156
+#: src/screens/Chats/GroupManageScreen.tsx:162
 #: src/screens/Chats/NewGroupScreen.tsx:91
 #: src/screens/Messages/ConversationSettings/prompts.tsx:42
 msgid "Group name"
@@ -5844,7 +5844,7 @@ msgstr "Group name"
 msgid "Group name is too long. {MAX_GROUP_NAME_GRAPHEME_LENGTH, plural, other {The maximum number of characters is #.}}"
 msgstr "Group name is too long. {MAX_GROUP_NAME_GRAPHEME_LENGTH, plural, other {The maximum number of characters is #.}}"
 
-#: src/screens/Chats/GroupManageScreen.tsx:76
+#: src/screens/Chats/GroupManageScreen.tsx:79
 msgid "Group renamed."
 msgstr "Group renamed."
 
@@ -6363,7 +6363,7 @@ msgstr ""
 msgid "In order to provide an age-appropriate experience, we need to know your birthdate. This is a one-time thing, and your data will be kept private."
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:111
+#: src/screens/Chats/GroupManageScreen.tsx:114
 msgid "In this group"
 msgstr "In this group"
 
@@ -6567,7 +6567,7 @@ msgid "Invite your friends to follow your favorite feeds and people"
 msgstr ""
 
 #: src/screens/Chats/AddPeople.tsx:224
-#: src/screens/Chats/GroupManageScreen.tsx:279
+#: src/screens/Chats/GroupManageScreen.tsx:287
 #: src/screens/Messages/ConversationSettings/MemberMenu.tsx:155
 msgid "Invited"
 msgstr "Invited"
@@ -6805,7 +6805,7 @@ msgid "Learn more."
 msgstr ""
 
 #: src/components/dms/LeaveConvoPrompt.tsx:59
-#: src/screens/Chats/GroupManageScreen.tsx:220
+#: src/screens/Chats/GroupManageScreen.tsx:228
 #: src/screens/Messages/ConversationSettings/index.tsx:590
 msgid "Leave"
 msgstr ""
@@ -6841,8 +6841,8 @@ msgctxt "button"
 msgid "Leave conversation"
 msgstr "Leave conversation"
 
-#: src/screens/Chats/GroupManageScreen.tsx:201
-#: src/screens/Chats/GroupManageScreen.tsx:208
+#: src/screens/Chats/GroupManageScreen.tsx:209
+#: src/screens/Chats/GroupManageScreen.tsx:216
 msgid "Leave group"
 msgstr "Leave group"
 
@@ -6855,7 +6855,7 @@ msgstr "Leave group chat"
 msgid "Leave this group chat"
 msgstr "Leave this group chat"
 
-#: src/screens/Chats/GroupManageScreen.tsx:218
+#: src/screens/Chats/GroupManageScreen.tsx:226
 msgid "Leave this group?"
 msgstr "Leave this group?"
 
@@ -8720,7 +8720,7 @@ msgid "Our moderators have reviewed reports and decided to disable your access t
 msgstr ""
 
 #: src/components/dialogs/StarterPackDialog.tsx:384
-#: src/screens/Chats/GroupManageScreen.tsx:275
+#: src/screens/Chats/GroupManageScreen.tsx:283
 msgid "Owner"
 msgstr "Owner"
 
@@ -9627,8 +9627,8 @@ msgstr ""
 #: src/components/StarterPack/Wizard/WizardListCard.tsx:106
 #: src/components/StarterPack/Wizard/WizardListCard.tsx:113
 #: src/screens/Bookmarks/index.tsx:265
-#: src/screens/Chats/GroupManageScreen.tsx:306
-#: src/screens/Chats/GroupManageScreen.tsx:313
+#: src/screens/Chats/GroupManageScreen.tsx:314
+#: src/screens/Chats/GroupManageScreen.tsx:321
 #: src/screens/Messages/ConversationSettings/Member.tsx:162
 #: src/screens/Messages/ConversationSettings/prompts.tsx:170
 #: src/screens/Moderation/index.tsx:477
@@ -9823,11 +9823,11 @@ msgstr ""
 msgid "Removed verification"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:169
+#: src/screens/Chats/GroupManageScreen.tsx:177
 msgid "Rename"
 msgstr "Rename"
 
-#: src/screens/Chats/GroupManageScreen.tsx:162
+#: src/screens/Chats/GroupManageScreen.tsx:170
 msgid "Rename group"
 msgstr "Rename group"
 
@@ -12386,7 +12386,7 @@ msgstr ""
 msgid "This moderation was applied to the entire user account and will appear on all posts."
 msgstr "This moderation was applied to the entire user account and will appear on all posts."
 
-#: src/screens/Chats/GroupManageScreen.tsx:233
+#: src/screens/Chats/GroupManageScreen.tsx:241
 msgid "This permanently deletes the group for everyone. This can't be undone."
 msgstr "This permanently deletes the group for everyone. This can't be undone."
 
@@ -13685,7 +13685,7 @@ msgstr ""
 msgid "We apply the highest privacy standards, and never share or sell your contact information."
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:138
+#: src/screens/Chats/GroupManageScreen.tsx:146
 msgid "We can't show who's in this group yet."
 msgstr "We can't show who's in this group yet."
 
@@ -14522,7 +14522,7 @@ msgstr ""
 msgid "You'll stay updated with these feeds"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:219
+#: src/screens/Chats/GroupManageScreen.tsx:227
 msgid "You'll stop receiving its messages. You can be re-invited later."
 msgstr "You'll stop receiving its messages. You can be re-invited later."
 

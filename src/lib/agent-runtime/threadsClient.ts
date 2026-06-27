@@ -172,7 +172,10 @@ export function pickThreadId(json: unknown): string | undefined {
 export function normalizeMember(raw: unknown): ThreadMember | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
-  const id = str(r.id) ?? str(r.did) ?? str(r.memberId)
+  // The runtime stores ONE identifier per member and projects the other as null
+  // ({did, handle} with one possibly null), so fall back to the handle for the id —
+  // otherwise a handle-only member has no id and gets dropped (empty roster).
+  const id = str(r.id) ?? str(r.did) ?? str(r.memberId) ?? str(r.handle)
   if (!id) return null
   const kind: GroupMemberKind = r.kind === 'persona' ? 'persona' : 'person'
   const role = r.role
@@ -216,6 +219,23 @@ export function normalizeRoster(json: unknown): ThreadRoster {
     creatorDid: str(j.creatorDid) ?? str(j.creator) ?? str(j.ownerDid),
     members: normalizeMembers(json),
   }
+}
+
+/**
+ * Does the current user match a thread's creator id? The runtime resolves actor identity
+ * as handle > did > sub (_ownerIdFrom), so `creatorId` may be a DID *or* a HANDLE. A user
+ * whose did is a `did:plc:...` will never equal a handle-form creatorId, so compare
+ * against BOTH the user's did and handle, case-insensitively. PURE + tested.
+ */
+export function isCreatorIdentity(
+  creatorId: string | undefined,
+  identity: {did?: string; handle?: string},
+): boolean {
+  const c = creatorId?.trim().toLowerCase()
+  if (!c) return false
+  const did = identity.did?.trim().toLowerCase()
+  const handle = identity.handle?.trim().toLowerCase()
+  return c === did || c === handle
 }
 
 /**
@@ -513,7 +533,11 @@ export async function renameThread(
     return {ok: true, signedOut: false}
   } catch (e) {
     logger.warn('threads: rename failed', {safeMessage: String(e)})
-    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
   }
 }
 
@@ -537,7 +561,11 @@ export async function removeThreadMember(
     return {ok: true, signedOut: false}
   } catch (e) {
     logger.warn('threads: remove member failed', {safeMessage: String(e)})
-    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
   }
 }
 
@@ -560,7 +588,11 @@ export async function deleteThread(
     return {ok: true, signedOut: false}
   } catch (e) {
     logger.warn('threads: delete failed', {safeMessage: String(e)})
-    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
   }
 }
 

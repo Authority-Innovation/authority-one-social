@@ -8,6 +8,7 @@ import {
   fetchThreads,
   groupOp,
   groupOpBody,
+  isCreatorIdentity,
   makeThreadTransport,
   memberOpFor,
   normalizeMembers,
@@ -220,6 +221,41 @@ describe('normalizeRoster (pure)', () => {
   it('defaults to an empty roster with no creatorDid', () => {
     expect(normalizeRoster({})).toEqual({creatorDid: undefined, members: []})
     expect(normalizeRoster(null)).toEqual({creatorDid: undefined, members: []})
+  })
+
+  it('keeps a handle-only member (did null) — falls the id back to handle', () => {
+    const out = normalizeRoster({
+      creatorDid: 'alice.test',
+      members: [
+        {did: null, handle: 'alice.test', name: 'Alice', role: 'owner'},
+        {did: 'did:bob', handle: null, role: 'member'},
+      ],
+    })
+    // The handle-only member is NOT dropped (the old id chain had no handle fallback).
+    expect(out.members).toHaveLength(2)
+    expect(out.members[0].id).toBe('alice.test')
+    expect(out.members[1].id).toBe('did:bob')
+  })
+})
+
+describe('isCreatorIdentity (creator gating)', () => {
+  const me = {did: 'did:plc:me', handle: 'me.pds.authority-one.com'}
+
+  it('matches when creatorId is the user did', () => {
+    expect(isCreatorIdentity('did:plc:me', me)).toBe(true)
+  })
+
+  it('matches when creatorId is the user HANDLE (the live-bug case)', () => {
+    expect(isCreatorIdentity('me.pds.authority-one.com', me)).toBe(true)
+    // case-insensitive
+    expect(isCreatorIdentity('ME.PDS.Authority-One.com', me)).toBe(true)
+  })
+
+  it('does not match a different identity, or with no creatorId', () => {
+    expect(isCreatorIdentity('did:plc:other', me)).toBe(false)
+    expect(isCreatorIdentity('someone.else', me)).toBe(false)
+    expect(isCreatorIdentity(undefined, me)).toBe(false)
+    expect(isCreatorIdentity('', me)).toBe(false)
   })
 })
 

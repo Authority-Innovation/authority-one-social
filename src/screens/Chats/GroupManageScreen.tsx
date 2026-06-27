@@ -3,7 +3,7 @@ import {ActivityIndicator, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
-import {type ThreadMember} from '#/lib/agent-runtime'
+import {isCreatorIdentity, type ThreadMember} from '#/lib/agent-runtime'
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
@@ -53,10 +53,13 @@ export function GroupManageScreen({route}: Props) {
   const membersQuery = useThreadMembersQuery(threadId)
   const roster = membersQuery.data ?? {members: []}
   const members = roster.members
-  const isCreator =
-    !!currentAccount?.did &&
-    !!roster.creatorDid &&
-    currentAccount.did === roster.creatorDid
+  // The runtime returns creatorDid as a DID *or* a handle (actor identity is resolved
+  // handle > did > sub), so match the current user against BOTH their did and handle —
+  // otherwise a creator stored by handle never matches their did:plc and loses admin.
+  const isCreator = isCreatorIdentity(roster.creatorDid, {
+    did: currentAccount?.did,
+    handle: currentAccount?.handle,
+  })
 
   // Locally-shown group name (header + rename field); updated on a successful rename so
   // the screen reflects it immediately without waiting for the list to refetch.
@@ -117,21 +120,26 @@ export function GroupManageScreen({route}: Props) {
               </View>
             ) : members.length > 0 ? (
               <View style={[a.gap_2xs, a.pt_2xs]}>
-                {members.map(m => (
-                  <MemberRow
-                    key={`${m.kind}:${m.id}`}
-                    member={m}
-                    // Creator can remove person members, but not themselves.
-                    onRemove={
-                      isCreator &&
-                      m.kind === 'person' &&
-                      m.id !== roster.creatorDid
-                        ? () => onRemove(m)
-                        : undefined
-                    }
-                    removing={removeMember.isPending}
-                  />
-                ))}
+                {members.map(m => {
+                  // The creator can remove person members, but not themselves — and the
+                  // creator row may be identified by did OR handle, so match on both.
+                  const memberIsCreator = isCreatorIdentity(roster.creatorDid, {
+                    did: m.id,
+                    handle: m.handle,
+                  })
+                  return (
+                    <MemberRow
+                      key={`${m.kind}:${m.id}`}
+                      member={m}
+                      onRemove={
+                        isCreator && m.kind === 'person' && !memberIsCreator
+                          ? () => onRemove(m)
+                          : undefined
+                      }
+                      removing={removeMember.isPending}
+                    />
+                  )
+                })}
               </View>
             ) : (
               <Text style={[a.text_sm, a.py_xs, t.atoms.text_contrast_low]}>
@@ -143,7 +151,12 @@ export function GroupManageScreen({route}: Props) {
           {/* Creator-only: rename the group. */}
           {isCreator ? (
             <View
-              style={[a.gap_xs, a.pt_lg, a.border_t, t.atoms.border_contrast_low]}>
+              style={[
+                a.gap_xs,
+                a.pt_lg,
+                a.border_t,
+                t.atoms.border_contrast_low,
+              ]}>
               <TextField.LabelText>
                 <Trans>Group name</Trans>
               </TextField.LabelText>
@@ -175,7 +188,12 @@ export function GroupManageScreen({route}: Props) {
 
           {/* Add people. */}
           <View
-            style={[a.gap_md, a.pt_lg, a.border_t, t.atoms.border_contrast_low]}>
+            style={[
+              a.gap_md,
+              a.pt_lg,
+              a.border_t,
+              t.atoms.border_contrast_low,
+            ]}>
             <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
               <Trans>Add people</Trans>
             </Text>
