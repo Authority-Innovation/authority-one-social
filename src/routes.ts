@@ -56,6 +56,7 @@ export const router = new Router<AllNavigatableRoutes>({
   PersonaSettings: '/settings/persona',
   ContextEngineSettings: '/settings/context-engine',
   ContextLog: '/settings/context-engine/log',
+  PhotoContextSettings: '/settings/photo-context',
   SavedFeeds: '/settings/saved-feeds',
   AccountSettings: '/settings/account',
   AutomationLabelSettings: '/settings/automation-label',

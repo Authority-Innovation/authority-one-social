@@ -8,7 +8,8 @@ export type {NativeStackScreenProps} from '@react-navigation/native-stack'
 export type CommonNavigatorParams = {
   NotFound: undefined
   // Authority One: conversational agent chat (voice + text) backed by the agent runtime.
-  AgentChat: {agent?: string}
+  // sharedPhotoUri/Mime: a photo handed from Photo Context to pre-attach for vision.
+  AgentChat: {agent?: string; sharedPhotoUri?: string; sharedPhotoMime?: string}
   // Authority One: Supabase account layer (sign in / up) that authorizes the agent channel.
   AuthorityAccount: undefined
   // Authority One: "For You" / Discover — TikTok-style vertical feed of localized sports content.
@@ -60,6 +61,8 @@ export type CommonNavigatorParams = {
   // Authority One: Context Engine (Phase 1, location-only) opt-in + log.
   ContextEngineSettings: undefined
   ContextLog: undefined
+  // Authority One: Photo Context (v1, metadata-only) opt-in.
+  PhotoContextSettings: undefined
   AccountSettings: undefined
   AutomationLabelSettings: undefined
   PrivacyAndSecuritySettings: undefined
