@@ -48,5 +48,6 @@ export {
   setActivePersona,
   updatePersona,
 } from './personasClient'
+export {postPhotoContext} from './photoContextClient'
 export {bytesToBase64, fetchBobAudioBase64} from './tts'
 export * from './types'

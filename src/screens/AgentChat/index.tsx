@@ -98,16 +98,13 @@ export function AgentChatScreen({route}: Props) {
   // Single in-progress image attachment for the next turn (one image per message).
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null)
 
-  // Pick an image and upload it to R2 immediately, showing a local preview while the
-  // upload is in flight. Resilient: a cancelled picker or a failed upload never throws
-  // or blocks the composer — a failed upload leaves a removable "failed" preview.
-  const onAttach = useCallback(async () => {
-    try {
-      const picked = await openPicker({selectionLimit: 1})
-      const img = picked?.[0]
-      if (!img) return
-      setAttachment({previewUri: img.path, mime: img.mime, uploading: true})
-      const url = await uploadChatImage({uri: img.path, mime: img.mime})
+  // Upload a local image to R2, showing a preview while in flight. Shared by the
+  // composer attach button and the Photo Context "share a photo with Bob" entry.
+  // Resilient: a failed upload leaves a removable "failed" preview, never crashes.
+  const attachLocalImage = useCallback(
+    async (uri: string, mime: string) => {
+      setAttachment({previewUri: uri, mime, uploading: true})
+      const url = await uploadChatImage({uri, mime})
       setAttachment(prev =>
         prev
           ? url
@@ -120,11 +117,38 @@ export function AgentChatScreen({route}: Props) {
           type: 'warning',
         })
       }
+    },
+    [],
+  )
+
+  // Pick an image from the library, then upload + attach it.
+  const onAttach = useCallback(async () => {
+    try {
+      const picked = await openPicker({selectionLimit: 1})
+      const img = picked?.[0]
+      if (!img) return
+      await attachLocalImage(img.path, img.mime)
     } catch {
       // Picker cancelled / permission denied — never crash the composer.
       setAttachment(null)
     }
-  }, [])
+  }, [attachLocalImage])
+
+  // Explicit per-photo share: when navigated here with a shared photo (from Photo
+  // Context), pre-attach it so the owner reviews + sends it through the normal flow.
+  const sharedPhotoUri = route.params?.sharedPhotoUri
+  const sharedPhotoMime = route.params?.sharedPhotoMime
+  useEffect(() => {
+    if (sharedPhotoUri) {
+      // attachLocalImage flips the attachment into an "uploading" preview then awaits
+      // the upload; syncing that external (picker/upload) state into the composer on
+      // navigation is the intended effect.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void attachLocalImage(sharedPhotoUri, sharedPhotoMime ?? 'image/jpeg')
+    }
+    // Run once per shared-photo param; attachLocalImage is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedPhotoUri, sharedPhotoMime])
 
   const removeAttachment = useCallback(() => setAttachment(null), [])
 

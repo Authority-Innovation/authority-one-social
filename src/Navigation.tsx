@@ -122,6 +122,7 @@ import {LanguageSettingsScreen} from '#/screens/Settings/LanguageSettings'
 import {LegacyNotificationSettingsScreen} from '#/screens/Settings/LegacyNotificationSettings'
 import {NotificationSettingsScreen} from '#/screens/Settings/NotificationSettings'
 import {PersonaSettingsScreen} from '#/screens/Settings/PersonaSettings'
+import {PhotoContextSettingsScreen} from '#/screens/Settings/PhotoContext'
 import {PrivacyAndSecuritySettingsScreen} from '#/screens/Settings/PrivacyAndSecuritySettings'
 import {SettingsScreen} from '#/screens/Settings/Settings'
 import {ThreadPreferencesScreen} from '#/screens/Settings/ThreadPreferences'
@@ -439,6 +440,14 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         getComponent={() => ContextLogScreen}
         options={{
           title: title(msg`Context log`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="PhotoContextSettings"
+        getComponent={() => PhotoContextSettingsScreen}
+        options={{
+          title: title(msg`Photo Context`),
           requireAuth: true,
         }}
       />
