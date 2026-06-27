@@ -76,6 +76,9 @@ import {createNativeStackNavigatorWithAuth} from '#/view/shell/createNativeStack
 import {AgentChatScreen} from '#/screens/AgentChat'
 import {AuthorityAccountScreen} from '#/screens/AuthorityAccount'
 import {BookmarksScreen} from '#/screens/Bookmarks'
+import {ChatListScreen} from '#/screens/Chats/ChatListScreen'
+import {GroupManageScreen} from '#/screens/Chats/GroupManageScreen'
+import {NewGroupScreen} from '#/screens/Chats/NewGroupScreen'
 import {SharedPreferencesTesterScreen} from '#/screens/E2E/SharedPreferencesTesterScreen'
 import {FindContactsFlowScreen} from '#/screens/FindContactsFlowScreen'
 import {ForYouScreen} from '#/screens/ForYou'
@@ -177,6 +180,21 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="AgentChat"
         getComponent={() => AgentChatScreen}
         options={{title: title(msg`Talk to your agent`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="ChatList"
+        getComponent={() => ChatListScreen}
+        options={{title: title(msg`Chats`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="NewGroup"
+        getComponent={() => NewGroupScreen}
+        options={{title: title(msg`New group`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="GroupManage"
+        getComponent={() => GroupManageScreen}
+        options={{title: title(msg`Manage group`), requireAuth: true}}
       />
       <Stack.Screen
         name="AuthorityAccount"

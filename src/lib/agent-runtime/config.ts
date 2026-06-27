@@ -11,6 +11,18 @@ export const AGENT_RUNTIME_BASE_URL =
 export const CHAT_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/chat`
 
 /**
+ * Multi-chat (threads + groups) endpoints. Owner-scoped, same /app auth pattern. The
+ * collection endpoint lists/creates threads; per-thread sub-paths are built from the id.
+ */
+export const THREADS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/threads`
+export const threadMessagesUrl = (id: string) =>
+  `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/messages`
+export const threadSendUrl = (id: string) =>
+  `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/send`
+export const threadGroupUrl = (id: string) =>
+  `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/group`
+
+/**
  * Chat image upload endpoint (owner-scoped). The app uploads a picked image here;
  * the runtime hosts it in R2 (the same `putRawImage` path the inbound SMS/MMS media
  * uses) and returns the public URL, which the app then sends with the chat turn so

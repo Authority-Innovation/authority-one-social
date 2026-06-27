@@ -293,6 +293,11 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     setDrawerOpen(false)
   }, [navigation, setDrawerOpen])
 
+  const onPressChats = useCallback(() => {
+    navigation.navigate('ChatList')
+    setDrawerOpen(false)
+  }, [navigation, setDrawerOpen])
+
   const onPressForYou = useCallback(() => {
     navigation.navigate('ForYou')
     setDrawerOpen(false)
@@ -374,6 +379,7 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
             {/* Authority One agent — promoted to the top so it's the first,
                 obvious entry point (was previously buried mid-list). */}
             <AgentChatMenuItem onPress={onPressAgentChat} />
+            <ChatsMenuItem onPress={onPressChats} />
             <ForYouMenuItem onPress={onPressForYou} />
             <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
             <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
@@ -401,6 +407,7 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
                 independent of the atproto/PDS login — so expose both even when
                 there's no social session. */}
             <AgentChatMenuItem onPress={onPressAgentChat} />
+            <ChatsMenuItem onPress={onPressChats} />
             <ForYouMenuItem onPress={onPressForYou} />
             <AuthorityAccountMenuItem onPress={onPressAuthorityAccount} />
             <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
@@ -656,6 +663,20 @@ let AgentChatMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
   )
 }
 AgentChatMenuItem = memo(AgentChatMenuItem)
+
+let ChatsMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
+  const t = useTheme()
+  // Custom (non-Bluesky) item: plain literal so it never depends on the compiled
+  // Lingui catalog (which would otherwise render as a raw message ID).
+  return (
+    <MenuItem
+      icon={<Message style={[t.atoms.text]} width={iconWidth} />}
+      label="Chats"
+      onPress={onPress}
+    />
+  )
+}
+ChatsMenuItem = memo(ChatsMenuItem)
 
 let ForYouMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
   const t = useTheme()
