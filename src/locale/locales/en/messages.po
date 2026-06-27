@@ -918,7 +918,7 @@ msgid "Abusive or discriminatory behavior"
 msgstr ""
 
 #. Accept a chat request
-#: src/screens/Chats/ChatListScreen.tsx:247
+#: src/screens/Chats/ChatListScreen.tsx:251
 #: src/screens/Messages/components/RequestButtons.tsx:287
 msgid "Accept"
 msgstr ""
@@ -1044,7 +1044,7 @@ msgstr ""
 msgid "Accounts with a scalloped blue check mark <0><1/></0> can verify others. These trusted verifiers are selected by Bluesky."
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/index.tsx:186
+#: src/screens/Settings/PersonaSettings/index.tsx:205
 msgid "Active"
 msgstr "Active"
 
@@ -1063,9 +1063,9 @@ msgstr ""
 #: src/components/dialogs/StarterPackDialog.tsx:376
 #: src/components/dialogs/StarterPackDialog.tsx:388
 #: src/components/dms/AddMembersFlow.tsx:410
-#: src/screens/Chats/AddPeople.tsx:79
-#: src/screens/Chats/AddPeople.tsx:101
-#: src/screens/Chats/AddPeople.tsx:120
+#: src/screens/Chats/AddPeople.tsx:82
+#: src/screens/Chats/AddPeople.tsx:106
+#: src/screens/Chats/AddPeople.tsx:125
 #: src/view/com/modals/UserAddRemoveLists.tsx:236
 msgid "Add"
 msgstr ""
@@ -1182,7 +1182,7 @@ msgstr ""
 msgid "Add muted words and tags"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:83
+#: src/screens/Chats/GroupManageScreen.tsx:180
 #: src/screens/Messages/components/MessagesListGroupInfoPanel.tsx:133
 #: src/screens/Messages/components/MessagesListGroupInfoPanel.tsx:172
 #: src/screens/ProfileList/AboutSection.tsx:72
@@ -1250,7 +1250,7 @@ msgstr ""
 msgid "Add your birthdate"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:208
+#: src/screens/Chats/AddPeople.tsx:224
 msgid "Added"
 msgstr "Added"
 
@@ -1285,7 +1285,7 @@ msgstr ""
 msgid "Additional details (limit 300 characters)"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:139
+#: src/screens/Chats/GroupManageScreen.tsx:277
 #: src/screens/Messages/ConversationSettings/Member.tsx:94
 #: src/screens/Messages/ConversationSettings/MemberMenu.tsx:155
 msgid "Admin"
@@ -1345,12 +1345,12 @@ msgstr ""
 msgid "Age assurance only takes a few minutes"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:119
-#: src/screens/Chats/GroupManageScreen.tsx:134
+#: src/screens/Chats/AddPeople.tsx:124
+#: src/screens/Chats/GroupManageScreen.tsx:272
 msgid "Agent persona"
 msgstr "Agent persona"
 
-#: src/screens/Chats/AddPeople.tsx:111
+#: src/screens/Chats/AddPeople.tsx:116
 msgid "Agent personas"
 msgstr "Agent personas"
 
@@ -1629,7 +1629,7 @@ msgstr ""
 msgid "An mockup of a iPhone showing the Bluesky app open to the profile of a verified user with a blue checkmark next to their display name."
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:205
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:224
 msgid "An optional authored backstory and routine. The agent draws on it when “bring to life” is on."
 msgstr "An optional authored backstory and routine. The agent draws on it when “bring to life” is on."
 
@@ -1959,7 +1959,7 @@ msgstr ""
 msgid "Back to Chats"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:263
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:282
 msgid "Backstory"
 msgstr "Backstory"
 
@@ -2224,7 +2224,7 @@ msgstr ""
 msgid "Breaking site rules"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:232
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:251
 msgid "Bring this persona to life"
 msgstr "Bring this persona to life"
 
@@ -3321,6 +3321,14 @@ msgstr ""
 msgid "Could not copy – please try again"
 msgstr "Could not copy – please try again"
 
+#: src/screens/Chats/GroupManageScreen.tsx:242
+msgid "Could not delete the group."
+msgstr "Could not delete the group."
+
+#: src/screens/Settings/PersonaSettings/index.tsx:159
+msgid "Could not delete the persona."
+msgstr "Could not delete the persona."
+
 #: src/features/inviteFriends/InviteFriendsDialogInner.tsx:74
 msgid "Could not download – please try again"
 msgstr "Could not download – please try again"
@@ -3380,6 +3388,14 @@ msgstr ""
 msgid "Could not remove member."
 msgstr "Could not remove member."
 
+#: src/screens/Chats/GroupManageScreen.tsx:89
+msgid "Could not remove the member."
+msgstr "Could not remove the member."
+
+#: src/screens/Chats/GroupManageScreen.tsx:79
+msgid "Could not rename the group."
+msgstr "Could not rename the group."
+
 #. placeholder {0}: cleanError(error)
 #: src/components/activity-notifications/SubscribeProfileDialog.tsx:295
 msgid "Could not save changes: {0}"
@@ -3388,6 +3404,10 @@ msgstr ""
 #: src/features/inviteFriends/InviteFriendsDialogInner.tsx:60
 msgid "Could not share – please try again"
 msgstr "Could not share – please try again"
+
+#: src/screens/Settings/PersonaSettings/index.tsx:102
+msgid "Could not switch persona."
+msgstr "Could not switch persona."
 
 #: src/state/queries/notifications/settings.ts:49
 msgid "Could not update notification settings"
@@ -3407,7 +3427,7 @@ msgstr ""
 msgid "Couldn’t load GIFs"
 msgstr "Couldn’t load GIFs"
 
-#: src/screens/Settings/PersonaSettings/index.tsx:104
+#: src/screens/Settings/PersonaSettings/index.tsx:116
 msgid "Couldn’t refresh personas. Showing the last known list."
 msgstr "Couldn’t refresh personas. Showing the last known list."
 
@@ -3433,7 +3453,7 @@ msgstr ""
 msgid "Create a list from this starter pack"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/index.tsx:270
+#: src/screens/Settings/PersonaSettings/index.tsx:289
 msgid "Create a persona to give your agent a name, voice, and personality."
 msgstr "Create a persona to give your agent a name, voice, and personality."
 
@@ -3527,9 +3547,9 @@ msgstr ""
 msgid "Create or modify an invite link for this group chat"
 msgstr "Create or modify an invite link for this group chat"
 
-#: src/screens/Settings/PersonaSettings/index.tsx:118
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:103
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:395
+#: src/screens/Settings/PersonaSettings/index.tsx:130
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:117
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:420
 msgid "Create persona"
 msgstr "Create persona"
 
@@ -3633,7 +3653,7 @@ msgstr ""
 msgid "Debug panel"
 msgstr ""
 
-#: src/screens/Chats/ChatListScreen.tsx:258
+#: src/screens/Chats/ChatListScreen.tsx:262
 msgid "Decline"
 msgstr "Decline"
 
@@ -3655,6 +3675,7 @@ msgstr ""
 
 #: src/components/dms/MessageOverlays.tsx:184
 #: src/components/PostControls/PostMenu/PostMenuItems.tsx:812
+#: src/screens/Chats/GroupManageScreen.tsx:234
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:275
 #: src/screens/Settings/AppPasswords.tsx:213
 #: src/screens/StarterPack/StarterPackScreen.tsx:615
@@ -3706,6 +3727,11 @@ msgstr ""
 msgid "Delete for me"
 msgstr ""
 
+#: src/screens/Chats/GroupManageScreen.tsx:189
+#: src/screens/Chats/GroupManageScreen.tsx:196
+msgid "Delete group"
+msgstr "Delete group"
+
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:199
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:202
 msgid "Delete list"
@@ -3737,6 +3763,10 @@ msgstr ""
 #: src/screens/StarterPack/StarterPackScreen.tsx:681
 msgid "Delete starter pack?"
 msgstr ""
+
+#: src/screens/Chats/GroupManageScreen.tsx:232
+msgid "Delete this group?"
+msgstr "Delete this group?"
 
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:270
 msgid "Delete this list?"
@@ -4242,7 +4272,7 @@ msgstr "Edit name"
 msgid "Edit People"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:103
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:117
 msgid "Edit persona"
 msgstr "Edit persona"
 
@@ -5066,7 +5096,7 @@ msgstr ""
 msgid "Fetch update"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:202
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:221
 msgid "Fictional life"
 msgstr "Fictional life"
 
@@ -5137,7 +5167,7 @@ msgstr ""
 msgid "Find my friends"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:60
+#: src/screens/Chats/AddPeople.tsx:63
 msgid "Find people"
 msgstr "Find people"
 
@@ -5442,7 +5472,7 @@ msgstr "Four message bubbles representing a group chat. First message: \"Did you
 msgid "Free your feed"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:93
+#: src/screens/Chats/AddPeople.tsx:96
 msgid "Friends"
 msgstr "Friends"
 
@@ -5802,6 +5832,8 @@ msgstr "Group is locked"
 
 #: src/components/dms/InitiateChatFlow.tsx:264
 #: src/components/dms/InitiateChatFlow.tsx:600
+#: src/screens/Chats/GroupManageScreen.tsx:148
+#: src/screens/Chats/GroupManageScreen.tsx:154
 #: src/screens/Chats/NewGroupScreen.tsx:91
 #: src/screens/Messages/ConversationSettings/prompts.tsx:42
 msgid "Group name"
@@ -5812,11 +5844,15 @@ msgstr "Group name"
 msgid "Group name is too long. {MAX_GROUP_NAME_GRAPHEME_LENGTH, plural, other {The maximum number of characters is #.}}"
 msgstr "Group name is too long. {MAX_GROUP_NAME_GRAPHEME_LENGTH, plural, other {The maximum number of characters is #.}}"
 
-#: src/screens/Chats/ChatListScreen.tsx:115
+#: src/screens/Chats/GroupManageScreen.tsx:76
+msgid "Group renamed."
+msgstr "Group renamed."
+
+#: src/screens/Chats/ChatListScreen.tsx:117
 msgid "Groups"
 msgstr "Groups"
 
-#: src/screens/Chats/ChatListScreen.tsx:139
+#: src/screens/Chats/ChatListScreen.tsx:141
 msgid "Groups are unavailable right now."
 msgstr "Groups are unavailable right now."
 
@@ -5889,7 +5925,7 @@ msgstr ""
 msgid "Hate speech"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:299
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:318
 msgid "Haunts"
 msgstr "Haunts"
 
@@ -6103,7 +6139,7 @@ msgstr ""
 msgid "Home"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:282
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:301
 msgid "Home base"
 msgstr "Home base"
 
@@ -6129,7 +6165,7 @@ msgstr ""
 msgid "How should we open this link?"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:183
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:202
 msgid "How the agent should sound and behave. Applied server-side to the system prompt."
 msgstr "How the agent should sound and behave. Applied server-side to the system prompt."
 
@@ -6327,7 +6363,7 @@ msgstr ""
 msgid "In order to provide an age-appropriate experience, we need to know your birthdate. This is a one-time thing, and your data will be kept private."
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:59
+#: src/screens/Chats/GroupManageScreen.tsx:111
 msgid "In this group"
 msgstr "In this group"
 
@@ -6449,7 +6485,7 @@ msgid "Invalid Verification Code"
 msgstr ""
 
 #: src/components/contacts/screens/ViewMatches.tsx:587
-#: src/screens/Chats/AddPeople.tsx:79
+#: src/screens/Chats/AddPeople.tsx:82
 msgid "Invite"
 msgstr ""
 
@@ -6530,17 +6566,17 @@ msgstr "Invite your friends"
 msgid "Invite your friends to follow your favorite feeds and people"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:208
-#: src/screens/Chats/GroupManageScreen.tsx:141
+#: src/screens/Chats/AddPeople.tsx:224
+#: src/screens/Chats/GroupManageScreen.tsx:279
 #: src/screens/Messages/ConversationSettings/MemberMenu.tsx:155
 msgid "Invited"
 msgstr "Invited"
 
-#: src/screens/Chats/ChatListScreen.tsx:236
+#: src/screens/Chats/ChatListScreen.tsx:240
 msgid "Invited you to join"
 msgstr "Invited you to join"
 
-#: src/screens/Chats/ChatListScreen.tsx:103
+#: src/screens/Chats/ChatListScreen.tsx:104
 msgid "Invites"
 msgstr "Invites"
 
@@ -6769,6 +6805,7 @@ msgid "Learn more."
 msgstr ""
 
 #: src/components/dms/LeaveConvoPrompt.tsx:59
+#: src/screens/Chats/GroupManageScreen.tsx:220
 #: src/screens/Messages/ConversationSettings/index.tsx:590
 msgid "Leave"
 msgstr ""
@@ -6804,7 +6841,8 @@ msgctxt "button"
 msgid "Leave conversation"
 msgstr "Leave conversation"
 
-#: src/screens/Chats/GroupManageScreen.tsx:97
+#: src/screens/Chats/GroupManageScreen.tsx:201
+#: src/screens/Chats/GroupManageScreen.tsx:208
 msgid "Leave group"
 msgstr "Leave group"
 
@@ -6816,6 +6854,10 @@ msgstr "Leave group chat"
 #: src/screens/Messages/ConversationSettings/index.tsx:589
 msgid "Leave this group chat"
 msgstr "Leave this group chat"
+
+#: src/screens/Chats/GroupManageScreen.tsx:218
+msgid "Leave this group?"
+msgstr "Leave this group?"
 
 #: src/components/dialogs/LinkWarning.tsx:83
 #: src/components/dialogs/LinkWarning.tsx:91
@@ -7197,7 +7239,7 @@ msgstr ""
 msgid "Make sure this is where you intend to go!"
 msgstr ""
 
-#: src/screens/Chats/ChatListScreen.tsx:210
+#: src/screens/Chats/ChatListScreen.tsx:214
 msgid "Manage"
 msgstr "Manage"
 
@@ -7613,7 +7655,7 @@ msgid "My starter pack"
 msgstr "My starter pack"
 
 #: src/components/dialogs/lists/CreateOrEditListDialog.tsx:416
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:110
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:124
 msgid "Name"
 msgstr ""
 
@@ -7882,7 +7924,7 @@ msgstr "No GIFs found for \"{query}\"."
 msgid "No GIFs to show right now. Try again in a moment."
 msgstr "No GIFs to show right now. Try again in a moment."
 
-#: src/screens/Chats/ChatListScreen.tsx:141
+#: src/screens/Chats/ChatListScreen.tsx:143
 msgid "No groups yet. Tap “New” to start one."
 msgstr "No groups yet. Tap “New” to start one."
 
@@ -7909,7 +7951,7 @@ msgstr ""
 msgid "No longer following {0}"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:87
+#: src/screens/Chats/AddPeople.tsx:90
 msgid "No matches"
 msgstr "No matches"
 
@@ -7958,11 +8000,11 @@ msgstr ""
 msgid "No one can send messages"
 msgstr "No one can send messages"
 
-#: src/screens/Chats/AddPeople.tsx:113
+#: src/screens/Chats/AddPeople.tsx:118
 msgid "No personas"
 msgstr "No personas"
 
-#: src/screens/Settings/PersonaSettings/index.tsx:267
+#: src/screens/Settings/PersonaSettings/index.tsx:286
 msgid "No personas yet"
 msgstr "No personas yet"
 
@@ -8047,7 +8089,7 @@ msgstr "No translation received from your device."
 msgid "No video posts yet"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:128
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:142
 msgid "No voices available yet."
 msgstr "No voices available yet."
 
@@ -8677,7 +8719,7 @@ msgid "Our moderators have reviewed reports and decided to disable your access t
 msgstr ""
 
 #: src/components/dialogs/StarterPackDialog.tsx:384
-#: src/screens/Chats/GroupManageScreen.tsx:137
+#: src/screens/Chats/GroupManageScreen.tsx:275
 msgid "Owner"
 msgstr "Owner"
 
@@ -8775,7 +8817,7 @@ msgstr "People I follow can request to join"
 msgid "People you follow"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:95
+#: src/screens/Chats/AddPeople.tsx:98
 msgid "People you follow appear here"
 msgstr "People you follow appear here"
 
@@ -8792,13 +8834,13 @@ msgid "Person toggle"
 msgstr ""
 
 #: src/Navigation.tsx:444
-#: src/screens/Settings/PersonaSettings/index.tsx:69
+#: src/screens/Settings/PersonaSettings/index.tsx:71
 #: src/screens/Settings/Settings.tsx:232
 #: src/screens/Settings/Settings.tsx:235
 msgid "Persona"
 msgstr "Persona"
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:170
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:189
 msgid "Personality"
 msgstr "Personality"
 
@@ -8806,7 +8848,7 @@ msgstr "Personality"
 msgid "Personalize the message"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/index.tsx:249
+#: src/screens/Settings/PersonaSettings/index.tsx:268
 msgid "Personas unavailable"
 msgstr "Personas unavailable"
 
@@ -9584,6 +9626,8 @@ msgstr ""
 #: src/components/StarterPack/Wizard/WizardListCard.tsx:106
 #: src/components/StarterPack/Wizard/WizardListCard.tsx:113
 #: src/screens/Bookmarks/index.tsx:265
+#: src/screens/Chats/GroupManageScreen.tsx:306
+#: src/screens/Chats/GroupManageScreen.tsx:313
 #: src/screens/Messages/ConversationSettings/Member.tsx:162
 #: src/screens/Messages/ConversationSettings/prompts.tsx:170
 #: src/screens/Moderation/index.tsx:477
@@ -9777,6 +9821,14 @@ msgstr ""
 #: src/components/verification/VerificationRemovePrompt.tsx:32
 msgid "Removed verification"
 msgstr ""
+
+#: src/screens/Chats/GroupManageScreen.tsx:169
+msgid "Rename"
+msgstr "Rename"
+
+#: src/screens/Chats/GroupManageScreen.tsx:162
+msgid "Rename group"
+msgstr "Rename group"
 
 #: src/components/dialogs/MutedWords.tsx:541
 msgid "Renew"
@@ -10233,7 +10285,7 @@ msgstr ""
 #: src/screens/SavedFeeds.tsx:124
 #: src/screens/SavedFeeds.tsx:311
 #: src/screens/SavedFeeds.tsx:315
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:395
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:420
 #: src/view/com/composer/Composer.tsx:1451
 #: src/view/com/composer/drafts/DraftsButton.tsx:125
 msgid "Save changes"
@@ -10367,7 +10419,7 @@ msgstr ""
 msgid "Search @{0}'s posts"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:65
+#: src/screens/Chats/AddPeople.tsx:68
 msgid "Search by name or handle"
 msgstr "Search by name or handle"
 
@@ -10441,7 +10493,7 @@ msgstr ""
 msgid "Search my posts"
 msgstr ""
 
-#: src/screens/Chats/AddPeople.tsx:64
+#: src/screens/Chats/AddPeople.tsx:67
 msgid "Search people"
 msgstr "Search people"
 
@@ -11164,7 +11216,7 @@ msgstr "Sign in to request access to this group chat."
 msgid "Sign in to view post"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/index.tsx:252
+#: src/screens/Settings/PersonaSettings/index.tsx:271
 msgid "Sign in to your Authority One account and make sure the agent runtime is reachable. Your agent keeps working with its default name and voice in the meantime."
 msgstr "Sign in to your Authority One account and make sure the agent runtime is reachable. Your agent keeps working with its default name and voice in the meantime."
 
@@ -12333,6 +12385,10 @@ msgstr ""
 msgid "This moderation was applied to the entire user account and will appear on all posts."
 msgstr "This moderation was applied to the entire user account and will appear on all posts."
 
+#: src/screens/Chats/GroupManageScreen.tsx:233
+msgid "This permanently deletes the group for everyone. This can't be undone."
+msgstr "This permanently deletes the group for everyone. This can't be undone."
+
 #: src/components/dms/MessagesListBlockedFooter.tsx:84
 msgid "This person is blocking you"
 msgstr "This person is blocking you"
@@ -13094,7 +13150,7 @@ msgstr ""
 msgid "Uploading video..."
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/index.tsx:215
+#: src/screens/Settings/PersonaSettings/index.tsx:234
 msgid "Use"
 msgstr "Use"
 
@@ -13593,11 +13649,11 @@ msgstr ""
 msgid "Visit your notification settings"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:124
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:138
 msgid "Voice"
 msgstr "Voice"
 
-#: src/screens/Settings/PersonaSettings/index.tsx:193
+#: src/screens/Settings/PersonaSettings/index.tsx:212
 msgid "Voice: {voiceName}"
 msgstr "Voice: {voiceName}"
 
@@ -13628,7 +13684,7 @@ msgstr ""
 msgid "We apply the highest privacy standards, and never share or sell your contact information."
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:74
+#: src/screens/Chats/GroupManageScreen.tsx:138
 msgid "We can't show who's in this group yet."
 msgstr "We can't show who's in this group yet."
 
@@ -13835,7 +13891,7 @@ msgstr ""
 msgid "We've confirmed your age assurance status. You can now close this dialog."
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:368
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:387
 msgid "Weekly rhythm"
 msgstr "Weekly rhythm"
 
@@ -14464,6 +14520,10 @@ msgstr ""
 #: src/screens/StarterPack/StarterPackLandingScreen.tsx:281
 msgid "You'll stay updated with these feeds"
 msgstr ""
+
+#: src/screens/Chats/GroupManageScreen.tsx:219
+msgid "You'll stop receiving its messages. You can be re-invited later."
+msgstr "You'll stop receiving its messages. You can be re-invited later."
 
 #: src/components/dialogs/nuxs/GroupChatsAnnouncement.tsx:205
 msgid "You’re in control"
