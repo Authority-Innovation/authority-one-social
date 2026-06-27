@@ -203,6 +203,16 @@ export const RECOMMENDED_SAVED_FEEDS: Pick<
   'type' | 'value' | 'pinned'
 >[] = [DISCOVER_SAVED_FEED, TIMELINE_SAVED_FEED]
 
+// Authority One — Phase 2 personalized ("For You") feed generator.
+// The at-uri of the app.bsky.feed.generator RECORD published by
+// authority-one-feedgen/scripts/publish-feed-generator.mjs
+// (at://<creator-did>/app.bsky.feed.generator/<rkey>). Set at build time via
+// EXPO_PUBLIC_PERSONALIZED_FEED_URI; empty string = feature off (helper no-ops).
+// The feed renders through the existing CustomFeedAPI path: a feedDesc of
+// `feedgen|${PERSONALIZED_FEED_URI}` (see post-feed.ts) with zero app-core changes.
+export const PERSONALIZED_FEED_URI: string =
+  process.env.EXPO_PUBLIC_PERSONALIZED_FEED_URI || ''
+
 export const KNOWN_SHUTDOWN_FEEDS = [
   'at://did:plc:wqowuobffl66jv3kpsvo7ak4/app.bsky.feed.generator/the-algorithm', // for you by skygaze
 ]

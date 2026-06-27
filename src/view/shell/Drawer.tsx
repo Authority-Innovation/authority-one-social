@@ -31,6 +31,7 @@ import {useUnreadNotifications} from '#/state/queries/notifications/unread'
 import {useProfileQuery} from '#/state/queries/profile'
 import {type SessionAccount, useSession} from '#/state/session'
 import {useSetDrawerOpen} from '#/state/shell'
+import {useSupabaseSession} from '#/state/supabase'
 import {formatCount} from '#/view/com/util/numeric/format'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {NavSignupCard} from '#/view/shell/NavSignupCard'
@@ -53,6 +54,7 @@ import {
   HomeOpen_Filled_Corner0_Rounded as HomeFilled,
   HomeOpen_Stoke2_Corner0_Rounded as Home,
 } from '#/components/icons/HomeOpen'
+import {Key_Stroke2_Corner2_Rounded as Key} from '#/components/icons/Key'
 import {
   MagnifyingGlass_Filled_Stroke2_Corner0_Rounded as MagnifyingGlassFilled,
   MagnifyingGlass_Stroke2_Corner0_Rounded as MagnifyingGlass,
@@ -291,6 +293,16 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     setDrawerOpen(false)
   }, [navigation, setDrawerOpen])
 
+  const onPressForYou = useCallback(() => {
+    navigation.navigate('ForYou')
+    setDrawerOpen(false)
+  }, [navigation, setDrawerOpen])
+
+  const onPressAuthorityAccount = useCallback(() => {
+    navigation.navigate('AuthorityAccount')
+    setDrawerOpen(false)
+  }, [navigation, setDrawerOpen])
+
   const onPressBookmarks = useCallback(() => {
     ax.metric('nav:click', {item: 'saved', surface: 'drawer'})
     navigation.navigate('Bookmarks')
@@ -359,6 +371,10 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
 
         {hasSession ? (
           <>
+            {/* Authority One agent — promoted to the top so it's the first,
+                obvious entry point (was previously buried mid-list). */}
+            <AgentChatMenuItem onPress={onPressAgentChat} />
+            <ForYouMenuItem onPress={onPressForYou} />
             <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
             <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
             <ChatMenuItem isActive={isAtMessages} onPress={onPressMessages} />
@@ -367,7 +383,6 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
               onPress={onPressNotifications}
             />
             <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
-            <AgentChatMenuItem onPress={onPressAgentChat} />
             <ListsMenuItem onPress={onPressLists} />
             <BookmarksMenuItem
               isActive={isAtBookmarks}
@@ -377,10 +392,17 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
               isActive={isAtMyProfile}
               onPress={onPressProfile}
             />
+            <AuthorityAccountMenuItem onPress={onPressAuthorityAccount} />
             <SettingsMenuItem onPress={onPressSettings} />
           </>
         ) : (
           <>
+            {/* The agent + its account work off the Supabase session, which is
+                independent of the atproto/PDS login — so expose both even when
+                there's no social session. */}
+            <AgentChatMenuItem onPress={onPressAgentChat} />
+            <ForYouMenuItem onPress={onPressForYou} />
+            <AuthorityAccountMenuItem onPress={onPressAuthorityAccount} />
             <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
             <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
             <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
@@ -621,18 +643,57 @@ let ListsMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
 ListsMenuItem = memo(ListsMenuItem)
 
 let AgentChatMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
-  const {_} = useLingui()
   const t = useTheme()
 
+  // Custom (non-Bluesky) item: use a plain literal so it never depends on the
+  // compiled Lingui catalog (which would otherwise render as a raw message ID).
   return (
     <MenuItem
       icon={<MicIcon style={[t.atoms.text]} width={iconWidth} />}
-      label={_(msg`Talk to your agent`)}
+      label="Talk to your agent"
       onPress={onPress}
     />
   )
 }
 AgentChatMenuItem = memo(AgentChatMenuItem)
+
+let ForYouMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
+  const t = useTheme()
+  // Custom (non-Bluesky) item: plain literal so it never depends on the compiled
+  // Lingui catalog (which would otherwise render as a raw message ID).
+  return (
+    <MenuItem
+      icon={<Hashtag style={[t.atoms.text]} width={iconWidth} />}
+      label="For You"
+      onPress={onPress}
+    />
+  )
+}
+ForYouMenuItem = memo(ForYouMenuItem)
+
+let AuthorityAccountMenuItem = ({
+  onPress,
+}: {
+  onPress: () => void
+}): React.ReactNode => {
+  const t = useTheme()
+  // Reflect signed-in state in the label so the drawer communicates it directly.
+  const {status} = useSupabaseSession()
+  // Custom (non-Bluesky) item: plain literals so labels never depend on the
+  // compiled Lingui catalog (which would otherwise render as a raw message ID).
+  return (
+    <MenuItem
+      icon={<Key style={[t.atoms.text]} width={iconWidth} />}
+      label={
+        status === 'signedIn'
+          ? 'Authority One account'
+          : 'Sign in to Authority One'
+      }
+      onPress={onPress}
+    />
+  )
+}
+AuthorityAccountMenuItem = memo(AuthorityAccountMenuItem)
 
 let BookmarksMenuItem = ({
   isActive,

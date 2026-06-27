@@ -5,22 +5,91 @@ import {getSupabaseAccessToken} from './authToken'
 import {CHAT_ENDPOINT, DEFAULT_AGENT} from './config'
 import {
   type ApprovalAction,
-  type ChatStreamEvent,
+  type ChatTurnResult,
+  type PendingAction,
   type SendMessageRequest,
 } from './types'
+
+/**
+ * Why a turn failed.
+ *
+ * - `transport` — the request/stream never completed: connection dropped, fetch
+ *   threw, or the runtime returned no readable body. The message is a raw
+ *   network string ("fetch failed: The network connection was lost") that must
+ *   NOT be shown as the agent's reply; the UI should offer a quiet retry.
+ * - `server` — a server/auth condition that DID come back from (or about) the
+ *   runtime and carries meaningful copy for the user: 401/403 auth, a non-OK
+ *   HTTP status, a server-sent SSE `error` event, or signed-out. These stay
+ *   visible as a real error message, distinct from transport blips.
+ */
+export type ChatErrorKind = 'transport' | 'server'
 
 export interface StreamHandlers {
   /** Called for every incremental text chunk; concatenate to render live. */
   onTextDelta: (delta: string) => void
-  /** Called when the runtime attaches approval actions to this turn. */
+  /** Called when the runtime attaches approval actions to this turn (from `pending`). */
   onActions?: (actions: ApprovalAction[]) => void
-  /** Called once when the turn completes successfully. */
-  onDone?: (messageId?: string) => void
-  /** Called on any error (network, auth, or server-reported). */
-  onError: (message: string) => void
+  /**
+   * Called once when the turn settles. `result` carries the AUTHORITATIVE final
+   * `message` (use it as the bubble's final text), `status`, `pending`, and
+   * `mediaUrls`. May be undefined only for a stream that ended without a `done`
+   * frame (treat the accumulated text as final in that case).
+   */
+  onDone?: (result?: ChatTurnResult) => void
+  /**
+   * Called on any error. `kind` lets the caller treat a dropped connection
+   * (`transport`) differently from a server/auth-reported error (`server`) —
+   * e.g. show a retry affordance for the former instead of rendering the raw
+   * network string as a chat bubble. Defaults to `server` when omitted so older
+   * callers keep their previous behavior.
+   */
+  onError: (message: string, kind?: ChatErrorKind) => void
+}
+
+/** Map the runtime's `pending` wire item to the app's approval-card UI type. */
+function toApprovalAction(p: PendingAction): ApprovalAction {
+  return {
+    id: p.id,
+    kind: p.kind,
+    title: p.summary ?? p.label ?? p.kind,
+    detail: p.ref,
+  }
+}
+
+/** Normalize a `done`/JSON body into a ChatTurnResult with safe defaults. */
+function toTurnResult(data: any): ChatTurnResult {
+  return {
+    message: typeof data?.message === 'string' ? data.message : '',
+    status: data?.status ?? 'answered',
+    pending: Array.isArray(data?.pending) ? data.pending : [],
+    mediaUrls: Array.isArray(data?.mediaUrls) ? data.mediaUrls : [],
+  }
+}
+
+/** Surface a settled turn: emit any approval actions, then the done result. */
+function emitDone(result: ChatTurnResult, handlers: StreamHandlers): void {
+  if (result.pending.length > 0) {
+    handlers.onActions?.(result.pending.map(toApprovalAction))
+  }
+  handlers.onDone?.(result)
 }
 
 export class AgentAuthError extends Error {}
+
+/**
+ * Shown when there is no Supabase session, so no bearer can be attached. Auth IS
+ * wired (see `#/state/supabase`); this means the user is simply signed out.
+ */
+export const SIGNED_OUT_MESSAGE = 'Sign in at /account to chat with your agent.'
+
+/**
+ * Shown when a bearer WAS attached but the runtime answered 401/403. The client
+ * token is fine — this is a server-side condition: the agent runtime hasn't been
+ * deployed with Supabase JWT verification (SUPABASE_JWT_SECRET) or has no
+ * app-index row mapping this user to an agent. See SUPABASE-AUTH-INTEGRATION.md.
+ */
+export const TOKEN_REJECTED_MESSAGE =
+  'The agent runtime rejected your account session. The runtime may not be deployed with Supabase verification yet.'
 
 /** Best-effort message extraction from an `unknown` caught error. */
 function errorMessage(e: unknown): string | undefined {
@@ -51,14 +120,22 @@ export function streamChat(
       return
     }
 
+    // Signed out → no bearer to attach. Don't round-trip to the runtime just to
+    // get a 401; tell the user how to authenticate. (Distinct from a rejected
+    // token, handled below.)
+    if (!token) {
+      handlers.onError(SIGNED_OUT_MESSAGE)
+      return
+    }
+
     try {
       const res = await expoFetch(CHAT_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
-          // Supabase session bearer (stubbed until Supabase auth is wired — see authToken.ts).
-          ...(token ? {Authorization: `Bearer ${token}`} : {}),
+          // Live Supabase session bearer (installed by #/state/supabase).
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           text: req.text,
@@ -69,17 +146,32 @@ export function streamChat(
       })
 
       if (res.status === 401 || res.status === 403) {
-        handlers.onError(
-          'Not authorized. (Supabase sign-in is not wired yet — see authToken.ts TODO.)',
-        )
+        handlers.onError(TOKEN_REJECTED_MESSAGE)
         return
       }
       if (!res.ok) {
         handlers.onError(`Runtime error ${res.status}`)
         return
       }
+
+      // The runtime answers SSE only when it opts into it; otherwise (or if a proxy
+      // strips streaming) it returns the JSON body {message,status,pending,mediaUrls}.
+      // Branch on content-type so both shapes populate the bubble.
+      const contentType = res.headers?.get?.('content-type') ?? ''
+      if (contentType.includes('application/json')) {
+        const json = await res.json()
+        const result = toTurnResult(json)
+        // Push the full reply through the delta channel so live consumers (e.g. TTS)
+        // still receive it, then settle with the authoritative result.
+        if (result.message) handlers.onTextDelta(result.message)
+        emitDone(result, handlers)
+        return
+      }
+
       if (!res.body) {
-        handlers.onError('No response stream from runtime.')
+        // The connection opened but produced no readable body — a transport
+        // failure, not a server message. Let the UI offer a retry.
+        handlers.onError('No response stream from runtime.', 'transport')
         return
       }
 
@@ -87,14 +179,27 @@ export function streamChat(
     } catch (e) {
       if (controller.signal.aborted) return // user-initiated cancel; not an error
       logger.error('agent-runtime streamChat failed', {safeMessage: e})
-      handlers.onError(errorMessage(e) ?? 'Network error talking to the agent.')
+      // Reached here = fetch/stream threw (e.g. "The network connection was
+      // lost"). That's a TRANSPORT failure: never surface the raw string as the
+      // agent's reply — the caller shows a retry instead.
+      handlers.onError(
+        errorMessage(e) ?? 'Network error talking to the agent.',
+        'transport',
+      )
     }
   })()
 
   return {abort: () => controller.abort()}
 }
 
-/** Parse an SSE byte stream into ChatStreamEvents and dispatch to handlers. */
+/**
+ * Parse an SSE byte stream and dispatch to handlers.
+ *
+ * Per APP-CHANNEL.md the event NAME is on the `event:` line; the `data:` line is a
+ * bare JSON object (no discriminator). We therefore key on the event name:
+ *   `chunk` → onTextDelta(data.delta)   `done` → settle with the result
+ *   `error` → onError(data.message)
+ */
 async function consumeSSE(
   body: ReadableStream<Uint8Array>,
   handlers: StreamHandlers,
@@ -102,26 +207,57 @@ async function consumeSSE(
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  // Guard so a `done` frame and the end-of-stream fallback don't both settle.
+  let settled = false
 
-  // SSE frames are separated by a blank line. Each frame may have multiple `data:` lines.
+  const settle = (result?: ChatTurnResult) => {
+    if (settled) return
+    settled = true
+    if (result) emitDone(result, handlers)
+    else handlers.onDone?.()
+  }
+
+  // SSE frames are separated by a blank line. A frame may carry an `event:` line and
+  // one or more `data:` lines.
   const flushFrame = (frame: string) => {
-    const dataLines = frame
-      .split('\n')
-      .filter(l => l.startsWith('data:'))
-      .map(l => l.slice(5).trimStart())
+    let eventName = 'message'
+    const dataLines: string[] = []
+    for (const raw of frame.split('\n')) {
+      const line = raw.replace(/\r$/, '')
+      if (line.startsWith(':')) continue // comment / keep-alive
+      if (line.startsWith('event:')) {
+        eventName = line.slice(6).trim()
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).replace(/^ /, ''))
+      }
+    }
     if (dataLines.length === 0) return
     const payload = dataLines.join('\n')
     if (payload === '[DONE]') {
-      handlers.onDone?.()
+      settle()
       return
     }
-    let evt: ChatStreamEvent
+    let data: any
     try {
-      evt = JSON.parse(payload)
+      data = JSON.parse(payload)
     } catch {
       return // ignore keep-alives / non-JSON comments
     }
-    dispatch(evt, handlers)
+    switch (eventName) {
+      case 'chunk':
+      case 'text': // tolerate the legacy name too
+        if (typeof data?.delta === 'string') handlers.onTextDelta(data.delta)
+        break
+      case 'done':
+        settle(toTurnResult(data))
+        break
+      case 'error':
+        handlers.onError(
+          data?.message ?? data?.error ?? 'Agent runtime error.',
+        )
+        settled = true // an error is terminal; don't also fire onDone
+        break
+    }
   }
 
   for (;;) {
@@ -136,9 +272,9 @@ async function consumeSSE(
       flushFrame(frame)
     }
   }
-  // Flush any trailing frame.
+  // Flush any trailing frame, then settle if the stream ended without `done`.
   if (buffer.trim().length > 0) flushFrame(buffer)
-  handlers.onDone?.()
+  settle()
 }
 
 function indexOfFrameBreak(s: string): {index: number; len: number} | -1 {
@@ -147,21 +283,4 @@ function indexOfFrameBreak(s: string): {index: number; len: number} | -1 {
   if (a === -1 && b === -1) return -1
   if (b === -1 || (a !== -1 && a < b)) return {index: a, len: 2}
   return {index: b, len: 4}
-}
-
-function dispatch(evt: ChatStreamEvent, handlers: StreamHandlers): void {
-  switch (evt.type) {
-    case 'text':
-      handlers.onTextDelta(evt.delta)
-      break
-    case 'actions':
-      handlers.onActions?.(evt.actions)
-      break
-    case 'done':
-      handlers.onDone?.(evt.messageId)
-      break
-    case 'error':
-      handlers.onError(evt.message)
-      break
-  }
 }

@@ -2,33 +2,29 @@
 // Supabase session token provider.
 //
 // The agent runtime authenticates /app/chat with the user's **Supabase session**
-// bearer token (NOT the atproto/PDS session). Supabase login is not yet wired into
-// this fork, so this provider is a STUB.
+// bearer token (NOT the atproto/PDS session). The contract here is intentionally
+// tiny — a function returning the current access token (or null when signed out) —
+// so the rest of the network layer never imports the Supabase client directly.
 //
-// TODO(auth): replace `getSupabaseAccessToken` with the real implementation once
-// Supabase auth lands in the app. The contract the rest of the network layer relies
-// on is intentionally tiny — a function returning the current access token (or null) —
-// so swapping the stub for the real provider touches only this file.
-//
-// Likely real implementation:
-//   import {supabase} from '#/state/supabase'
-//   const {data} = await supabase.auth.getSession()
-//   return data.session?.access_token ?? null
-// (plus a refresh path so an expired token is rotated before use.)
+// WIRED: `#/state/supabase` installs the real provider at startup via
+// `setSupabaseTokenProvider(getFreshAccessToken)` (a module side-effect that runs
+// when its Provider is mounted in App.{web,native}.tsx). That provider returns the
+// live session's access token, refreshing it when at/near expiry, or null when
+// signed out. The default below is only the pre-mount / test fallback.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type TokenProvider = () => Promise<string | null>
 
 let provider: TokenProvider = () => {
-  // STUB: no Supabase session available yet. Returning null makes requests
-  // un-authenticated; the runtime will reject them with 401 until this is wired.
-  // Set EXPO_PUBLIC_DEV_SUPABASE_TOKEN to a hand-issued token for local testing.
+  // Pre-mount / test fallback: until `#/state/supabase` installs the real
+  // provider, return a hand-issued dev token if one is set, else null (the
+  // runtime rejects un-authenticated requests with 401).
   return Promise.resolve(process.env.EXPO_PUBLIC_DEV_SUPABASE_TOKEN ?? null)
 }
 
 /**
- * Override the token provider. Call this from the real Supabase auth integration
- * once it exists, e.g. `setSupabaseTokenProvider(async () => (await supabase.auth.getSession()).data.session?.access_token ?? null)`.
+ * Override the token provider. Called by the Supabase auth integration in
+ * `#/state/supabase`: `setSupabaseTokenProvider(getFreshAccessToken)`.
  */
 export function setSupabaseTokenProvider(next: TokenProvider): void {
   provider = next

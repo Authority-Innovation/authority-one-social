@@ -33,9 +33,17 @@ export type TtsEvents = {
 
 export interface TtsModule {
   getVoices(): TtsVoice[]
-  /** Speak text. Returns the utteranceId used in lifecycle events. */
+  /** Speak text on-device (AVSpeechSynthesizer). Returns the utteranceId. */
   speak(text: string, options?: SynthesisOptions): string
-  /** Stop immediately — used for barge-in. */
+  /**
+   * Play already-synthesized audio (e.g. ElevenLabs "Bob" voice fetched via the
+   * runtime proxy) from a base64-encoded clip (MP3). Emits the SAME lifecycle
+   * events as `speak` (onSpeechStart/Done/Canceled/Error) keyed by the returned
+   * utteranceId, so callers treat remote and on-device voices uniformly.
+   * `stop()` interrupts it (barge-in), exactly like `speak`.
+   */
+  playClip(base64: string, options?: SynthesisOptions): string
+  /** Stop immediately — used for barge-in (cuts both `speak` AND `playClip`). */
   stop(): void
   pause(): void
   resume(): void

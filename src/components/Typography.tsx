@@ -24,6 +24,7 @@ export function Text({
   dataSet,
   numberOfLines,
   allowFontScaling = true,
+  fontFamilyOverride,
   ...rest
 }: TextProps) {
   const {fonts, flags} = useAlf()
@@ -42,6 +43,18 @@ export function Text({
       flags,
     },
   )
+
+  /**
+   * Opt-in display-font override (e.g. the Authority One Fraunces headline
+   * face). `normalizeTextStyles` -> `applyFonts` always sets `fontFamily` from
+   * the global UI font, so any caller-supplied family in `style` is clobbered;
+   * we re-apply the override here, last, so it actually wins. Inert (no-op)
+   * unless a caller passes `fontFamilyOverride`, so the default font path and
+   * the default theme are completely unaffected.
+   */
+  if (fontFamilyOverride) {
+    s.fontFamily = fontFamilyOverride
+  }
 
   if (__DEV__) {
     if (!emoji && childHasEmoji(children)) {

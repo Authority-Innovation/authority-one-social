@@ -15,6 +15,8 @@ export const router = new Router<AllNavigatableRoutes>({
   LegacyNotificationSettings: '/notifications/settings',
   Settings: '/settings',
   AgentChat: '/agent',
+  AuthorityAccount: '/account',
+  ForYou: '/for-you',
   Lists: '/lists',
   // moderation
   Moderation: '/moderation',
@@ -51,6 +53,9 @@ export const router = new Router<AllNavigatableRoutes>({
   PreferencesExternalEmbeds: '/settings/external-embeds',
   AccessibilitySettings: '/settings/accessibility',
   AppearanceSettings: '/settings/appearance',
+  PersonaSettings: '/settings/persona',
+  ContextEngineSettings: '/settings/context-engine',
+  ContextLog: '/settings/context-engine/log',
   SavedFeeds: '/settings/saved-feeds',
   AccountSettings: '/settings/account',
   AutomationLabelSettings: '/settings/automation-label',

@@ -1,19 +1,37 @@
 import ExpoModulesCore
 
-/// JS-facing TTS module. Delegates to a `SpeechSynthesizing` backend (AVSpeechSynthesizer
-/// today) and forwards lifecycle events to JS. To swap in Orca/ElevenLabs later, change
-/// only the `makeBackend()` factory — JS and the rest of the app are unaffected.
+/// JS-facing TTS module. Two voices behind one event stream:
+///   • `speak`     → on-device AVSpeechSynthesizer (the `SpeechSynthesizing` backend).
+///   • `playClip`  → remote ElevenLabs "Bob" audio (base64 from the runtime proxy),
+///                   played by `AudioClipPlayer`.
+/// Both emit the SAME lifecycle events and are silenced by the SAME `stop()` (barge-in),
+/// so JS treats premium and on-device voices identically. To swap the on-device engine
+/// for Orca/streaming-neural later, change only the `makeBackend()` factory.
 public class AuthorityTtsModule: Module, SpeechSynthesizingDelegate {
-  private lazy var backend: SpeechSynthesizing = Self.makeBackend()
+  // Built lazily on FIRST USE (first speak/getVoices/etc.), never at module-create time.
+  // Constructing the backend eagerly (e.g. from OnCreate) instantiates AVSpeechSynthesizer
+  // during native module registration — before the JS thread exists — which crashes with
+  // "This method must not be called before the JS thread is created." The delegate is wired
+  // here, inside the lazy initializer, so it's set exactly when the backend is first created.
+  private lazy var backend: SpeechSynthesizing = {
+    let engine = Self.makeBackend()
+    engine.delegate = self
+    return engine
+  }()
+
+  // Plays remote (ElevenLabs "Bob") audio clips handed down from JS as base64 MP3.
+  // Lazy for the same reason as `backend` — no AVFoundation construction at
+  // module-create time (before the JS thread exists).
+  private lazy var clipPlayer: AudioClipPlayer = {
+    let p = AudioClipPlayer()
+    p.delegate = self
+    return p
+  }()
 
   public func definition() -> ModuleDefinition {
     Name("AuthorityTtsModule")
 
     Events("onSpeechStart", "onSpeechDone", "onSpeechCanceled", "onSpeechError")
-
-    OnCreate {
-      self.backend.delegate = self
-    }
 
     Function("getVoices") { () -> [[String: String]] in
       self.backend.availableVoices()
@@ -32,9 +50,19 @@ public class AuthorityTtsModule: Module, SpeechSynthesizingDelegate {
       return utteranceId
     }
 
-    /// Barge-in: stop immediately.
+    /// Play a base64-encoded audio clip (ElevenLabs "Bob" voice from the runtime
+    /// proxy). Emits the SAME lifecycle events as `speak`. Returns the utteranceId.
+    Function("playClip") {
+      (base64: String, utteranceId: String, _options: [String: Any]?) -> String in
+      self.clipPlayer.play(base64: base64, utteranceId: utteranceId)
+      return utteranceId
+    }
+
+    /// Barge-in: stop immediately. Cuts BOTH the on-device synthesizer AND any
+    /// remote clip currently playing, so a single stop() always silences Bob.
     Function("stop") {
       self.backend.stop()
+      self.clipPlayer.stop()
     }
 
     Function("pause") {

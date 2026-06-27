@@ -1,10 +1,46 @@
-// Wire types for the agent runtime's POST /app/chat streaming endpoint.
+// Wire types for the agent runtime's POST /app/chat endpoint.
 //
-// The runtime streams Server-Sent Events. Each `data:` line is one JSON object of
-// `ChatStreamEvent`. The contract below is what the parallel runtime task is building to;
-// any field whose shape is still in flux is marked. See VOICE-CHAT-INTEGRATION.md.
+// AUTHORITATIVE SOURCE: pilot-agent-runtime/APP-CHANNEL.md. The runtime speaks two
+// shapes from the SAME route:
+//
+//   SSE (Accept: text/event-stream) — the event NAME is on the SSE `event:` line and
+//   the `data:` line is a bare JSON object WITHOUT a `type` field:
+//       event: chunk
+//       data: {"delta":"First sentence. "}
+//       event: done
+//       data: {"message":"…full reply…","status":"drafted","pending":[…],"mediaUrls":[]}
+//
+//   JSON (default) — one object: {message, status, pending, mediaUrls}.
+//
+// NB: an earlier version of this file ASSUMED each `data:` line carried its own
+// `{type:'text'|'done'|…}` discriminator. The runtime never sends that, which is why
+// the parser matched nothing and the assistant bubble rendered empty. Keyed on the
+// `event:` name now.
 
 export type ChatRole = 'user' | 'assistant'
+
+/**
+ * Origin channel a stored turn came in on (runtime `mem:conversation` tag, surfaced
+ * by GET /app/history). The window is cross-channel, so a turn may have originated on
+ * SMS/WhatsApp/voice rather than in-app text. 'app' = in-app text (renders with NO
+ * badge). Unknown/missing tags are treated as 'app' by the runtime before they reach
+ * here, but the union stays open (string) so a new runtime channel never breaks parse.
+ */
+export type ChatChannel =
+  | 'app'
+  | 'sms'
+  | 'whatsapp'
+  | 'voice'
+  | 'imessage'
+  | (string & {})
+
+/** Terminal status of a turn, from the runtime's `done`/JSON payload. */
+export type ChatTurnStatus =
+  | 'answered'
+  | 'drafted'
+  | 'not-done'
+  | 'paused'
+  | 'error'
 
 export interface ChatMessage {
   id: string
@@ -14,7 +50,31 @@ export interface ChatMessage {
   actions?: ApprovalAction[]
   /** True while an assistant message is still streaming. */
   pending?: boolean
+  /** Terminal status reported by the runtime once the turn settles. */
+  status?: ChatTurnStatus
+  /** Image URLs the turn generated, if any (runtime `mediaUrls`). */
+  mediaUrls?: string[]
+  /**
+   * Origin channel of the turn (from GET /app/history). Undefined for turns created
+   * live in this session (always in-app text). 'app' and undefined both render with
+   * NO channel badge; sms/whatsapp/voice/imessage get an unobtrusive annotation.
+   */
+  channel?: ChatChannel
   createdAt: number
+}
+
+/**
+ * One turn from GET /app/history (the runtime's per-owner rolling conversation
+ * window). Cross-channel: `channel` says where the turn originated. `role` is the
+ * runtime's storage role ('agent', not 'assistant') — the client maps it to the app's
+ * ChatRole when hydrating. See pilot-agent-runtime APP-CHANNEL.md.
+ */
+export interface HistoryEntry {
+  role: 'user' | 'agent'
+  text: string
+  channel: ChatChannel
+  mediaUrls: string[]
+  at: string | null
 }
 
 /**
@@ -38,37 +98,42 @@ export interface ApprovalAction {
 
 export type ApprovalDecision = 'approve' | 'reject'
 
-// ── Streamed events ──────────────────────────────────────────────────────────
+// ── Runtime wire payloads (APP-CHANNEL.md) ──────────────────────────────────
 
-/** Incremental assistant text. Concatenate `delta` to build the reply. */
-export interface TextDeltaEvent {
-  type: 'text'
+/**
+ * One queued action in the runtime's `pending` array (the shape the runtime
+ * actually sends). Distinct from `ApprovalAction`, which is the app-facing UI type
+ * the cards render; `chatClient` maps one to the other.
+ */
+export interface PendingAction {
+  id: string
+  kind: string
+  /** Human-readable summary of the action (maps to ApprovalAction.title). */
+  summary: string
+  /** Short button/label hint. */
+  label?: string
+  /** Opaque reference (e.g. draft id / target) the runtime echoes back. */
+  ref?: string
+  createdAt?: string | number
+}
+
+/**
+ * The terminal `done` SSE payload AND the non-streaming JSON body — byte-identical
+ * per APP-CHANNEL.md. `message` is the AUTHORITATIVE final reply (it may differ from
+ * the concatenated chunks: the anti-confabulation guard can replace it and the
+ * approval decoration appends to it).
+ */
+export interface ChatTurnResult {
+  message: string
+  status: ChatTurnStatus
+  pending: PendingAction[]
+  mediaUrls: string[]
+}
+
+/** The `chunk` SSE payload: one incremental slice of the reply. */
+export interface ChunkEventData {
   delta: string
 }
-
-/** One or more approval actions for the current assistant turn. */
-export interface ActionsEvent {
-  type: 'actions'
-  actions: ApprovalAction[]
-}
-
-/** Terminal event for a turn. `messageId` is the assistant message's server id. */
-export interface DoneEvent {
-  type: 'done'
-  messageId?: string
-}
-
-/** Server-reported error mid-stream. */
-export interface ErrorEvent {
-  type: 'error'
-  message: string
-}
-
-export type ChatStreamEvent =
-  | TextDeltaEvent
-  | ActionsEvent
-  | DoneEvent
-  | ErrorEvent
 
 export interface SendMessageRequest {
   /** The user's new message. */

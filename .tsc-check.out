@@ -1,0 +1,12 @@
+file:///sessions/jolly-stoic-cori/mnt/authority-one-spike/authority-one-social/node_modules/@typescript/native-preview/lib/getExePath.js:40
+            throw new Error("Unable to resolve " + platformPackageName + ". Either your platform is unsupported, or you are missing the package on disk.");
+                  ^
+
+Error: Unable to resolve @typescript/native-preview-linux-arm64. Either your platform is unsupported, or you are missing the package on disk.
+    at getExePath (file:///sessions/jolly-stoic-cori/mnt/authority-one-spike/authority-one-social/node_modules/@typescript/native-preview/lib/getExePath.js:40:19)
+    at file:///sessions/jolly-stoic-cori/mnt/authority-one-spike/authority-one-social/node_modules/@typescript/native-preview/bin/tsgo.js:6:13
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.22.3

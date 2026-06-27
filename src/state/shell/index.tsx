@@ -1,3 +1,5 @@
+import {ContextEngineProvider} from '#/state/contextEngine/ContextEngineProvider'
+import {Provider as SkinProvider} from '#/state/skin'
 import {Provider as ColorModeProvider} from './color-mode'
 import {Provider as DrawerOpenProvider} from './drawer-open'
 import {Provider as DrawerSwipableProvider} from './drawer-swipe-disabled'
@@ -25,7 +27,11 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         <DrawerSwipableProvider>
           <MinimalModeProvider>
             <ColorModeProvider>
-              <TickEveryMinuteProvider>{children}</TickEveryMinuteProvider>
+              <SkinProvider>
+                <ContextEngineProvider>
+                  <TickEveryMinuteProvider>{children}</TickEveryMinuteProvider>
+                </ContextEngineProvider>
+              </SkinProvider>
             </ColorModeProvider>
           </MinimalModeProvider>
         </DrawerSwipableProvider>

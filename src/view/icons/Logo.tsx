@@ -1,14 +1,14 @@
 import {forwardRef} from 'react'
 import {type TextProps} from 'react-native'
-import Svg, {Path, type PathProps, Rect, type SvgProps} from 'react-native-svg'
+import Svg, {Path, type PathProps, type SvgProps} from 'react-native-svg'
 
+import {WINDMILL_PATH, WINDMILL_VIEWBOX} from '#/lib/windmillPath'
 import {flatten, useTheme} from '#/alf'
 
 const ratio = 1
 
-// Varsity "1" — black numeral with white outline (One brand mark)
-const ONE_NUMERAL =
-  'M40 10 L28 10 L17 17 L17 26 L26 26 L26 46 L19 46 L19 54 L47 54 L47 46 L40 46 Z'
+// Authority One brand mark — the black ink-brush WINDMILL (shared path).
+const WINDMILL = WINDMILL_PATH
 
 type Props = {
   fill?: PathProps['fill']
@@ -16,8 +16,9 @@ type Props = {
 } & Omit<SvgProps, 'style'>
 
 /**
- * One brand mark: varsity numeral 1 (black, white outline) on the brand
- * orange tile.
+ * One brand mark: the windmill, rendered as single-color strokes on a
+ * transparent background so it sits on any surface (nav, headers, loading).
+ * Defaults to the brand accent; pass `fill` to override.
  */
 export const Logo = forwardRef(function LogoImpl(props: Props, ref) {
   const t = useTheme()
@@ -35,20 +36,12 @@ export const Logo = forwardRef(function LogoImpl(props: Props, ref) {
       fill="none"
       // @ts-ignore it's fiiiiine
       ref={ref}
-      viewBox="0 0 64 64"
+      viewBox={WINDMILL_VIEWBOX}
       accessibilityLabel="One"
       accessibilityHint=""
       {...rest}
       style={[{width: size, height: size * ratio}, styles]}>
-      <Rect x="0" y="0" width="64" height="64" rx="10" fill={_fill} />
-      <Path
-        d={ONE_NUMERAL}
-        fill="#FFFFFF"
-        stroke="#FFFFFF"
-        strokeWidth={5}
-        strokeLinejoin="miter"
-      />
-      <Path d={ONE_NUMERAL} fill="#000000" />
+      <Path d={WINDMILL} fill={_fill} />
     </Svg>
   )
 })

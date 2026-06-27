@@ -9,6 +9,10 @@ export type CommonNavigatorParams = {
   NotFound: undefined
   // Authority One: conversational agent chat (voice + text) backed by the agent runtime.
   AgentChat: {agent?: string}
+  // Authority One: Supabase account layer (sign in / up) that authorizes the agent channel.
+  AuthorityAccount: undefined
+  // Authority One: "For You" / Discover — TikTok-style vertical feed of localized sports content.
+  ForYou: undefined
   Lists: undefined
   Moderation: undefined
   ModerationModlists: undefined
@@ -51,6 +55,11 @@ export type CommonNavigatorParams = {
   PreferencesExternalEmbeds: undefined
   AccessibilitySettings: undefined
   AppearanceSettings: undefined
+  // Authority One: agent persona/avatar selector (name + voice + personality).
+  PersonaSettings: undefined
+  // Authority One: Context Engine (Phase 1, location-only) opt-in + log.
+  ContextEngineSettings: undefined
+  ContextLog: undefined
   AccountSettings: undefined
   AutomationLabelSettings: undefined
   PrivacyAndSecuritySettings: undefined

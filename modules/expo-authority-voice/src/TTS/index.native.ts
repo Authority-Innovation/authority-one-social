@@ -24,6 +24,11 @@ interface NativeTtsModule {
     utteranceId: string,
     options: SynthesisOptions | null,
   ): void
+  playClip(
+    base64: string,
+    utteranceId: string,
+    options: SynthesisOptions | null,
+  ): void
   stop(): void
   pause(): void
   resume(): void
@@ -53,6 +58,11 @@ export const TTS: TtsModule = {
   speak(text: string, options?: SynthesisOptions): string {
     const id = nextUtteranceId()
     Native?.speak(text, id, options ?? null)
+    return id
+  },
+  playClip(base64: string, options?: SynthesisOptions): string {
+    const id = nextUtteranceId()
+    Native?.playClip(base64, id, options ?? null)
     return id
   },
   stop(): void {

@@ -30,6 +30,13 @@ final class MicrophoneTap {
   /// Start capturing. `onBuffer` is called on the audio render thread — do minimal work there.
   func start(onBuffer: @escaping (AVAudioPCMBuffer, AVAudioTime) -> Void) throws {
     let input = engine.inputNode
+    // ECHO CANCELLATION for continuous voice chat: enabling Apple's voice-processing
+    // I/O makes the input node cancel our own TTS playback out of the captured signal,
+    // so Bob's spoken reply doesn't false-trigger barge-in while the mic stays open.
+    // Best-effort (iOS 13+); ignore if unsupported so capture still works without AEC.
+    if #available(iOS 13.0, *) {
+      try? input.setVoiceProcessingEnabled(true)
+    }
     let format = input.outputFormat(forBus: 0)
     input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, when in
       onBuffer(buffer, when)

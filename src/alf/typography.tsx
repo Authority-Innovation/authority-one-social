@@ -64,6 +64,14 @@ export type TextProps = RNTextProps & {
    * Whether the children could possibly contain emoji.
    */
   emoji?: boolean
+  /**
+   * Opt-in display/headline font family applied AFTER the global font pass, so
+   * it overrides the default UI font (which `applyFonts` would otherwise force).
+   * Used to apply the Authority One Fraunces headline face to specific
+   * title/display-name Text nodes when the AO theme is active. Leave undefined
+   * for normal body/UI text.
+   */
+  fontFamilyOverride?: string
 }
 
 const EMOJI = createEmojiRegex()

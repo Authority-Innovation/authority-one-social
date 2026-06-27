@@ -74,9 +74,11 @@ import {TermsOfServiceScreen} from '#/view/screens/TermsOfService'
 import {BottomBar} from '#/view/shell/bottom-bar/BottomBar'
 import {createNativeStackNavigatorWithAuth} from '#/view/shell/createNativeStackNavigatorWithAuth'
 import {AgentChatScreen} from '#/screens/AgentChat'
+import {AuthorityAccountScreen} from '#/screens/AuthorityAccount'
 import {BookmarksScreen} from '#/screens/Bookmarks'
 import {SharedPreferencesTesterScreen} from '#/screens/E2E/SharedPreferencesTesterScreen'
 import {FindContactsFlowScreen} from '#/screens/FindContactsFlowScreen'
+import {ForYouScreen} from '#/screens/ForYou'
 import HashtagScreen from '#/screens/Hashtag'
 import {LogScreen} from '#/screens/Log'
 import {MessagesScreen} from '#/screens/Messages/ChatList'
@@ -110,6 +112,8 @@ import {AppIconSettingsScreen} from '#/screens/Settings/AppIconSettings'
 import {AppPasswordsScreen} from '#/screens/Settings/AppPasswords'
 import {AutomationLabelSettingsScreen} from '#/screens/Settings/AutomationLabelSettings'
 import {ContentAndMediaSettingsScreen} from '#/screens/Settings/ContentAndMediaSettings'
+import {ContextEngineSettingsScreen} from '#/screens/Settings/ContextEngine'
+import {ContextLogScreen} from '#/screens/Settings/ContextEngine/ContextLog'
 import {ExternalMediaPreferencesScreen} from '#/screens/Settings/ExternalMediaPreferences'
 import {FindContactsSettingsScreen} from '#/screens/Settings/FindContactsSettings'
 import {FollowingFeedPreferencesScreen} from '#/screens/Settings/FollowingFeedPreferences'
@@ -117,6 +121,7 @@ import {InterestsSettingsScreen} from '#/screens/Settings/InterestsSettings'
 import {LanguageSettingsScreen} from '#/screens/Settings/LanguageSettings'
 import {LegacyNotificationSettingsScreen} from '#/screens/Settings/LegacyNotificationSettings'
 import {NotificationSettingsScreen} from '#/screens/Settings/NotificationSettings'
+import {PersonaSettingsScreen} from '#/screens/Settings/PersonaSettings'
 import {PrivacyAndSecuritySettingsScreen} from '#/screens/Settings/PrivacyAndSecuritySettings'
 import {SettingsScreen} from '#/screens/Settings/Settings'
 import {ThreadPreferencesScreen} from '#/screens/Settings/ThreadPreferences'
@@ -171,6 +176,16 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="AgentChat"
         getComponent={() => AgentChatScreen}
         options={{title: title(msg`Talk to your agent`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="AuthorityAccount"
+        getComponent={() => AuthorityAccountScreen}
+        options={{title: title(msg`Authority One account`)}}
+      />
+      <Stack.Screen
+        name="ForYou"
+        getComponent={() => ForYouScreen}
+        options={{title: title(msg`For You`), requireAuth: true}}
       />
       <Stack.Screen
         name="Lists"
@@ -400,6 +415,30 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         getComponent={() => AppearanceSettingsScreen}
         options={{
           title: title(msg`Appearance`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="PersonaSettings"
+        getComponent={() => PersonaSettingsScreen}
+        options={{
+          title: title(msg`Persona`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="ContextEngineSettings"
+        getComponent={() => ContextEngineSettingsScreen}
+        options={{
+          title: title(msg`Context Engine`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="ContextLog"
+        getComponent={() => ContextLogScreen}
+        options={{
+          title: title(msg`Context log`),
           requireAuth: true,
         }}
       />

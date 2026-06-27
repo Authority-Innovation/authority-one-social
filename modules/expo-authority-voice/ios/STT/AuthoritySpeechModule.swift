@@ -97,11 +97,12 @@ public class AuthoritySpeechModule: Module {
       }
       return nil
     case .whisperKit:
-      #if canImport(WhisperKit)
-      return WhisperKitTranscriber()
-      #else
+      // WhisperKit fallback removed for the first TestFlight build. The
+      // `#if canImport(WhisperKit)` guard in detectBackend() is kept so the
+      // module still compiles whether or not the package is present; with the
+      // WhisperKitTranscriber implementation gone we report unavailable here.
+      // To re-enable, restore WhisperKitTranscriber.swift and return it.
       return nil
-      #endif
     case .unavailable:
       return nil
     }

@@ -228,6 +228,20 @@ export function SettingsScreen({}: Props) {
               <Trans>Appearance</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
+          <SettingsList.LinkItem to="/settings/persona" label={l`Persona`}>
+            <SettingsList.ItemIcon icon={PersonIcon} />
+            <SettingsList.ItemText>
+              <Trans>Persona</Trans>
+            </SettingsList.ItemText>
+          </SettingsList.LinkItem>
+          <SettingsList.LinkItem
+            to="/settings/context-engine"
+            label={l`Context Engine`}>
+            <SettingsList.ItemIcon icon={EarthIcon} />
+            <SettingsList.ItemText>
+              <Trans>Context Engine</Trans>
+            </SettingsList.ItemText>
+          </SettingsList.LinkItem>
           <SettingsList.LinkItem
             to="/settings/accessibility"
             label={l`Accessibility`}>

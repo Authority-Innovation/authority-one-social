@@ -5,12 +5,13 @@
  */
 
 import {useEffect, useRef, useState} from 'react'
-import Svg, {Path} from 'react-native-svg'
+import Svg, {Path, Rect} from 'react-native-svg'
 
+import {WINDMILL_PATH} from '#/lib/windmillPath'
 import {atoms as a, flatten} from '#/alf'
 
 const size = 100
-const ratio = 57 / 64
+const ratio = 1
 
 export function Splash({
   isReady,
@@ -85,21 +86,11 @@ export function Splash({
             fill="none"
             viewBox="0 0 64 64"
             style={[a.relative, {width: size, height: size * ratio, top: -50}]}>
-            {/* One brand mark */}
-            <Path
-              fill="#E8431F"
-              d="M10 0h44a10 10 0 0 1 10 10v44a10 10 0 0 1-10 10H10A10 10 0 0 1 0 54V10A10 10 0 0 1 10 0Z"
-            />
-            <Path
-              d="M40 10 L28 10 L17 17 L17 26 L26 26 L26 46 L19 46 L19 54 L47 54 L47 46 L40 46 Z"
-              fill="#FFFFFF"
-              stroke="#FFFFFF"
-              strokeWidth={5}
-            />
-            <Path
-              d="M40 10 L28 10 L17 17 L17 26 L26 26 L26 46 L19 46 L19 54 L47 54 L47 46 L40 46 Z"
-              fill="#000000"
-            />
+            {/* One brand mark: black ink-brush windmill on a cream "paper"
+                tile, so it reads on the white (light) / black (dark) loading
+                background before the React theme mounts. */}
+            <Rect x="0" y="0" width="64" height="64" rx="10" fill="#F4F0E8" />
+            <Path d={WINDMILL_PATH} fill="#1A1511" />
           </Svg>
         </div>
       )}

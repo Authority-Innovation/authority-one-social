@@ -1,0 +1,10 @@
+import {describe, it, jest} from '@jest/globals'
+const mockGetSession = jest.fn()
+jest.mock('@supabase/supabase-js', () => ({createClient: () => ({auth: {getSession: mockGetSession}})}))
+import {supabase} from '../client'
+describe('debug', () => {
+  it('shape', () => {
+    // eslint-disable-next-line no-console
+    console.log('KEYS', Object.keys(supabase || {}), 'auth?', typeof (supabase as any).auth, 'getSession?', typeof (supabase as any).auth?.getSession)
+  })
+})

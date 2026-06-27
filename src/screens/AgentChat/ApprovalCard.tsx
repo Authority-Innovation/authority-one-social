@@ -1,5 +1,4 @@
 import {View} from 'react-native'
-import {Trans} from '@lingui/react/macro'
 
 import {type ApprovalAction} from '#/lib/agent-runtime'
 import {atoms as a, useTheme} from '#/alf'
@@ -55,9 +54,11 @@ export function ApprovalCard({
           disabled={disabled}
           onPress={() => onDecision('approve')}
           style={[a.flex_1]}>
-          <ButtonText>
-            <Trans>Approve</Trans>
-          </ButtonText>
+          {/* Plain literal (not a Lingui Trans macro): the "Approve" msg ID is
+              absent from the compiled catalog, so the macro renders as a raw ID
+              ("Z7ZXbT"). Same compiled-catalog miss fixed for the chat title,
+              composer placeholder, and drawer labels. */}
+          <ButtonText>Approve</ButtonText>
         </Button>
         <Button
           label="Reject"
@@ -67,9 +68,9 @@ export function ApprovalCard({
           disabled={disabled}
           onPress={() => onDecision('reject')}
           style={[a.flex_1]}>
-          <ButtonText>
-            <Trans>Reject</Trans>
-          </ButtonText>
+          {/* Plain literal for parity with Approve above — keep both labels off
+              the compiled catalog so neither can regress to a raw msg ID. */}
+          <ButtonText>Reject</ButtonText>
         </Button>
       </View>
     </View>

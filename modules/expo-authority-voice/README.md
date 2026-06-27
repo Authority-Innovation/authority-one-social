@@ -8,7 +8,11 @@ On-device speech-to-text and text-to-speech for the One app, bridged to React Na
   - Primary: Apple **SpeechAnalyzer / SpeechTranscriber** (iOS 26+), streaming, with volatile partial results.
   - Fallback: **WhisperKit** (Argmax, Core ML / Neural Engine) for iOS 17–25.
   - Backend is chosen at runtime via `getCapabilities()`. iPhone 13 (A15) runs both.
-- **TTS** (`AuthorityTtsModule`) — `AVSpeechSynthesizer`, behind a `SpeechSynthesizing` Swift protocol so a neural/cloud engine (Orca, ElevenLabs) can drop in by changing only `AuthorityTtsModule.makeBackend()`.
+- **TTS** (`AuthorityTtsModule`) — two voices behind one event stream:
+  - `speak(text, opts)` → on-device `AVSpeechSynthesizer` (behind the `SpeechSynthesizing` Swift protocol; the swap point for a neural engine is `makeBackend()`).
+  - `playClip(base64, opts)` → plays already-synthesized audio (the ElevenLabs "Bob" voice, fetched server-side via the runtime `/app/tts` proxy and handed down as base64 MP3) through `AudioClipPlayer`.
+  - Both emit the same lifecycle events (`onSpeechStart/Done/Canceled/Error`) and are both silenced by the same `stop()` (barge-in).
+- **Echo cancellation** — `MicrophoneTap` enables Apple voice-processing I/O (`setVoiceProcessingEnabled`) so the mic can stay open during playback (continuous mode / barge-in) without Bob's audio self-triggering.
 
 ## TS usage
 
@@ -22,9 +26,12 @@ STT.start('en-US')
 // ...
 STT.stop(); off()
 
-const id = TTS.speak('Hello from One', {rate: 0.5})
-TTS.stop()                                   // barge-in
+const id = TTS.speak('Hello from One', {rate: 0.5})    // on-device voice
+TTS.playClip(base64Mp3, {})                            // ElevenLabs "Bob" clip
+TTS.stop()                                             // barge-in (stops either)
 ```
+
+For the full hands-free experience (continuous listen↔think↔speak loop, barge-in, ElevenLabs Bob voice with on-device fallback) see `src/screens/AgentChat/` (`useVoiceConversation` + `voiceConversationMachine`) and `pilot-agent-runtime/IN-APP-VOICE.md`.
 
 ## Owner setup (Xcode) — required before the native build
 
