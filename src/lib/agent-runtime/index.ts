@@ -28,10 +28,7 @@ export {
   postFeedSignals,
 } from './feedClient'
 export {fetchHistory, type HistoryResult} from './historyClient'
-export {
-  type ChatImageToUpload,
-  uploadChatImage,
-} from './imageUploadClient'
+export {type ChatImageToUpload, uploadChatImage} from './imageUploadClient'
 export {
   createPersona,
   deletePersona,
@@ -53,6 +50,7 @@ export {
 export {postPhotoContext} from './photoContextClient'
 export {
   createThread,
+  fetchThreadMembers,
   fetchThreadMessages,
   fetchThreads,
   type GroupMemberKind,
@@ -62,11 +60,15 @@ export {
   type GroupOpInput,
   makeThreadTransport,
   memberOpFor,
+  normalizeMember,
+  normalizeMembers,
   normalizeThread,
   normalizeThreads,
+  pickThreadId,
   sendToThread,
   type Thread,
   type ThreadKind,
+  type ThreadMember,
   type ThreadsResult,
   type ThreadWriteResult,
 } from './threadsClient'

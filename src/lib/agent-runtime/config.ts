@@ -21,14 +21,18 @@ export const threadSendUrl = (id: string) =>
   `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/send`
 export const threadGroupUrl = (id: string) =>
   `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/group`
+export const threadMembersUrl = (id: string) =>
+  `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/members`
 
 /**
- * Chat image upload endpoint (owner-scoped). The app uploads a picked image here;
- * the runtime hosts it in R2 (the same `putRawImage` path the inbound SMS/MMS media
- * uses) and returns the public URL, which the app then sends with the chat turn so
- * the existing vision pipeline processes it. See MEDIA-IN-CHAT-SCOPE.md.
+ * Chat image upload endpoint (owner-scoped). The app POSTs the RAW image bytes with an
+ * image `Content-Type` header; the runtime hosts them in R2 (the same `putRawImage` path
+ * the inbound SMS/MMS media uses) and returns the public URL, which the app then sends
+ * with the chat turn so the existing vision pipeline processes it. The runtime route is
+ * `/app/media/upload` and it reads `request.arrayBuffer()` + validates the Content-Type
+ * (it does NOT parse multipart/form-data). See MEDIA-IN-CHAT-SCOPE.md.
  */
-export const CHAT_IMAGE_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/chat/image`
+export const CHAT_IMAGE_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/media/upload`
 
 /**
  * History read-back endpoint. GET returns the last ~50 turns of the owner's rolling

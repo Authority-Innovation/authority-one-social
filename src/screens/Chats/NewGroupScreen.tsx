@@ -39,9 +39,18 @@ export function NewGroupScreen({}: Props) {
       {kind: 'group', title},
       {
         onSuccess: res => {
-          if (res.ok && res.data?.id) setThreadId(res.data.id)
-          else if (res.signedOut) setError('Sign in to create a group.')
-          else setError(res.error ?? 'Could not create the group.')
+          if (res.ok && res.data?.id) {
+            // Created — stay on-screen to add people to the new group.
+            setThreadId(res.data.id)
+          } else if (res.ok) {
+            // Created, but the runtime didn't echo an id we could parse. Don't show a
+            // false error — the thread list will surface the new group.
+            navigation.navigate('ChatList')
+          } else if (res.signedOut) {
+            setError('Sign in to create a group.')
+          } else {
+            setError(res.error ?? 'Could not create the group.')
+          }
         },
         onError: () => setError('Could not create the group.'),
       },
@@ -114,8 +123,9 @@ export function NewGroupScreen({}: Props) {
               </Text>
               <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
                 <Trans>
-                  Friends you’re connected with are added right away. Anyone else gets an
-                  invite to accept. You can also add agent personas.
+                  Friends you’re connected with are added right away. Anyone
+                  else gets an invite to accept. You can also add agent
+                  personas.
                 </Trans>
               </Text>
               <AddPeople threadId={threadId} />

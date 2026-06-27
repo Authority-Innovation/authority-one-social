@@ -8,7 +8,7 @@ import {
   type NativeStackScreenProps,
   type NavigationProp,
 } from '#/lib/routes/types'
-import {useGroupOpMutation,useThreadsQuery} from '#/state/queries/threads'
+import {useGroupOpMutation, useThreadsQuery} from '#/state/queries/threads'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {ChevronRight_Stroke2_Corner0_Rounded as ChevronIcon} from '#/components/icons/Chevron'
@@ -99,7 +99,8 @@ export function ChatListScreen({}: Props) {
           {/* Pending invites — accept / decline. */}
           {pending.length > 0 ? (
             <View style={[a.gap_sm]}>
-              <Text style={[a.text_sm, a.font_bold, t.atoms.text_contrast_medium]}>
+              <Text
+                style={[a.text_sm, a.font_bold, t.atoms.text_contrast_medium]}>
                 <Trans>Invites</Trans>
               </Text>
               {pending.map(g => (
@@ -111,7 +112,8 @@ export function ChatListScreen({}: Props) {
           {/* Group threads. */}
           {joined.length > 0 ? (
             <View style={[a.gap_sm]}>
-              <Text style={[a.text_sm, a.font_bold, t.atoms.text_contrast_medium]}>
+              <Text
+                style={[a.text_sm, a.font_bold, t.atoms.text_contrast_medium]}>
                 <Trans>Groups</Trans>
               </Text>
               {joined.map(g => (
@@ -176,7 +178,9 @@ function ThreadRow({
         ]}>
         <GroupIcon size="lg" fill={t.atoms.text.color} />
         <View style={[a.flex_1]}>
-          <Text style={[a.text_md, a.font_bold, t.atoms.text]} numberOfLines={1}>
+          <Text
+            style={[a.text_md, a.font_bold, t.atoms.text]}
+            numberOfLines={1}>
             {thread.title}
           </Text>
           {thread.lastMessage ? (
@@ -203,10 +207,12 @@ function ThreadRow({
       <Button
         label={`Manage ${thread.title}`}
         size="small"
-        variant="ghost"
+        variant="solid"
         color="secondary"
-        shape="round"
         onPress={onManage}>
+        <ButtonText>
+          <Trans>Manage</Trans>
+        </ButtonText>
         <ButtonIcon icon={ChevronIcon} />
       </Button>
     </View>

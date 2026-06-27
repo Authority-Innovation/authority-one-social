@@ -1,8 +1,12 @@
 import {useState} from 'react'
 import {View} from 'react-native'
-import {Trans} from '@lingui/react/macro'
+import {Trans, useLingui} from '@lingui/react/macro'
 
-import {type GroupMemberKind, type GroupOp, memberOpFor} from '#/lib/agent-runtime'
+import {
+  type GroupMemberKind,
+  type GroupOp,
+  memberOpFor,
+} from '#/lib/agent-runtime'
 import {sanitizeDisplayName} from '#/lib/strings/display-names'
 import {sanitizeHandle} from '#/lib/strings/handles'
 import {useActorAutocompleteQuery} from '#/state/queries/actor-autocomplete'
@@ -21,6 +25,7 @@ import {Text} from '#/components/Typography'
  * PERSONAS are added directly. The friend-vs-invite decision is the pure `memberOpFor`.
  */
 export function AddPeople({threadId}: {threadId: string}) {
+  const {t: l} = useLingui()
   const {currentAccount} = useSession()
   const followsQuery = useProfileFollowsQuery(currentAccount?.did)
   const {data: personas} = usePersonasQuery()
@@ -32,8 +37,7 @@ export function AddPeople({threadId}: {threadId: string}) {
   // Local "done" set so each row reflects added/invited without a members endpoint.
   const [done, setDone] = useState<Record<string, GroupOp>>({})
 
-  const follows =
-    followsQuery.data?.pages.flatMap(page => page.follows) ?? []
+  const follows = followsQuery.data?.pages.flatMap(page => page.follows) ?? []
   const friendIds = new Set(follows.map(f => f.did))
 
   const act = (
@@ -60,8 +64,8 @@ export function AddPeople({threadId}: {threadId: string}) {
         </TextField.LabelText>
         <TextField.Root>
           <TextField.Input
-            label="Search people"
-            placeholder="Search by name or handle"
+            label={l`Search people`}
+            placeholder={l`Search by name or handle`}
             defaultValue={search}
             onChangeText={setSearch}
             autoCapitalize="none"
@@ -75,7 +79,7 @@ export function AddPeople({threadId}: {threadId: string}) {
                 <PersonRow
                   key={p.did}
                   profile={p}
-                  cta={chosen === 'invite' ? 'Invite' : 'Add'}
+                  cta={chosen === 'invite' ? l`Invite` : l`Add`}
                   doneOp={done[p.did]}
                   pending={op.isPending}
                   onPress={() => act(p.did, 'person', chosen)}
@@ -83,38 +87,42 @@ export function AddPeople({threadId}: {threadId: string}) {
               )
             })
           ) : (
-            <Empty text="No matches" />
+            <Empty text={l`No matches`} />
           )
         ) : null}
       </View>
 
       {/* Friends (already-connected) — direct add */}
-      <Section title="Friends">
+      <Section title={l`Friends`}>
         {follows.length === 0 ? (
-          <Empty text="People you follow appear here" />
+          <Empty text={l`People you follow appear here`} />
         ) : (
-          follows.slice(0, 50).map(f => (
-            <PersonRow
-              key={f.did}
-              profile={f}
-              doneOp={done[f.did]}
-              pending={op.isPending}
-              onPress={() => act(f.did, 'person', 'add')}
-            />
-          ))
+          follows
+            .slice(0, 50)
+            .map(f => (
+              <PersonRow
+                key={f.did}
+                profile={f}
+                cta={l`Add`}
+                doneOp={done[f.did]}
+                pending={op.isPending}
+                onPress={() => act(f.did, 'person', 'add')}
+              />
+            ))
         )}
       </Section>
 
       {/* Agent personas — direct add */}
-      <Section title="Agent personas">
+      <Section title={l`Agent personas`}>
         {(personas?.personas ?? []).length === 0 ? (
-          <Empty text="No personas" />
+          <Empty text={l`No personas`} />
         ) : (
           (personas?.personas ?? []).map(persona => (
             <Row
               key={persona.id}
               title={persona.name}
-              subtitle="Agent persona"
+              subtitle={l`Agent persona`}
+              cta={l`Add`}
               doneOp={done[persona.id]}
               pending={op.isPending}
               onPress={() => act(persona.id, 'persona', 'add')}
@@ -126,7 +134,13 @@ export function AddPeople({threadId}: {threadId: string}) {
   )
 }
 
-function Section({title, children}: {title: string; children: React.ReactNode}) {
+function Section({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
   const t = useTheme()
   return (
     <View style={[a.gap_xs]}>
@@ -147,14 +161,14 @@ function Empty({text}: {text: string}) {
 
 function PersonRow({
   profile,
-  cta = 'Add',
+  cta,
   doneOp,
   pending,
   onPress,
 }: {
   // Minimal shape shared by getFollows' ProfileView and search's ProfileViewBasic.
   profile: {did: string; handle: string; displayName?: string}
-  cta?: string
+  cta: string
   doneOp?: GroupOp
   pending: boolean
   onPress: () => void
@@ -174,34 +188,40 @@ function PersonRow({
 function Row({
   title,
   subtitle,
-  cta = 'Add',
+  cta,
   doneOp,
   pending,
   onPress,
 }: {
   title: string
   subtitle?: string
-  cta?: string
+  cta: string
   doneOp?: GroupOp
   pending: boolean
   onPress: () => void
 }) {
   const t = useTheme()
+  const {t: l} = useLingui()
   return (
     <View style={[a.flex_row, a.align_center, a.gap_sm, a.py_xs]}>
       <View style={[a.flex_1]}>
-        <Text emoji style={[a.text_md, a.font_bold, t.atoms.text]} numberOfLines={1}>
+        <Text
+          emoji
+          style={[a.text_md, a.font_bold, t.atoms.text]}
+          numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[a.text_xs, t.atoms.text_contrast_medium]} numberOfLines={1}>
+          <Text
+            style={[a.text_xs, t.atoms.text_contrast_medium]}
+            numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {doneOp ? (
         <Text style={[a.text_sm, a.font_bold, {color: t.palette.positive_600}]}>
-          {doneOp === 'invite' ? 'Invited' : 'Added'}
+          {doneOp === 'invite' ? l`Invited` : l`Added`}
         </Text>
       ) : (
         <Button

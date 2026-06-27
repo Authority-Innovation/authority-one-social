@@ -1,9 +1,14 @@
-import {type ChatMessage, type ChatTurnResult,type SendMessageRequest} from '#/lib/agent-runtime/types'
+import {
+  type ChatMessage,
+  type ChatTurnResult,
+  type SendMessageRequest,
+} from '#/lib/agent-runtime/types'
 import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
-import {SIGNED_OUT_MESSAGE,type StreamHandlers} from './chatClient'
+import {SIGNED_OUT_MESSAGE, type StreamHandlers} from './chatClient'
 import {
   threadGroupUrl,
+  threadMembersUrl,
   threadMessagesUrl,
   THREADS_ENDPOINT,
   threadSendUrl,
@@ -45,6 +50,18 @@ export interface ThreadWriteResult<T = undefined> {
   signedOut: boolean
   error?: string
   data?: T
+}
+
+/** A member of a group thread, as surfaced by GET /app/threads/:id/members. */
+export interface ThreadMember {
+  /** DID for a person, or persona id for an agent persona. */
+  id: string
+  kind: GroupMemberKind
+  /** Display name when known (handle/id used as the fallback at the UI layer). */
+  name?: string
+  /** Handle for a person member (e.g. alice.pds.authority-one.com). */
+  handle?: string
+  role?: 'owner' | 'admin' | 'member' | 'pending'
 }
 
 export type GroupMemberKind = 'person' | 'persona'
@@ -116,6 +133,70 @@ export function normalizeThreads(json: unknown): Thread[] {
 }
 
 /**
+ * Pull a thread id out of a create response defensively. The runtime has been observed
+ * to return the created thread flat (`{id,...}`) OR nested under a wrapper key
+ * (`{thread:{...}}`, `{data:{...}}`, `{result:{...}}`, `{group:{...}}`) OR as a bare id
+ * field (`{id}`/`{threadId}`/`{sid}`). We accept all of them so a successful create is
+ * never mis-reported as a failure just because the envelope differs. PURE.
+ */
+export function pickThreadId(json: unknown): string | undefined {
+  if (!json || typeof json !== 'object') return undefined
+  const j = json as Record<string, unknown>
+  const direct = str(j.id) ?? str(j.threadId) ?? str(j.sid)
+  if (direct) return direct
+  for (const key of ['thread', 'data', 'result', 'group']) {
+    const nested = j[key]
+    if (nested && typeof nested === 'object') {
+      const r = nested as Record<string, unknown>
+      const id = str(r.id) ?? str(r.threadId) ?? str(r.sid)
+      if (id) return id
+    }
+  }
+  return undefined
+}
+
+/** Normalize one raw group-member row defensively. Returns null without an id. */
+export function normalizeMember(raw: unknown): ThreadMember | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const id = str(r.id) ?? str(r.did) ?? str(r.memberId)
+  if (!id) return null
+  const kind: GroupMemberKind = r.kind === 'persona' ? 'persona' : 'person'
+  const role = r.role
+  return {
+    id,
+    kind,
+    name: str(r.name) ?? str(r.displayName),
+    handle: str(r.handle),
+    role:
+      role === 'owner' ||
+      role === 'admin' ||
+      role === 'member' ||
+      role === 'pending'
+        ? role
+        : undefined,
+  }
+}
+
+/** Newest/owner-first ordering for a roster: owner, admins, members, then pending. */
+export function normalizeMembers(json: unknown): ThreadMember[] {
+  const rows = (json as {members?: unknown})?.members
+  if (!Array.isArray(rows)) return []
+  const rank = (m: ThreadMember) =>
+    m.role === 'owner'
+      ? 0
+      : m.role === 'admin'
+        ? 1
+        : m.role === 'pending'
+          ? 3
+          : 2
+  return rows
+    .map(normalizeMember)
+    .filter((m): m is ThreadMember => m !== null)
+    .sort((a, b) => rank(a) - rank(b))
+}
+
+/**
  * Friend-vs-invite decision: an already-connected person (in the owner's follows /
  * social graph) is ADDED directly; anyone else is INVITED and must accept. Personas are
  * always added directly (no consent step). PURE + tested.
@@ -126,8 +207,7 @@ export function memberOpFor(
   friendIds: ReadonlySet<string> | readonly string[],
 ): GroupOp {
   if (memberKind === 'persona') return 'add'
-  const set =
-    friendIds instanceof Set ? friendIds : new Set<string>(friendIds)
+  const set = friendIds instanceof Set ? friendIds : new Set<string>(friendIds)
   return set.has(memberId) ? 'add' : 'invite'
 }
 
@@ -184,7 +264,11 @@ export async function fetchThreads(): Promise<ThreadsResult> {
   try {
     headers = await authHeaders()
   } catch (e) {
-    return {threads: [], signedOut: false, error: errorMessage(e) ?? 'auth error'}
+    return {
+      threads: [],
+      signedOut: false,
+      error: errorMessage(e) ?? 'auth error',
+    }
   }
   if (!headers) return {threads: [], signedOut: true}
   try {
@@ -192,11 +276,19 @@ export async function fetchThreads(): Promise<ThreadsResult> {
     if (res.status === 401 || res.status === 403)
       return {threads: [], signedOut: true}
     if (!res.ok)
-      return {threads: [], signedOut: false, error: `Runtime error ${res.status}`}
+      return {
+        threads: [],
+        signedOut: false,
+        error: `Runtime error ${res.status}`,
+      }
     return {threads: normalizeThreads(await res.json()), signedOut: false}
   } catch (e) {
     logger.warn('threads: fetch failed', {safeMessage: String(e)})
-    return {threads: [], signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      threads: [],
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
   }
 }
 
@@ -224,11 +316,37 @@ export async function createThread(input: {
       return {ok: false, signedOut: true}
     if (!res.ok)
       return {ok: false, signedOut: false, error: `Runtime error ${res.status}`}
-    const created = normalizeThread(await res.json()) ?? undefined
-    return {ok: true, signedOut: false, data: created}
+    // A 2xx means the thread WAS created. Recover the thread/id from whatever envelope
+    // the runtime used so we never mis-report a real success as a failure (the create
+    // screen then proceeds to "add people"). If we genuinely can't find an id, still
+    // report ok (no data) — the thread list refetch will surface the new group.
+    const json = await res.json().catch(() => ({}))
+    const created = normalizeThread(json)
+    if (created) return {ok: true, signedOut: false, data: created}
+    const id = pickThreadId(json)
+    if (id) {
+      return {
+        ok: true,
+        signedOut: false,
+        data: {
+          id,
+          kind: input.kind,
+          personaId: input.personaId,
+          title:
+            input.title ?? (input.kind === 'group' ? 'Group' : 'Talk to Bob'),
+          unreadCount: 0,
+          updatedAt: 0,
+        },
+      }
+    }
+    return {ok: true, signedOut: false, data: undefined}
   } catch (e) {
     logger.warn('threads: create failed', {safeMessage: String(e)})
-    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
   }
 }
 
@@ -292,7 +410,11 @@ export async function sendToThread(
     return {ok: true, signedOut: false, data: reply}
   } catch (e) {
     logger.warn('threads: send failed', {safeMessage: String(e)})
-    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
   }
 }
 
@@ -316,7 +438,34 @@ export async function groupOp(
     return {ok: true, signedOut: false}
   } catch (e) {
     logger.warn('threads: group op failed', {safeMessage: String(e)})
-    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
+  }
+}
+
+/**
+ * GET /app/threads/:id/members — the group roster. Returns [] when signed out,
+ * unreachable, or the endpoint isn't deployed yet, so the roster UI degrades to a
+ * "can't show members yet" state instead of erroring. Never throws.
+ */
+export async function fetchThreadMembers(
+  threadId: string,
+): Promise<ThreadMember[]> {
+  try {
+    const headers = await authHeaders()
+    if (!headers) return []
+    const res = await fetch(threadMembersUrl(threadId), {
+      method: 'GET',
+      headers,
+    })
+    if (!res.ok) return []
+    return normalizeMembers(await res.json())
+  } catch (e) {
+    logger.warn('threads: fetch members failed', {safeMessage: String(e)})
+    return []
   }
 }
 
@@ -342,7 +491,10 @@ export function makeThreadTransport(threadId: string) {
         return
       }
       if (!result.ok) {
-        handlers.onError(result.error ?? 'Could not send to this thread.', 'transport')
+        handlers.onError(
+          result.error ?? 'Could not send to this thread.',
+          'transport',
+        )
         return
       }
       const reply = result.data

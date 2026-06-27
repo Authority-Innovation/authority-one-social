@@ -2,17 +2,38 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {
   createThread,
+  fetchThreadMembers,
   fetchThreads,
   groupOp,
   type GroupOpInput,
   type Thread,
   type ThreadKind,
+  type ThreadMember,
 } from '#/lib/agent-runtime'
 import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
 
 const threadsQueryKeyRoot = 'agentThreads'
-export const createThreadsQueryKey = () => createQueryKey(threadsQueryKeyRoot, {})
+export const createThreadsQueryKey = () =>
+  createQueryKey(threadsQueryKeyRoot, {})
+
+const threadMembersQueryKeyRoot = 'agentThreadMembers'
+export const createThreadMembersQueryKey = (threadId: string) =>
+  createQueryKey(threadMembersQueryKeyRoot, {threadId})
+
+/**
+ * The roster for a group thread (GET /app/threads/:id/members). Always resolves (never
+ * throws); an empty array means signed out, unreachable, or the members endpoint isn't
+ * deployed yet, in which case the UI shows a graceful "can't show members" state.
+ */
+export function useThreadMembersQuery(threadId: string) {
+  return useQuery<ThreadMember[]>({
+    queryKey: createThreadMembersQueryKey(threadId),
+    queryFn: () => fetchThreadMembers(threadId),
+    staleTime: STALE.SECONDS.FIFTEEN,
+    enabled: !!threadId,
+  })
+}
 
 /**
  * The owner's chat threads (default Talk-to-Bob agent thread + groups) from
@@ -41,17 +62,27 @@ function useInvalidateThreads() {
 export function useCreateThreadMutation() {
   const invalidate = useInvalidateThreads()
   return useMutation({
-    mutationFn: (input: {title?: string; kind: ThreadKind; personaId?: string}) =>
-      createThread(input),
+    mutationFn: (input: {
+      title?: string
+      kind: ThreadKind
+      personaId?: string
+    }) => createThread(input),
     onSuccess: invalidate,
   })
 }
 
 export function useGroupOpMutation() {
   const invalidate = useInvalidateThreads()
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: {threadId: string} & GroupOpInput) =>
       groupOp(input.threadId, input),
-    onSuccess: invalidate,
+    onSuccess: (_data, input) => {
+      void invalidate()
+      // Membership changed -> refresh that group's roster too.
+      void qc.invalidateQueries({
+        queryKey: createThreadMembersQueryKey(input.threadId),
+      })
+    },
   })
 }
