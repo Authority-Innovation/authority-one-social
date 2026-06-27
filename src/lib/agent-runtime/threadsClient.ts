@@ -7,9 +7,12 @@ import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
 import {SIGNED_OUT_MESSAGE, type StreamHandlers} from './chatClient'
 import {
+  threadDeleteUrl,
   threadGroupUrl,
   threadMembersUrl,
   threadMessagesUrl,
+  threadRemoveMemberUrl,
+  threadRenameUrl,
   THREADS_ENDPOINT,
   threadSendUrl,
 } from './config'
@@ -62,6 +65,16 @@ export interface ThreadMember {
   /** Handle for a person member (e.g. alice.pds.authority-one.com). */
   handle?: string
   role?: 'owner' | 'admin' | 'member' | 'pending'
+}
+
+/**
+ * A group's roster as returned by GET /app/threads/:id/members:
+ * `{creatorDid, members:[{did,handle,name,role}]}`. `creatorDid` identifies the group
+ * creator so the UI can gate creator-only admin actions (rename/remove/delete).
+ */
+export interface ThreadRoster {
+  creatorDid?: string
+  members: ThreadMember[]
 }
 
 export type GroupMemberKind = 'person' | 'persona'
@@ -194,6 +207,15 @@ export function normalizeMembers(json: unknown): ThreadMember[] {
     .map(normalizeMember)
     .filter((m): m is ThreadMember => m !== null)
     .sort((a, b) => rank(a) - rank(b))
+}
+
+/** Normalize the GET /app/threads/:id/members payload into a roster. PURE. */
+export function normalizeRoster(json: unknown): ThreadRoster {
+  const j = (json ?? {}) as Record<string, unknown>
+  return {
+    creatorDid: str(j.creatorDid) ?? str(j.creator) ?? str(j.ownerDid),
+    members: normalizeMembers(json),
+  }
 }
 
 /**
@@ -447,25 +469,98 @@ export async function groupOp(
 }
 
 /**
- * GET /app/threads/:id/members — the group roster. Returns [] when signed out,
- * unreachable, or the endpoint isn't deployed yet, so the roster UI degrades to a
- * "can't show members yet" state instead of erroring. Never throws.
+ * GET /app/threads/:id/members — the group roster `{creatorDid, members}`. Returns an
+ * empty roster when signed out, unreachable, or the endpoint isn't deployed yet, so the
+ * roster UI degrades to a "can't show members yet" state (and creator-only admin actions
+ * stay hidden) instead of erroring. Never throws.
  */
 export async function fetchThreadMembers(
   threadId: string,
-): Promise<ThreadMember[]> {
+): Promise<ThreadRoster> {
+  const empty: ThreadRoster = {members: []}
   try {
     const headers = await authHeaders()
-    if (!headers) return []
+    if (!headers) return empty
     const res = await fetch(threadMembersUrl(threadId), {
       method: 'GET',
       headers,
     })
-    if (!res.ok) return []
-    return normalizeMembers(await res.json())
+    if (!res.ok) return empty
+    return normalizeRoster(await res.json())
   } catch (e) {
     logger.warn('threads: fetch members failed', {safeMessage: String(e)})
-    return []
+    return empty
+  }
+}
+
+/** POST /app/threads/:id/rename {name} — creator-only group rename. */
+export async function renameThread(
+  threadId: string,
+  name: string,
+): Promise<ThreadWriteResult> {
+  const headers = await authHeaders().catch(() => null)
+  if (!headers) return {ok: false, signedOut: true}
+  try {
+    const res = await fetch(threadRenameUrl(threadId), {
+      method: 'POST',
+      headers: {...headers, 'Content-Type': 'application/json'},
+      body: JSON.stringify({name}),
+    })
+    if (res.status === 401 || res.status === 403)
+      return {ok: false, signedOut: true}
+    if (!res.ok)
+      return {ok: false, signedOut: false, error: `Runtime error ${res.status}`}
+    return {ok: true, signedOut: false}
+  } catch (e) {
+    logger.warn('threads: rename failed', {safeMessage: String(e)})
+    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+  }
+}
+
+/** POST /app/threads/:id/members/remove {did} — creator-only member eject. */
+export async function removeThreadMember(
+  threadId: string,
+  did: string,
+): Promise<ThreadWriteResult> {
+  const headers = await authHeaders().catch(() => null)
+  if (!headers) return {ok: false, signedOut: true}
+  try {
+    const res = await fetch(threadRemoveMemberUrl(threadId), {
+      method: 'POST',
+      headers: {...headers, 'Content-Type': 'application/json'},
+      body: JSON.stringify({did}),
+    })
+    if (res.status === 401 || res.status === 403)
+      return {ok: false, signedOut: true}
+    if (!res.ok)
+      return {ok: false, signedOut: false, error: `Runtime error ${res.status}`}
+    return {ok: true, signedOut: false}
+  } catch (e) {
+    logger.warn('threads: remove member failed', {safeMessage: String(e)})
+    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+  }
+}
+
+/** POST /app/threads/:id/delete — creator-only group delete (distinct from leave). */
+export async function deleteThread(
+  threadId: string,
+): Promise<ThreadWriteResult> {
+  const headers = await authHeaders().catch(() => null)
+  if (!headers) return {ok: false, signedOut: true}
+  try {
+    const res = await fetch(threadDeleteUrl(threadId), {
+      method: 'POST',
+      headers: {...headers, 'Content-Type': 'application/json'},
+      body: JSON.stringify({}),
+    })
+    if (res.status === 401 || res.status === 403)
+      return {ok: false, signedOut: true}
+    if (!res.ok)
+      return {ok: false, signedOut: false, error: `Runtime error ${res.status}`}
+    return {ok: true, signedOut: false}
+  } catch (e) {
+    logger.warn('threads: delete failed', {safeMessage: String(e)})
+    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
   }
 }
 

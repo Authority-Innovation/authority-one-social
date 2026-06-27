@@ -50,6 +50,7 @@ export {
 export {postPhotoContext} from './photoContextClient'
 export {
   createThread,
+  deleteThread,
   fetchThreadMembers,
   fetchThreadMessages,
   fetchThreads,
@@ -62,13 +63,17 @@ export {
   memberOpFor,
   normalizeMember,
   normalizeMembers,
+  normalizeRoster,
   normalizeThread,
   normalizeThreads,
   pickThreadId,
+  removeThreadMember,
+  renameThread,
   sendToThread,
   type Thread,
   type ThreadKind,
   type ThreadMember,
+  type ThreadRoster,
   type ThreadsResult,
   type ThreadWriteResult,
 } from './threadsClient'

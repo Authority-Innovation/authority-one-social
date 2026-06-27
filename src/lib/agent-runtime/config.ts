@@ -23,6 +23,13 @@ export const threadGroupUrl = (id: string) =>
   `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/group`
 export const threadMembersUrl = (id: string) =>
   `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/members`
+// Creator-only group admin (a parallel runtime session implements these routes).
+export const threadRenameUrl = (id: string) =>
+  `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/rename`
+export const threadRemoveMemberUrl = (id: string) =>
+  `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/members/remove`
+export const threadDeleteUrl = (id: string) =>
+  `${THREADS_ENDPOINT}/${encodeURIComponent(id)}/delete`
 
 /**
  * Chat image upload endpoint (owner-scoped). The app POSTs the RAW image bytes with an

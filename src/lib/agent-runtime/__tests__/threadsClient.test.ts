@@ -3,6 +3,7 @@ import {afterEach, describe, expect, it, jest} from '@jest/globals'
 import {getSupabaseAccessToken} from '../authToken'
 import {
   createThread,
+  deleteThread,
   fetchThreadMembers,
   fetchThreads,
   groupOp,
@@ -10,9 +11,12 @@ import {
   makeThreadTransport,
   memberOpFor,
   normalizeMembers,
+  normalizeRoster,
   normalizeThread,
   normalizeThreads,
   pickThreadId,
+  removeThreadMember,
+  renameThread,
   sendToThread,
 } from '../threadsClient'
 
@@ -199,24 +203,46 @@ describe('normalizeMembers (pure)', () => {
   })
 })
 
+describe('normalizeRoster (pure)', () => {
+  it('reads creatorDid + members (mapping did -> id)', () => {
+    const out = normalizeRoster({
+      creatorDid: 'did:owner',
+      members: [
+        {did: 'did:owner', handle: 'o.test', name: 'Owner', role: 'owner'},
+        {did: 'did:m', handle: 'm.test', role: 'member'},
+      ],
+    })
+    expect(out.creatorDid).toBe('did:owner')
+    expect(out.members.map(m => m.id)).toEqual(['did:owner', 'did:m'])
+    expect(out.members[0].name).toBe('Owner')
+  })
+
+  it('defaults to an empty roster with no creatorDid', () => {
+    expect(normalizeRoster({})).toEqual({creatorDid: undefined, members: []})
+    expect(normalizeRoster(null)).toEqual({creatorDid: undefined, members: []})
+  })
+})
+
 describe('fetchThreadMembers', () => {
-  it('returns [] (no fetch) when signed out', async () => {
+  it('returns an empty roster (no fetch) when signed out', async () => {
     mockToken.mockResolvedValue(null)
     const spy = okJson({members: [{id: 'x'}]})
     global.fetch = spy
-    expect(await fetchThreadMembers('g1')).toEqual([])
+    expect(await fetchThreadMembers('g1')).toEqual({members: []})
     expect((spy as unknown as jest.Mock).mock.calls).toHaveLength(0)
   })
 
-  it('returns the normalized roster on success', async () => {
+  it('returns the normalized roster (creatorDid + members) on success', async () => {
     mockToken.mockResolvedValue('tok')
     global.fetch = okJson({
-      members: [{id: 'o', role: 'owner', handle: 'o.test'}],
+      creatorDid: 'did:o',
+      members: [{did: 'did:o', role: 'owner', handle: 'o.test'}],
     })
     const out = await fetchThreadMembers('g1')
-    expect(out).toEqual([
+    expect(out.creatorDid).toBe('did:o')
+    expect(out.members).toEqual([
       {
-        id: 'o',
+        id: 'did:o',
         kind: 'person',
         name: undefined,
         handle: 'o.test',
@@ -225,12 +251,60 @@ describe('fetchThreadMembers', () => {
     ])
   })
 
-  it('returns [] on a non-ok response (degrades, e.g. endpoint not deployed)', async () => {
+  it('returns an empty roster on non-ok (degrades, e.g. endpoint not deployed)', async () => {
     mockToken.mockResolvedValue('tok')
     global.fetch = jest.fn(() =>
       Promise.resolve({ok: false, status: 405}),
     ) as unknown as typeof fetch
-    expect(await fetchThreadMembers('g1')).toEqual([])
+    expect(await fetchThreadMembers('g1')).toEqual({members: []})
+  })
+})
+
+describe('group admin writes (rename/remove/delete)', () => {
+  it('renameThread POSTs {name} to /rename', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = okJson({})
+    const res = await renameThread('g1', 'Family')
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0]
+    expect(String(call[0])).toContain('/app/threads/g1/rename')
+    expect(JSON.parse(String((call[1] as {body: string}).body))).toEqual({
+      name: 'Family',
+    })
+    expect(res.ok).toBe(true)
+  })
+
+  it('removeThreadMember POSTs {did} to /members/remove', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = okJson({})
+    const res = await removeThreadMember('g1', 'did:x')
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0]
+    expect(String(call[0])).toContain('/app/threads/g1/members/remove')
+    expect(JSON.parse(String((call[1] as {body: string}).body))).toEqual({
+      did: 'did:x',
+    })
+    expect(res.ok).toBe(true)
+  })
+
+  it('deleteThread POSTs to /delete', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = okJson({})
+    const res = await deleteThread('g1')
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0]
+    expect(String(call[0])).toContain('/app/threads/g1/delete')
+    expect(res.ok).toBe(true)
+  })
+
+  it('surfaces signed-out and non-ok as not-ok (no false success)', async () => {
+    mockToken.mockResolvedValue(null)
+    expect(await renameThread('g1', 'x')).toEqual({ok: false, signedOut: true})
+
+    mockToken.mockResolvedValue('tok')
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ok: false, status: 500}),
+    ) as unknown as typeof fetch
+    const res = await deleteThread('g1')
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain('500')
   })
 })
 
