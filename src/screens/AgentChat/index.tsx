@@ -68,6 +68,10 @@ export function AgentChatScreen({route}: Props) {
   // "will" events so the padding change rides the keyboard animation.
   const [isKeyboardVisible] = useIsKeyboardVisible({iosUseWillEvents: true})
   const agent = route.params?.agent ?? DEFAULT_AGENT
+  // Multi-chat: when opened for a specific thread (group/agent), drive that thread.
+  // Absent -> the default single Talk-to-Bob channel (back-compat).
+  const threadId = route.params?.threadId
+  const threadTitle = route.params?.threadTitle
   // Active persona (name + voice) from the runtime. Degrades to undefined when
   // signed out / unreachable, so the name falls back to the atproto profile.
   const {data: personas} = usePersonasQuery()
@@ -93,7 +97,7 @@ export function AgentChatScreen({route}: Props) {
     decide,
     transportError,
     retry,
-  } = useAgentChat(agent)
+  } = useAgentChat(agent, {threadId})
   const [input, setInput] = useState('')
   // Single in-progress image attachment for the next turn (one image per message).
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null)
@@ -275,7 +279,7 @@ export function AgentChatScreen({route}: Props) {
         <Layout.Header.BackButton />
         <Layout.Header.Content>
           <Layout.Header.TitleText style={headerTitleStyle}>
-            {`Talk to ${agentName}`}
+            {threadTitle ?? `Talk to ${agentName}`}
           </Layout.Header.TitleText>
           {!showMic ? (
             <Layout.Header.SubtitleText>

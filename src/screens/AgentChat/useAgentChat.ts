@@ -5,6 +5,8 @@ import {
   type ChatMessage,
   type ChatRole,
   fetchHistory,
+  fetchThreadMessages,
+  makeThreadTransport,
   postApprovalDecision,
   streamChat,
 } from '#/lib/agent-runtime'
@@ -55,8 +57,17 @@ export interface UseAgentChat {
  * Chat state machine for the agent runtime. Keeps the message list, drives the
  * streaming reply into a single "pending" assistant message, and exposes hooks so the
  * screen can pipe streamed text into TTS.
+ *
+ * When `opts.threadId` is set, the SAME machine drives a multi-chat thread instead of
+ * the default Talk-to-Bob channel: history loads from the thread and turns POST to the
+ * thread's send endpoint (non-streaming) — the UI is identical. Without a threadId it is
+ * the existing single-chat behavior (back-compat).
  */
-export function useAgentChat(agent?: string): UseAgentChat {
+export function useAgentChat(
+  agent?: string,
+  opts?: {threadId?: string},
+): UseAgentChat {
+  const threadId = opts?.threadId
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isHydrating, setIsHydrating] = useState(true)
@@ -80,18 +91,20 @@ export function useAgentChat(agent?: string): UseAgentChat {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const result = await fetchHistory()
+      const loaded = threadId
+        ? await fetchThreadMessages(threadId)
+        : (await fetchHistory()).messages
       if (cancelled) return
-      if (result.messages.length > 0) {
-        setMessages(prev => (prev.length === 0 ? result.messages : prev))
+      if (loaded.length > 0) {
+        setMessages(prev => (prev.length === 0 ? loaded : prev))
       }
       setIsHydrating(false)
     })()
     return () => {
       cancelled = true
     }
-    // Mount-only: the empty-list guard makes a re-run safe, but we want a single load.
-  }, [])
+    // Re-hydrate if the thread changes; the empty-list guard makes a re-run safe.
+  }, [threadId])
   // Mirror of messages for building the history payload without stale closures.
   // Written in an effect (not during render) so we never mutate a ref mid-render;
   // `send` only reads it from event handlers, which always run post-commit.
@@ -126,8 +139,12 @@ export function useAgentChat(agent?: string): UseAgentChat {
     ) => {
       setIsStreaming(true)
 
+      // Thread turns POST to the thread's send endpoint (JSON reply); the default
+      // channel streams via SSE. Both satisfy the same transport contract.
+      const startTurn = threadId ? makeThreadTransport(threadId) : streamChat
+
       let acc = ''
-      const {abort} = streamChat(
+      const {abort} = startTurn(
         {text, history, agent, images: opts?.images},
         {
           onTextDelta: delta => {
@@ -181,7 +198,7 @@ export function useAgentChat(agent?: string): UseAgentChat {
       )
       abortRef.current = abort
     },
-    [agent, upsertAssistant],
+    [agent, threadId, upsertAssistant],
   )
 
   const send = useCallback(

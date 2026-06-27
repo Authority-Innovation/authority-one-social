@@ -9,11 +9,23 @@ export type CommonNavigatorParams = {
   NotFound: undefined
   // Authority One: conversational agent chat (voice + text) backed by the agent runtime.
   // sharedPhotoUri/Mime: a photo handed from Photo Context to pre-attach for vision.
-  AgentChat: {agent?: string; sharedPhotoUri?: string; sharedPhotoMime?: string}
+  // threadId/threadTitle: opens a specific multi-chat thread (group/agent) vs the
+  // default single Talk-to-Bob channel when absent.
+  AgentChat: {
+    agent?: string
+    sharedPhotoUri?: string
+    sharedPhotoMime?: string
+    threadId?: string
+    threadTitle?: string
+  }
   // Authority One: Supabase account layer (sign in / up) that authorizes the agent channel.
   AuthorityAccount: undefined
   // Authority One: "For You" / Discover — TikTok-style vertical feed of localized sports content.
   ForYou: undefined
+  // Authority One: multi-chat (threads + groups).
+  ChatList: undefined
+  NewGroup: undefined
+  GroupManage: {threadId: string; title: string}
   Lists: undefined
   Moderation: undefined
   ModerationModlists: undefined

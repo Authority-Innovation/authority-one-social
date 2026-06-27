@@ -49,5 +49,24 @@ export {
   updatePersona,
 } from './personasClient'
 export {postPhotoContext} from './photoContextClient'
+export {
+  createThread,
+  fetchThreadMessages,
+  fetchThreads,
+  type GroupMemberKind,
+  type GroupOp,
+  groupOp,
+  groupOpBody,
+  type GroupOpInput,
+  makeThreadTransport,
+  memberOpFor,
+  normalizeThread,
+  normalizeThreads,
+  sendToThread,
+  type Thread,
+  type ThreadKind,
+  type ThreadsResult,
+  type ThreadWriteResult,
+} from './threadsClient'
 export {bytesToBase64, fetchBobAudioBase64} from './tts'
 export * from './types'
