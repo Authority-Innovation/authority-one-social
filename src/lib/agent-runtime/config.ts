@@ -63,6 +63,9 @@ export const TTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/tts`
  * reads/sets. See the persona contract in the runtime.
  */
 export const PERSONAS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas`
+/** Full persona detail (identity + knowledge base + fiction). The list endpoint is now
+ *  light (id/name/voiceId only), so the editor loads detail from here. */
+export const PERSONAS_GET_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas/get`
 export const PERSONAS_UPDATE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas/update`
 export const PERSONAS_DELETE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas/delete`
 export const PERSONAS_ACTIVE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas/active`

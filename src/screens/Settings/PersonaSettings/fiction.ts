@@ -16,14 +16,19 @@ export interface PersonaFictionDraft {
 }
 
 export function emptyFictionDraft(): PersonaFictionDraft {
-  return {enabled: false, backstory: '', homeBase: '', haunts: [], weeklyRhythm: ''}
+  return {
+    enabled: false,
+    backstory: '',
+    homeBase: '',
+    haunts: [],
+    weeklyRhythm: '',
+  }
 }
 
-/** Seed the editor from a persona's existing fiction (or empty when none). */
-export function fictionDraftFromPersona(
-  persona: Persona | null,
+/** Seed the editor from a PersonaFiction (or empty when none). */
+export function fictionDraftFrom(
+  f: PersonaFiction | undefined,
 ): PersonaFictionDraft {
-  const f = persona?.fiction
   if (!f) return emptyFictionDraft()
   return {
     enabled: f.enabled === true,
@@ -32,6 +37,13 @@ export function fictionDraftFromPersona(
     haunts: Array.isArray(f.haunts) ? [...f.haunts] : [],
     weeklyRhythm: f.weeklyRhythm ?? '',
   }
+}
+
+/** Seed the editor from a persona's existing fiction (or empty when none). */
+export function fictionDraftFromPersona(
+  persona: Persona | null,
+): PersonaFictionDraft {
+  return fictionDraftFrom(persona?.fiction)
 }
 
 /** Append a haunt (trimmed, non-empty, de-duped case-insensitively). */
@@ -80,7 +92,9 @@ export function fictionHasContent(draft: PersonaFictionDraft): boolean {
 }
 
 /** Build the normalized PersonaFiction payload from the editor draft. */
-export function buildFictionPayload(draft: PersonaFictionDraft): PersonaFiction {
+export function buildFictionPayload(
+  draft: PersonaFictionDraft,
+): PersonaFiction {
   return {
     enabled: draft.enabled,
     backstory: trimToUndef(draft.backstory),

@@ -4,6 +4,7 @@ import {
   PERSONAS_ACTIVE_ENDPOINT,
   PERSONAS_DELETE_ENDPOINT,
   PERSONAS_ENDPOINT,
+  PERSONAS_GET_ENDPOINT,
   PERSONAS_UPDATE_ENDPOINT,
   VOICES_ENDPOINT,
 } from './config'
@@ -38,8 +39,50 @@ export interface Persona {
   id: string
   name: string
   voiceId?: string
+  /** Light list no longer carries this; present only on legacy/flat responses. */
   personality?: string
   fiction?: PersonaFiction
+}
+
+// ── Split persona schema (identity / knowledge base) ─────────────────────────
+// The runtime persona model is SPLIT: a compact always-on IDENTITY ("soul") plus a
+// larger KNOWLEDGE BASE the agent pulls in when relevant. The list endpoint is light;
+// full detail is loaded per-persona from /app/personas/get.
+
+/** The compact, always-on "soul" — the personality folded into every turn. */
+export interface PersonaIdentity {
+  personality?: string
+}
+
+/** One knowledge-base entry: deep lore the agent retrieves when relevant. */
+export interface KnowledgeBaseEntry {
+  id?: string
+  title: string
+  /** Retrieval keywords. */
+  keywords: string[]
+  body: string
+}
+
+/** Knowledge base: an always-injected `summary` gist + a list of detail entries. */
+export interface KnowledgeBase {
+  summary?: string
+  entries: KnowledgeBaseEntry[]
+}
+
+/** Full persona detail from POST /app/personas/get. */
+export interface PersonaDetail {
+  id: string
+  name: string
+  voiceId?: string
+  identity: PersonaIdentity
+  knowledgeBase: KnowledgeBase
+  fiction?: PersonaFiction
+}
+
+export interface PersonaDetailResult {
+  detail?: PersonaDetail
+  signedOut: boolean
+  error?: string
 }
 
 /** The full GET /app/personas payload, normalized. */
@@ -49,6 +92,8 @@ export interface PersonasState {
   activeName?: string
   activeVoiceId?: string
   voices: PersonaVoice[]
+  /** Whether the runtime has migrated this owner's personas to the split schema. */
+  migrated?: boolean
 }
 
 export interface PersonasResult {
@@ -62,6 +107,8 @@ export interface PersonaWriteResult {
   ok: boolean
   signedOut: boolean
   error?: string
+  /** Machine-readable error code from a 4xx (e.g. 'identity-too-long', 'persona-too-large'). */
+  code?: string
   /**
    * The refreshed personas view the runtime returns on a successful mutation (the same
    * shape as GET /app/personas). Lets the caller update the cache from the authoritative
@@ -138,6 +185,87 @@ export function normalizePersonasResponse(json: unknown): PersonasState {
     activePersonaId,
     activeName: str(j.activeName) ?? active?.name,
     activeVoiceId: str(j.activeVoiceId) ?? active?.voiceId,
+    migrated: j.migrated === true,
+  }
+}
+
+// ── Persona detail normalizers (POST /app/personas/get) ──────────────────────
+
+/** Normalize keywords: accept a string[] or a comma/newline-separated string. PURE. */
+export function normalizeKeywords(raw: unknown): string[] {
+  const parts = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split(/[,\n]/)
+      : []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const p of parts) {
+    if (typeof p !== 'string') continue
+    const v = p.trim()
+    if (!v) continue
+    const key = v.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(v)
+  }
+  return out
+}
+
+/** Normalize one raw knowledge-base entry. Returns null when it has no title and no body. */
+export function normalizeKbEntry(raw: unknown): KnowledgeBaseEntry | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const title = typeof r.title === 'string' ? r.title : ''
+  const body = typeof r.body === 'string' ? r.body : ''
+  if (!title.trim() && !body.trim()) return null
+  return {
+    id: str(r.id),
+    title,
+    keywords: normalizeKeywords(r.keywords),
+    body,
+  }
+}
+
+/** Normalize the knowledge-base block defensively (summary + entries). PURE. */
+export function normalizeKnowledgeBase(raw: unknown): KnowledgeBase {
+  const k = (raw ?? {}) as Record<string, unknown>
+  return {
+    summary: str(k.summary),
+    entries: Array.isArray(k.entries)
+      ? k.entries
+          .map(normalizeKbEntry)
+          .filter((e): e is KnowledgeBaseEntry => e !== null)
+      : [],
+  }
+}
+
+/**
+ * Normalize the POST /app/personas/get payload ({persona:{...}}) into a PersonaDetail.
+ * Tolerates a legacy flat `personality` by lifting it into `identity`. Returns null
+ * without an id. PURE.
+ */
+export function normalizePersonaDetail(json: unknown): PersonaDetail | null {
+  const j = (json ?? {}) as Record<string, unknown>
+  const raw = (
+    j.persona && typeof j.persona === 'object' ? j.persona : j
+  ) as Record<string, unknown>
+  const id = str(raw.id)
+  if (!id) return null
+  const identityRaw =
+    raw.identity && typeof raw.identity === 'object'
+      ? (raw.identity as Record<string, unknown>)
+      : {}
+  const personality =
+    str(identityRaw.personality) ??
+    (typeof raw.personality === 'string' ? raw.personality : undefined)
+  return {
+    id,
+    name: str(raw.name) ?? id,
+    voiceId: str(raw.voiceId),
+    identity: {personality},
+    knowledgeBase: normalizeKnowledgeBase(raw.knowledgeBase),
+    fiction: normalizeFiction(raw.fiction),
   }
 }
 
@@ -213,6 +341,37 @@ export async function fetchVoices(): Promise<PersonaVoice[]> {
   }
 }
 
+/**
+ * POST /app/personas/get {id} — full persona detail (identity + knowledge base + fiction).
+ * The list is light now, so the editor calls this to load a persona for editing. Never
+ * throws; returns signedOut / error flags so the editor can degrade.
+ */
+export async function fetchPersonaDetail(
+  id: string,
+): Promise<PersonaDetailResult> {
+  let headers: Record<string, string> | null
+  try {
+    headers = await authHeaders()
+  } catch (e) {
+    return {signedOut: false, error: errorMessage(e) ?? 'auth error'}
+  }
+  if (!headers) return {signedOut: true}
+  try {
+    const res = await fetch(PERSONAS_GET_ENDPOINT, {
+      method: 'POST',
+      headers: {...headers, 'Content-Type': 'application/json'},
+      body: JSON.stringify({id}),
+    })
+    if (res.status === 401 || res.status === 403) return {signedOut: true}
+    if (!res.ok) return {signedOut: false, error: `Runtime error ${res.status}`}
+    const detail = normalizePersonaDetail(await res.json()) ?? undefined
+    return {detail, signedOut: false}
+  } catch (e) {
+    logger.warn('personas: fetch detail failed', {safeMessage: String(e)})
+    return {signedOut: false, error: errorMessage(e) ?? 'network error'}
+  }
+}
+
 async function postJson(
   url: string,
   body: Record<string, unknown>,
@@ -234,7 +393,20 @@ async function postJson(
       return {ok: false, signedOut: true}
     }
     if (!res.ok) {
-      return {ok: false, signedOut: false, error: `Runtime error ${res.status}`}
+      // Surface the runtime's machine-readable code (e.g. identity-too-long,
+      // persona-too-large) + message so the editor can show a specific, helpful error.
+      const errJson = (await res.json().catch(() => undefined)) as
+        | {code?: unknown; error?: unknown; message?: unknown}
+        | undefined
+      return {
+        ok: false,
+        signedOut: false,
+        code: str(errJson?.code),
+        error:
+          str(errJson?.error) ??
+          str(errJson?.message) ??
+          `Runtime error ${res.status}`,
+      }
     }
     // The runtime echoes the refreshed personas view on success; carry it back so the
     // caller can update the cache authoritatively (no refetch race). Only attach a state
@@ -260,34 +432,44 @@ async function postJson(
   }
 }
 
-export function createPersona(input: {
-  name: string
-  voiceId?: string
-  personality?: string
-}): Promise<PersonaWriteResult> {
-  return postJson(PERSONAS_ENDPOINT, {
-    name: input.name,
-    voiceId: input.voiceId,
-    personality: input.personality,
-  })
-}
-
-export function updatePersona(input: {
-  id: string
+/**
+ * Create/update input in the SPLIT shape: a compact `identity` (always-on soul) + a
+ * `knowledgeBase` (deep lore) + optional `fiction`. The runtime still accepts a legacy
+ * flat `personality`, but we always send the nested shape. Fields are omitted when
+ * undefined (absent ⇒ no change server-side).
+ */
+export interface PersonaWriteInput {
   name?: string
   voiceId?: string
-  personality?: string
-  /** The persona's fictional life; the runtime accepts it on the update endpoint. */
+  identity?: PersonaIdentity
+  knowledgeBase?: KnowledgeBase
   fiction?: PersonaFiction
-}): Promise<PersonaWriteResult> {
+}
+
+/** Build the nested wire body, omitting undefined fields. */
+function personaBody(input: PersonaWriteInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  if (input.name !== undefined) body.name = input.name
+  if (input.voiceId !== undefined) body.voiceId = input.voiceId
+  if (input.identity !== undefined) body.identity = input.identity
+  if (input.knowledgeBase !== undefined)
+    body.knowledgeBase = input.knowledgeBase
+  if (input.fiction !== undefined) body.fiction = input.fiction
+  return body
+}
+
+export function createPersona(
+  input: PersonaWriteInput & {name: string},
+): Promise<PersonaWriteResult> {
+  return postJson(PERSONAS_ENDPOINT, personaBody(input))
+}
+
+export function updatePersona(
+  input: PersonaWriteInput & {id: string},
+): Promise<PersonaWriteResult> {
   return postJson(PERSONAS_UPDATE_ENDPOINT, {
     id: input.id,
-    name: input.name,
-    voiceId: input.voiceId,
-    personality: input.personality,
-    // Only include fiction when provided, so personas without authored fiction keep
-    // their exact prior update payload.
-    ...(input.fiction ? {fiction: input.fiction} : {}),
+    ...personaBody(input),
   })
 }
 

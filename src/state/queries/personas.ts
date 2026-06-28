@@ -4,8 +4,8 @@ import {
   createPersona,
   deletePersona,
   fetchPersonas,
-  type PersonaFiction,
   type PersonasState,
+  type PersonaWriteInput,
   type PersonaWriteResult,
   setActivePersona,
   updatePersona,
@@ -44,24 +44,32 @@ function useInvalidatePersonas() {
  * returns {ok:false,...}), so throw here on failure: react-query routes it to onError,
  * the editor keeps the dialog open and shows the error, and nothing silently no-ops.
  */
+/** An Error that also carries the runtime's machine-readable code (for the editor). */
+export class PersonaWriteError extends Error {
+  code?: string
+  constructor(message: string, code?: string) {
+    super(message)
+    this.name = 'PersonaWriteError'
+    this.code = code
+  }
+}
+
 function ensureOk(
   res: PersonaWriteResult,
   fallback: string,
 ): PersonaWriteResult {
   if (res.ok) return res
-  if (res.signedOut) throw new Error('Please sign in to manage personas.')
-  throw new Error(res.error ?? fallback)
+  if (res.signedOut)
+    throw new PersonaWriteError('Please sign in to manage personas.')
+  throw new PersonaWriteError(res.error ?? fallback, res.code)
 }
 
 export function useCreatePersonaMutation() {
   const qc = useQueryClient()
   const invalidate = useInvalidatePersonas()
   return useMutation({
-    mutationFn: async (input: {
-      name: string
-      voiceId?: string
-      personality?: string
-    }) => ensureOk(await createPersona(input), 'Could not create the persona.'),
+    mutationFn: async (input: PersonaWriteInput & {name: string}) =>
+      ensureOk(await createPersona(input), 'Could not create the persona.'),
     onSuccess: res => {
       // Apply the authoritative refreshed view immediately (no refetch race), then
       // invalidate so any other observers reconcile too.
@@ -75,13 +83,8 @@ export function useUpdatePersonaMutation() {
   const qc = useQueryClient()
   const invalidate = useInvalidatePersonas()
   return useMutation({
-    mutationFn: async (input: {
-      id: string
-      name?: string
-      voiceId?: string
-      personality?: string
-      fiction?: PersonaFiction
-    }) => ensureOk(await updatePersona(input), 'Could not save the persona.'),
+    mutationFn: async (input: PersonaWriteInput & {id: string}) =>
+      ensureOk(await updatePersona(input), 'Could not save the persona.'),
     onSuccess: res => {
       if (res.state) qc.setQueryData(createPersonasQueryKey(), res.state)
       void invalidate()

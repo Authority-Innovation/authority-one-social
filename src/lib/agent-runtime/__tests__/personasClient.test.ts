@@ -4,7 +4,11 @@ import {getSupabaseAccessToken} from '../authToken'
 import {
   createPersona,
   deletePersona,
+  fetchPersonaDetail,
   fetchPersonas,
+  normalizeKeywords,
+  normalizeKnowledgeBase,
+  normalizePersonaDetail,
   normalizePersonasResponse,
   pickActiveVoiceId,
   pickAgentHeaderName,
@@ -77,6 +81,7 @@ describe('normalizePersonasResponse', () => {
       activePersonaId: undefined,
       activeName: undefined,
       activeVoiceId: undefined,
+      migrated: false,
     })
   })
 })
@@ -150,7 +155,13 @@ describe('CRUD request shaping', () => {
 
     mockToken.mockResolvedValue('tok')
     mockOkJson({})
-    await createPersona({name: 'Ada', voiceId: 'v2', personality: 'curious'})
+    // Nested split shape: identity + knowledgeBase.
+    await createPersona({
+      name: 'Ada',
+      voiceId: 'v2',
+      identity: {personality: 'curious'},
+      knowledgeBase: {summary: 'a curious mind', entries: []},
+    })
     await updatePersona({id: 'p2', name: 'Ada 2'})
     await deletePersona({id: 'p2'})
     await setActivePersona({id: 'p1'})
@@ -164,7 +175,8 @@ describe('CRUD request shaping', () => {
     expect(bodyOf(byUrl('/app/personas')!)).toEqual({
       name: 'Ada',
       voiceId: 'v2',
-      personality: 'curious',
+      identity: {personality: 'curious'},
+      knowledgeBase: {summary: 'a curious mind', entries: []},
     })
     expect(bodyOf(byUrl('/app/personas/update')!)).toMatchObject({
       id: 'p2',
@@ -179,15 +191,124 @@ describe('CRUD request shaping', () => {
     mockOkJson({
       personas: [
         {id: 'p1', name: 'Bob'},
-        {id: 'p2', name: 'Stormy', personality: 'an ice hog'},
+        {id: 'p2', name: 'Stormy'},
       ],
       activePersonaId: 'p1',
       voices: [{voiceId: 'v1', name: 'Bob'}],
     })
-    const res = await createPersona({name: 'Stormy', personality: 'an ice hog'})
+    const res = await createPersona({
+      name: 'Stormy',
+      identity: {personality: 'an ice hog'},
+    })
     expect(res.ok).toBe(true)
     // The authoritative list comes back so the cache can update without a refetch.
     expect(res.state?.personas.map(p => p.name)).toEqual(['Bob', 'Stormy'])
+  })
+
+  it('surfaces the runtime 400 code (e.g. identity-too-long)', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 400,
+        json: () =>
+          Promise.resolve({code: 'identity-too-long', error: 'too long'}),
+      }),
+    ) as unknown as typeof fetch
+    const res = await createPersona({
+      name: 'X',
+      identity: {personality: 'x'.repeat(5000)},
+    })
+    expect(res.ok).toBe(false)
+    expect(res.code).toBe('identity-too-long')
+    expect(res.error).toBe('too long')
+  })
+})
+
+describe('normalizeKeywords (pure)', () => {
+  it('accepts arrays or comma/newline strings; trims + dedupes', () => {
+    expect(normalizeKeywords(['a', 'B', 'a'])).toEqual(['a', 'B'])
+    expect(normalizeKeywords('trail, falls\nrocks, trail')).toEqual([
+      'trail',
+      'falls',
+      'rocks',
+    ])
+    expect(normalizeKeywords(undefined)).toEqual([])
+  })
+})
+
+describe('normalizeKnowledgeBase (pure)', () => {
+  it('keeps summary + drops entries with no title and no body', () => {
+    const kb = normalizeKnowledgeBase({
+      summary: 'gist',
+      entries: [
+        {id: 'e1', title: 'Lore', keywords: 'a,b', body: 'deep'},
+        {title: '', body: ''},
+        null,
+      ],
+    })
+    expect(kb.summary).toBe('gist')
+    expect(kb.entries).toEqual([
+      {id: 'e1', title: 'Lore', keywords: ['a', 'b'], body: 'deep'},
+    ])
+  })
+})
+
+describe('normalizePersonaDetail (pure)', () => {
+  it('reads the nested {persona:{identity,knowledgeBase,fiction}} shape', () => {
+    const d = normalizePersonaDetail({
+      persona: {
+        id: 'p1',
+        name: 'Stormy',
+        voiceId: 'v1',
+        identity: {personality: 'an ice hog'},
+        knowledgeBase: {
+          summary: 'hockey star',
+          entries: [{id: 'e1', title: 'Team', keywords: ['nhl'], body: '...'}],
+        },
+        fiction: {enabled: true, haunts: ['the rink']},
+      },
+    })
+    expect(d?.identity.personality).toBe('an ice hog')
+    expect(d?.knowledgeBase.summary).toBe('hockey star')
+    expect(d?.knowledgeBase.entries[0].keywords).toEqual(['nhl'])
+    expect(d?.fiction?.enabled).toBe(true)
+  })
+
+  it('lifts a legacy flat personality into identity; null without an id', () => {
+    const d = normalizePersonaDetail({persona: {id: 'p2', personality: 'flat'}})
+    expect(d?.identity.personality).toBe('flat')
+    expect(d?.knowledgeBase.entries).toEqual([])
+    expect(normalizePersonaDetail({persona: {name: 'no id'}})).toBeNull()
+  })
+})
+
+describe('fetchPersonaDetail', () => {
+  it('returns signedOut without a token', async () => {
+    mockToken.mockResolvedValue(null)
+    expect(await fetchPersonaDetail('p1')).toEqual({signedOut: true})
+  })
+
+  it('POSTs {id} and returns the normalized detail', async () => {
+    mockToken.mockResolvedValue('tok')
+    mockOkJson({persona: {id: 'p1', name: 'Bob', identity: {personality: 'x'}}})
+    const res = await fetchPersonaDetail('p1')
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0]
+    expect(String(call[0])).toContain('/app/personas/get')
+    expect(JSON.parse(String((call[1] as {body: string}).body))).toEqual({
+      id: 'p1',
+    })
+    expect(res.detail?.identity.personality).toBe('x')
+  })
+
+  it('returns an error on non-ok (degrades)', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ok: false, status: 500}),
+    ) as unknown as typeof fetch
+    const res = await fetchPersonaDetail('p1')
+    expect(res.detail).toBeUndefined()
+    expect(res.error).toContain('500')
   })
 
   it('omits state when the runtime body is not a personas view', async () => {
