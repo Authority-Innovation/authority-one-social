@@ -85,7 +85,11 @@ export function AgentChatScreen({route}: Props) {
   // Constrain the conversation to a readable, centered column on web/wide
   // screens; on narrow windows / native it falls back to full width.
   const centerColumn = gtMobile
-    ? {maxWidth: Layout.CENTER_COLUMN_WIDTH, width: '100%' as const, marginHorizontal: 'auto' as const}
+    ? {
+        maxWidth: Layout.CENTER_COLUMN_WIDTH,
+        width: '100%' as const,
+        marginHorizontal: 'auto' as const,
+      }
     : null
 
   const {
@@ -105,25 +109,22 @@ export function AgentChatScreen({route}: Props) {
   // Upload a local image to R2, showing a preview while in flight. Shared by the
   // composer attach button and the Photo Context "share a photo with Bob" entry.
   // Resilient: a failed upload leaves a removable "failed" preview, never crashes.
-  const attachLocalImage = useCallback(
-    async (uri: string, mime: string) => {
-      setAttachment({previewUri: uri, mime, uploading: true})
-      const url = await uploadChatImage({uri, mime})
-      setAttachment(prev =>
-        prev
-          ? url
-            ? {...prev, uploading: false, url}
-            : {...prev, uploading: false, failed: true}
-          : prev,
-      )
-      if (!url) {
-        Toast.show('Could not attach image. Remove it and try again.', {
-          type: 'warning',
-        })
-      }
-    },
-    [],
-  )
+  const attachLocalImage = useCallback(async (uri: string, mime: string) => {
+    setAttachment({previewUri: uri, mime, uploading: true})
+    const url = await uploadChatImage({uri, mime})
+    setAttachment(prev =>
+      prev
+        ? url
+          ? {...prev, uploading: false, url}
+          : {...prev, uploading: false, failed: true}
+        : prev,
+    )
+    if (!url) {
+      Toast.show('Could not attach image. Remove it and try again.', {
+        type: 'warning',
+      })
+    }
+  }, [])
 
   // Pick an image from the library, then upload + attach it.
   const onAttach = useCallback(async () => {
@@ -174,14 +175,18 @@ export function AgentChatScreen({route}: Props) {
   // Continuous, hands-free voice chat (idle ↔ listening ↔ thinking ↔ speaking),
   // with barge-in and the ElevenLabs "Bob" voice. Exposes the shared voice engine
   // (for the partial transcript + text-mode speak) and the single ON/OFF control.
-  const {voice, convState, isOn: voiceModeOn, toggle: toggleVoiceMode} =
-    useVoiceConversation({
-      send: text => send(text),
-      isStreaming,
-      getReplyText,
-      localeId: 'en-US',
-      voiceId: personaVoiceId,
-    })
+  const {
+    voice,
+    convState,
+    isOn: voiceModeOn,
+    toggle: toggleVoiceMode,
+  } = useVoiceConversation({
+    send: text => send(text),
+    isStreaming,
+    getReplyText,
+    localeId: 'en-US',
+    voiceId: personaVoiceId,
+  })
 
   const doSend = useCallback(
     (text: string) => {
@@ -202,7 +207,12 @@ export function AgentChatScreen({route}: Props) {
   useEffect(() => {
     if (wasStreaming.current && !isStreaming) {
       const last = messages[messages.length - 1]
-      if (!voiceModeOn && autoSpeak && last?.role === 'assistant' && last.text) {
+      if (
+        !voiceModeOn &&
+        autoSpeak &&
+        last?.role === 'assistant' &&
+        last.text
+      ) {
         voice.speak(last.text)
       }
     }
@@ -257,8 +267,7 @@ export function AgentChatScreen({route}: Props) {
             style={[a.text_md, t.atoms.text_contrast_medium, a.text_center]}>
             {/* Custom (non-Bluesky) copy: plain literal so it never depends on
                 the compiled Lingui catalog (which would render a raw msg ID). */}
-            Sign in to your Authority One account to chat with{' '}
-            {agentName}.
+            Sign in to your Authority One account to chat with {agentName}.
           </Text>
           <Button
             label="Sign in to chat"
@@ -328,7 +337,8 @@ export function AgentChatScreen({route}: Props) {
           {messages.length === 0 && isHydrating ? (
             // Recent thread is loading — show a quiet loader instead of the empty-state
             // copy so a returning user doesn't see a flash of "blank chat".
-            <View style={[a.flex_1, a.align_center, a.justify_center, a.pt_5xl]}>
+            <View
+              style={[a.flex_1, a.align_center, a.justify_center, a.pt_5xl]}>
               <Loader size="lg" />
             </View>
           ) : messages.length === 0 ? (
@@ -348,6 +358,16 @@ export function AgentChatScreen({route}: Props) {
               <MessageBubble
                 key={m.id}
                 message={m}
+                // Group threads attribute every message; 1:1 chat shows no per-message
+                // name. The owner's own turns are "You"; an agent turn uses the runtime-
+                // supplied sender name, falling back to the thread's agent name.
+                senderName={
+                  threadId
+                    ? m.role === 'user'
+                      ? 'You'
+                      : (m.senderName ?? agentName)
+                    : undefined
+                }
                 decideDisabled={isStreaming}
                 onDecision={(action, decision) => {
                   void decide(action, decision)
@@ -431,7 +451,8 @@ export function AgentChatScreen({route}: Props) {
                     </View>
                   ) : null}
                 </View>
-                <Text style={[a.flex_1, a.text_sm, t.atoms.text_contrast_medium]}>
+                <Text
+                  style={[a.flex_1, a.text_sm, t.atoms.text_contrast_medium]}>
                   {attachment.uploading
                     ? 'Uploading image…'
                     : attachment.failed
@@ -444,7 +465,10 @@ export function AgentChatScreen({route}: Props) {
                   accessibilityHint=""
                   onPress={removeAttachment}
                   style={[a.p_sm, a.rounded_full]}>
-                  <CloseIcon size="sm" fill={t.atoms.text_contrast_medium.color} />
+                  <CloseIcon
+                    size="sm"
+                    fill={t.atoms.text_contrast_medium.color}
+                  />
                 </Pressable>
               </View>
             </View>
@@ -458,84 +482,89 @@ export function AgentChatScreen({route}: Props) {
               a.py_sm,
               a.w_full,
               centerColumn,
-              {paddingBottom: composerBottomOffset(bottomBarOffset, isKeyboardVisible)},
+              {
+                paddingBottom: composerBottomOffset(
+                  bottomBarOffset,
+                  isKeyboardVisible,
+                ),
+              },
             ]}>
-          {showMic ? (
-            // Single ON/OFF control for continuous, hands-free voice chat. ON =
-            // a live "call" with Bob (listen → reply → listen, with barge-in);
-            // OFF = back to text. One toggle, not a per-message button.
-            <Button
-              label={voiceModeOn ? 'End voice chat' : 'Start voice chat'}
-              size="large"
-              shape="round"
-              variant="solid"
-              color={voiceModeOn ? 'negative' : 'secondary'}
-              onPress={toggleVoiceMode}>
-              <ButtonIcon icon={MicIcon} />
-            </Button>
-          ) : null}
+            {showMic ? (
+              // Single ON/OFF control for continuous, hands-free voice chat. ON =
+              // a live "call" with Bob (listen → reply → listen, with barge-in);
+              // OFF = back to text. One toggle, not a per-message button.
+              <Button
+                label={voiceModeOn ? 'End voice chat' : 'Start voice chat'}
+                size="large"
+                shape="round"
+                variant="solid"
+                color={voiceModeOn ? 'negative' : 'secondary'}
+                onPress={toggleVoiceMode}>
+                <ButtonIcon icon={MicIcon} />
+              </Button>
+            ) : null}
 
-          {/* Attach an image. Disabled in voice mode, while a turn streams, or when an
+            {/* Attach an image. Disabled in voice mode, while a turn streams, or when an
               attachment is already pending (one image per message). */}
-          <Button
-            label="Attach image"
-            size="large"
-            shape="round"
-            variant="solid"
-            color="secondary"
-            disabled={voiceModeOn || isStreaming || attachment !== null}
-            onPress={() => {
-              void onAttach()
-            }}>
-            <ButtonIcon icon={ImageIcon} />
-          </Button>
-
-          <TextInput
-            accessibilityLabel="Text input field"
-            accessibilityHint="Type a message to send to the agent"
-            value={input}
-            onChangeText={setInput}
-            // Plain literal (not a Lingui msg): the compiled catalog miss is what
-            // renders the placeholder as a raw message ID ("l9RW8S").
-            placeholder={`Message ${agentName}…`}
-            placeholderTextColor={t.atoms.text_contrast_low.color}
-            multiline
-            style={[
-              a.flex_1,
-              a.px_md,
-              a.py_sm,
-              a.rounded_full,
-              a.text_md,
-              t.atoms.bg_contrast_25,
-              t.atoms.text,
-              {maxHeight: 120},
-            ]}
-            onSubmitEditing={() => doSend(input)}
-            editable={!voiceModeOn}
-          />
-
-          {isStreaming ? (
             <Button
-              label="Stop"
+              label="Attach image"
               size="large"
               shape="round"
               variant="solid"
               color="secondary"
-              onPress={abort}>
-              <ButtonIcon icon={SpeakerIcon} />
+              disabled={voiceModeOn || isStreaming || attachment !== null}
+              onPress={() => {
+                void onAttach()
+              }}>
+              <ButtonIcon icon={ImageIcon} />
             </Button>
-          ) : (
-            <Button
-              label="Send"
-              size="large"
-              shape="round"
-              variant="solid"
-              color="primary"
-              disabled={!canSend(input, attachment, isStreaming)}
-              onPress={() => doSend(input)}>
-              <ButtonIcon icon={SendIcon} />
-            </Button>
-          )}
+
+            <TextInput
+              accessibilityLabel="Text input field"
+              accessibilityHint="Type a message to send to the agent"
+              value={input}
+              onChangeText={setInput}
+              // Plain literal (not a Lingui msg): the compiled catalog miss is what
+              // renders the placeholder as a raw message ID ("l9RW8S").
+              placeholder={`Message ${agentName}…`}
+              placeholderTextColor={t.atoms.text_contrast_low.color}
+              multiline
+              style={[
+                a.flex_1,
+                a.px_md,
+                a.py_sm,
+                a.rounded_full,
+                a.text_md,
+                t.atoms.bg_contrast_25,
+                t.atoms.text,
+                {maxHeight: 120},
+              ]}
+              onSubmitEditing={() => doSend(input)}
+              editable={!voiceModeOn}
+            />
+
+            {isStreaming ? (
+              <Button
+                label="Stop"
+                size="large"
+                shape="round"
+                variant="solid"
+                color="secondary"
+                onPress={abort}>
+                <ButtonIcon icon={SpeakerIcon} />
+              </Button>
+            ) : (
+              <Button
+                label="Send"
+                size="large"
+                shape="round"
+                variant="solid"
+                color="primary"
+                disabled={!canSend(input, attachment, isStreaming)}
+                onPress={() => doSend(input)}>
+                <ButtonIcon icon={SendIcon} />
+              </Button>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>

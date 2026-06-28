@@ -18,10 +18,14 @@ import {channelBadge} from './channelBadge'
  */
 export function MessageBubble({
   message,
+  senderName,
   decideDisabled,
   onDecision,
 }: {
   message: ChatMessage
+  /** Sender attribution for GROUP threads (e.g. "Bob", "Stormy", "You"). Undefined in
+   *  1:1 chat — no per-message name there (the header already names the one agent). */
+  senderName?: string
   decideDisabled?: boolean
   onDecision: (action: ApprovalAction, decision: 'approve' | 'reject') => void
 }) {
@@ -34,17 +38,26 @@ export function MessageBubble({
 
   return (
     <View style={[a.w_full, isUser ? a.align_end : a.align_start]}>
+      {/* Sender attribution — a small name caption above the bubble in group threads, so
+          it's clear who's speaking in a multi-participant chat. Plain string (set by the
+          screen), so it never depends on the compiled catalog. */}
+      {senderName ? (
+        <Text
+          style={[
+            a.text_xs,
+            a.font_bold,
+            a.mb_2xs,
+            a.px_xs,
+            t.atoms.text_contrast_medium,
+          ]}>
+          {senderName}
+        </Text>
+      ) : null}
+
       {/* Channel annotation — unobtrusive caption above the bubble. Only present for
           off-app-text origins; in-app text turns render nothing here. */}
       {badge ? (
-        <View
-          style={[
-            a.flex_row,
-            a.align_center,
-            a.gap_xs,
-            a.mb_2xs,
-            a.px_xs,
-          ]}>
+        <View style={[a.flex_row, a.align_center, a.gap_xs, a.mb_2xs, a.px_xs]}>
           {badge.mic ? (
             <MicIcon size="xs" fill={t.atoms.text_contrast_low.color} />
           ) : null}
@@ -61,7 +74,10 @@ export function MessageBubble({
           a.rounded_md,
           {maxWidth: '80%'},
           isUser
-            ? [{backgroundColor: t.palette.primary_500}, {borderBottomRightRadius: 4}]
+            ? [
+                {backgroundColor: t.palette.primary_500},
+                {borderBottomRightRadius: 4},
+              ]
             : [t.atoms.bg_contrast_50, {borderBottomLeftRadius: 4}],
         ]}>
         {showLoader ? (
@@ -104,11 +120,7 @@ export function MessageBubble({
               <Image
                 key={`${url}_${i}`}
                 source={{uri: url}}
-                style={[
-                  a.rounded_sm,
-                  a.mt_xs,
-                  {width: 220, height: 220},
-                ]}
+                style={[a.rounded_sm, a.mt_xs, {width: 220, height: 220}]}
                 contentFit="cover"
                 accessibilityIgnoresInvertColors
                 // Plain literal alt text (not Lingui) so it never depends on the

@@ -60,6 +60,15 @@ export interface ChatMessage {
    * NO channel badge; sms/whatsapp/voice/imessage get an unobtrusive annotation.
    */
   channel?: ChatChannel
+  /**
+   * Display name of who sent this turn, for GROUP threads where multiple participants
+   * (the owner + one or more agent personas) speak. Rendered as an attribution caption
+   * above the bubble. Undefined in 1:1 chat (the header already names the one agent) and
+   * for the owner's own turns (the UI labels those "You"). The runtime should carry this
+   * on group message payloads (see handover); until it does, the app falls back to the
+   * thread's resolved agent name.
+   */
+  senderName?: string
   createdAt: number
 }
 
@@ -128,6 +137,9 @@ export interface ChatTurnResult {
   status: ChatTurnStatus
   pending: PendingAction[]
   mediaUrls: string[]
+  /** Display name of the responding agent/persona (group threads). Optional — the
+   *  runtime does not send this yet; see the group-attribution handover note. */
+  senderName?: string
 }
 
 /** The `chunk` SSE payload: one incremental slice of the reply. */

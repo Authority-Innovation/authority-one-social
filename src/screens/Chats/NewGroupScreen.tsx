@@ -66,20 +66,20 @@ export function NewGroupScreen({}: Props) {
             <Trans>New group</Trans>
           </Layout.Header.TitleText>
         </Layout.Header.Content>
-        <Layout.Header.Slot>
-          {threadId ? (
-            <Button
-              label="Done"
-              size="small"
-              variant="solid"
-              color="primary"
-              onPress={() => navigation.navigate('ChatList')}>
-              <ButtonText>
-                <Trans>Done</Trans>
-              </ButtonText>
-            </Button>
-          ) : null}
-        </Layout.Header.Slot>
+        {/* Text action goes directly in Outer, not the fixed icon-width Header.Slot
+            (which collapses a text label into a vertical letter stack). */}
+        {threadId ? (
+          <Button
+            label="Done"
+            size="small"
+            variant="solid"
+            color="primary"
+            onPress={() => navigation.navigate('ChatList')}>
+            <ButtonText>
+              <Trans>Done</Trans>
+            </ButtonText>
+          </Button>
+        ) : null}
       </Layout.Header.Outer>
 
       <Layout.Content>

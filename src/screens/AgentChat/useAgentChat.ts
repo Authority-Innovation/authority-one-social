@@ -167,6 +167,9 @@ export function useAgentChat(
               pending: false,
               status: result?.status ?? m.status,
               mediaUrls: result?.mediaUrls ?? m.mediaUrls,
+              // Group attribution: the responding persona's name when the runtime sends
+              // it (else the screen falls back to the thread's agent name).
+              senderName: result?.senderName ?? m.senderName,
             }))
             if (finalText) opts?.onReplyChunk?.(finalText)
             setIsStreaming(false)
@@ -276,7 +279,8 @@ export function useAgentChat(
       // Remember which message currently holds the card so we can restore it if the
       // server rejects the decision (read from the post-commit mirror, no stale closure).
       const holderId =
-        messagesRef.current.find(m => m.actions?.some(a => a.id === action.id))?.id ?? null
+        messagesRef.current.find(m => m.actions?.some(a => a.id === action.id))
+          ?.id ?? null
       // Optimistically remove the action card from whichever message holds it.
       setMessages(prev =>
         prev.map(m =>
@@ -285,7 +289,11 @@ export function useAgentChat(
             : m,
         ),
       )
-      const ok = await postApprovalDecision({actionId: action.id, decision, agent})
+      const ok = await postApprovalDecision({
+        actionId: action.id,
+        decision,
+        agent,
+      })
       // RESTORE ON FAILURE: if the runtime did not accept the decision, the action is
       // STILL pending server-side — an optimistic removal would lie to the user (the
       // card vanishes while the item lingers and is later resurfaced). Put the card back

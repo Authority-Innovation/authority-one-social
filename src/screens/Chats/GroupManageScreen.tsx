@@ -130,10 +130,22 @@ export function GroupManageScreen({route}: Props) {
                     did: m.id,
                     handle: m.handle,
                   })
+                  // Is this row the current user? Match my did OR handle against the
+                  // member's did OR handle, so we can render "You" instead of a raw DID.
+                  const isSelf =
+                    isCreatorIdentity(currentAccount?.did, {
+                      did: m.id,
+                      handle: m.handle,
+                    }) ||
+                    isCreatorIdentity(currentAccount?.handle, {
+                      did: m.id,
+                      handle: m.handle,
+                    })
                   return (
                     <MemberRow
                       key={`${m.kind}:${m.id}`}
                       member={m}
+                      isSelf={isSelf}
                       onRemove={
                         isCreator && !memberIsCreator
                           ? () => onRemove(m)
@@ -269,28 +281,39 @@ export function GroupManageScreen({route}: Props) {
   )
 }
 
+/** A bare DID identifier (e.g. did:plc:…) — never shown to the user. */
+function isDid(s?: string): boolean {
+  return !!s && s.startsWith('did:')
+}
+
 function MemberRow({
   member,
+  isSelf,
   onRemove,
   removing,
 }: {
   member: ThreadMember
+  isSelf?: boolean
   onRemove?: () => void
   removing?: boolean
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
   const isPerson = member.kind === 'person'
-  const title = member.name
-    ? sanitizeDisplayName(member.name)
-    : member.handle
-      ? sanitizeHandle(member.handle, '@')
-      : member.id
-  const subtitle = isPerson
-    ? member.handle
+  // Friendly label, NEVER a raw did:plc string. "You" for the current account; otherwise
+  // the display name / handle; and a generic fallback for a bare-DID member the runtime
+  // didn't resolve a name for (see the runtime note in the handover).
+  const handleLabel =
+    member.handle && !isDid(member.handle)
       ? sanitizeHandle(member.handle, '@')
       : undefined
-    : l`Agent persona`
+  const idLabel = !isDid(member.id) ? member.id : undefined
+  const title = isSelf
+    ? l`You`
+    : member.name
+      ? sanitizeDisplayName(member.name)
+      : (handleLabel ?? idLabel ?? l`Member`)
+  const subtitle = isPerson ? handleLabel : l`Agent persona`
   const roleLabel =
     member.role === 'owner'
       ? l`Owner`

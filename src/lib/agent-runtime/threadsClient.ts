@@ -288,11 +288,16 @@ function toThreadMessage(raw: unknown): ChatMessage | null {
   const r = raw as Record<string, unknown>
   const role = r.role === 'user' ? 'user' : 'assistant'
   const at = typeof r.at === 'string' ? Date.parse(r.at) : num(r.at)
+  // Sender display name for group attribution, IF the runtime carries one (tolerant of
+  // the field name). Absent today — the UI falls back to the thread's agent name.
+  const senderName =
+    str(r.senderName) ?? str(r.author) ?? str(r.from) ?? str(r.name)
   return {
     id: msgId(role),
     role,
     text: typeof r.text === 'string' ? r.text : '',
     channel: typeof r.channel === 'string' ? r.channel : 'app',
+    ...(senderName ? {senderName} : {}),
     mediaUrls: Array.isArray(r.mediaUrls)
       ? r.mediaUrls.filter((u): u is string => typeof u === 'string' && !!u)
       : [],
@@ -441,6 +446,10 @@ export async function sendToThread(
     if (!res.ok)
       return {ok: false, signedOut: false, error: `Runtime error ${res.status}`}
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    // Responding persona's display name, IF the runtime carries one (tolerant of the
+    // field name). Absent today — the UI falls back to the thread's agent name.
+    const senderName =
+      str(data?.senderName) ?? str(data?.author) ?? str(data?.from)
     const reply: ChatTurnResult = {
       message: typeof data?.message === 'string' ? data.message : '',
       status: 'answered',
@@ -448,6 +457,7 @@ export async function sendToThread(
       mediaUrls: Array.isArray(data?.mediaUrls)
         ? (data.mediaUrls as string[]).filter(u => typeof u === 'string')
         : [],
+      ...(senderName ? {senderName} : {}),
     }
     return {ok: true, signedOut: false, data: reply}
   } catch (e) {

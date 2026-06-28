@@ -48,25 +48,26 @@ export function ChatListScreen({}: Props) {
             <Trans>Chats</Trans>
           </Layout.Header.TitleText>
         </Layout.Header.Content>
-        <Layout.Header.Slot>
-          <Button
-            label={l`New group`}
-            size="small"
-            variant="solid"
-            color="primary"
-            onPress={() => navigation.navigate('NewGroup')}>
-            <ButtonIcon icon={PlusIcon} />
-            <ButtonText>
-              {/* Render the English literal directly — NOT <Trans>. This pill has
-                  repeatedly regressed to a raw Lingui message-id hash across builds
-                  (stale compiled catalog / Metro transform cache), and a one-word nav
-                  label must never garble. A literal can't depend on the catalog, so it
-                  can't become a hash. "New" stays translatable elsewhere (used in 3
-                  other components) and the a11y label above is still localized. */}
-              New
-            </ButtonText>
-          </Button>
-        </Layout.Header.Slot>
+        {/* Text action goes DIRECTLY in Outer (the row), not Header.Slot — Slot is a
+            fixed icon-width (33px) box that collapses a text label into a vertical
+            stack. This matches the header text-button pattern (e.g. SavedFeeds). */}
+        <Button
+          label={l`New group`}
+          size="small"
+          variant="solid"
+          color="primary"
+          onPress={() => navigation.navigate('NewGroup')}>
+          <ButtonIcon icon={PlusIcon} />
+          <ButtonText>
+            {/* Render the English literal directly — NOT <Trans>. This pill has
+                repeatedly regressed to a raw Lingui message-id hash across builds
+                (stale compiled catalog / Metro transform cache), and a one-word nav
+                label must never garble. A literal can't depend on the catalog, so it
+                can't become a hash. "New" stays translatable elsewhere (used in 3
+                other components) and the a11y label above is still localized. */}
+            New
+          </ButtonText>
+        </Button>
       </Layout.Header.Outer>
 
       <Layout.Content>
