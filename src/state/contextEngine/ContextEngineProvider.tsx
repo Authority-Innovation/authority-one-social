@@ -8,10 +8,10 @@ import {
 } from '#/lib/agent-runtime'
 import {getCurrentState} from '#/lib/appState'
 import {
-  buildContextEvent,
+  advanceDwell,
+  closeDwell,
   derivePlace,
-  dwellMinutes,
-  placeChanged,
+  isInTransit,
   shouldCapture,
   shouldCaptureBackground,
 } from '#/lib/contextEngine/derive'
@@ -19,6 +19,7 @@ import {
   type ContextEvent,
   type ContextPrefs,
   type NormalizedGeocode,
+  type OpenDwell,
 } from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
 import {IS_NATIVE} from '#/env'
@@ -91,7 +92,9 @@ function newId(at: number): string {
   return `${at.toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function normalizeGeocode(g: Location.LocationGeocodedAddress): NormalizedGeocode {
+function normalizeGeocode(
+  g: Location.LocationGeocodedAddress,
+): NormalizedGeocode {
   return {
     name: g.name ?? undefined,
     street: g.street ?? undefined,
@@ -115,13 +118,9 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
     prefsRef.current = prefs
   }, [prefs])
 
-  // Open dwell: the place we're currently "in" (conclusion only, no coords).
-  const openRef = useRef<{
-    place: ContextEvent['place']
-    placeRef?: string
-    confidence: number
-    startAt: number
-  } | null>(null)
+  // Open dwell: the place we're currently "in". Conclusion + transient working coords
+  // (anchor/last sample) used for proximity + motion gating; never written to an event.
+  const openRef = useRef<OpenDwell | null>(null)
 
   // Initial local load + permission check.
   useEffect(() => {
@@ -132,7 +131,9 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
       setPrefs(p)
       setEvents(ev)
       if (IS_NATIVE && p.enabled) {
-        const perm = await Location.getForegroundPermissionsAsync().catch(() => null)
+        const perm = await Location.getForegroundPermissionsAsync().catch(
+          () => null,
+        )
         if (!cancelled) setPermissionGranted(perm?.granted === true)
       }
       // Phase 1.5: if background context was left on, re-check Always permission and
@@ -164,19 +165,10 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
   }
 
   const flushOpenDwell = () => {
-    const prev = openRef.current
-    if (!prev) return
-    const now = Date.now()
-    recordEvent(
-      buildContextEvent({
-        id: newId(now),
-        at: now,
-        place: prev.place,
-        placeRef: prev.placeRef,
-        confidence: prev.confidence,
-        durationMin: dwellMinutes(prev.startAt, now),
-      }),
-    )
+    const open = openRef.current
+    if (!open) return
+    // Only commit if the dwell met the threshold (no instantaneous "0 min" entries).
+    for (const ev of closeDwell(open, Date.now(), newId)) recordEvent(ev)
     openRef.current = null
   }
 
@@ -195,23 +187,33 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
         })
         if (cancelled) return
         const coords = {lat: pos.coords.latitude, lng: pos.coords.longitude}
-        const geos = await Location.reverseGeocodeAsync({
-          latitude: coords.lat,
-          longitude: coords.lng,
-        }).catch(() => [] as Location.LocationGeocodedAddress[])
-        const geocode = geos[0] ? normalizeGeocode(geos[0]) : undefined
-        const concl = derivePlace({coords, geocode, prefs: prefsRef.current})
-        // Raw coords are now discarded — only the conclusion proceeds.
         const now = Date.now()
-        if (placeChanged(openRef.current, concl)) {
-          flushOpenDwell()
-          openRef.current = {
-            place: concl.place,
-            placeRef: concl.placeRef,
-            confidence: concl.confidence,
-            startAt: now,
-          }
+        const open = openRef.current
+        // In transit -> nothing gets logged, so skip the reverse-geocode (battery/cost).
+        const prev =
+          open?.lastCoords && typeof open.lastAt === 'number'
+            ? {coords: open.lastCoords, at: open.lastAt}
+            : undefined
+        const moving = isInTransit(pos.coords.speed, prev, now, coords)
+        let geocode: NormalizedGeocode | undefined
+        if (!moving) {
+          const geos = await Location.reverseGeocodeAsync({
+            latitude: coords.lat,
+            longitude: coords.lng,
+          }).catch(() => [] as Location.LocationGeocodedAddress[])
+          if (cancelled) return
+          geocode = geos[0] ? normalizeGeocode(geos[0]) : undefined
         }
+        const concl = derivePlace({coords, geocode, prefs: prefsRef.current})
+        // Raw coords stay transient (open-dwell working state only) — never recorded.
+        const {events, open: nextOpen} = advanceDwell(
+          open,
+          {coords, speedMps: pos.coords.speed, conclusion: concl},
+          now,
+          newId,
+        )
+        openRef.current = nextOpen
+        for (const ev of events) recordEvent(ev)
       } catch (e) {
         logger.warn('contextEngine: sample failed', {safeMessage: String(e)})
       }

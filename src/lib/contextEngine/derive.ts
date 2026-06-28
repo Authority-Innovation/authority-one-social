@@ -38,7 +38,8 @@ export function matchAnchor(
   radiusM = ANCHOR_RADIUS_M,
 ): 'home' | 'work' | undefined {
   const near = (anchor?: Anchor) =>
-    !!anchor && haversineMeters(coords, {lat: anchor.lat, lng: anchor.lng}) <= radiusM
+    !!anchor &&
+    haversineMeters(coords, {lat: anchor.lat, lng: anchor.lng}) <= radiusM
   if (near(prefs.home)) return 'home'
   if (near(prefs.work)) return 'work'
   return undefined
@@ -140,43 +141,149 @@ export function shouldCaptureBackground(state: {
 }
 
 /**
- * Phase 1.5 visit-style dwell transition (PURE). Given the currently-open dwell and a
- * fresh place conclusion, decide what to record:
- *   - SAME place  -> nothing to record; keep the open dwell running.
- *   - NEW place   -> flush the previous dwell as a ContextEvent (with its elapsed
- *                    minutes), then open a fresh dwell at the new place.
- * Mirrors the Phase 1 foreground flush logic, but as a stateless step so the
- * background task can drive it across wakes using only the persisted open dwell.
- * `idFor` injects id generation so this stays deterministic + testable.
+ * Tunable thresholds for dwell-based logging + transit suppression. A "place" is only
+ * worth logging when the user is STATIONARY and DWELLS — driving past a string of
+ * addresses must never produce venue entries. All values are conservative defaults;
+ * adjust here in one spot.
+ */
+export const CONTEXT_TUNING = {
+  /** At/above this speed we treat the user as in transit (m/s). 2.5 ~ 9 km/h: above a
+   *  brisk walk, so driving/cycling is suppressed but pacing around a venue is not. */
+  movingSpeedMps: 2.5,
+  /** Samples within this distance of the dwell anchor count as the SAME place (m).
+   *  "Same place" is geographic, NOT the reverse-geocoded address string (which changes
+   *  every few meters while moving). */
+  dwellRadiusM: 75,
+  /** Minimum time stationary at one place before it is worth logging (ms). Below this a
+   *  dwell is a drive-by / pass-through and is discarded, never written as an event. */
+  minDwellMs: 3 * 60_000,
+}
+
+export type ContextTuning = typeof CONTEXT_TUNING
+
+/** One location sample reduced for the dwell engine: where, how fast, and the place. */
+export interface DwellSample {
+  coords: Coords
+  /** GPS speed in m/s when known. expo-location reports null/-1 when unavailable. */
+  speedMps?: number | null
+  conclusion: {place: ContextPlace; placeRef?: string; confidence: number}
+}
+
+/**
+ * Is the user in transit (moving) at this sample? Prefers the GPS-reported speed; when
+ * that's unavailable (null/-1) falls back to displacement-over-time vs the previous
+ * sample. The sequential-addresses + "0 min" pattern is exactly what this suppresses.
+ * PURE.
+ */
+export function isInTransit(
+  speedMps: number | null | undefined,
+  prev: {coords: Coords; at: number} | undefined,
+  now: number,
+  coords: Coords,
+  movingSpeedMps: number = CONTEXT_TUNING.movingSpeedMps,
+): boolean {
+  if (typeof speedMps === 'number' && speedMps >= 0) {
+    return speedMps >= movingSpeedMps
+  }
+  if (prev && now > prev.at) {
+    const dtSec = (now - prev.at) / 1000
+    const speed = haversineMeters(coords, prev.coords) / Math.max(1, dtSec)
+    return speed >= movingSpeedMps
+  }
+  return false
+}
+
+/**
+ * Close an open dwell into a ContextEvent — but ONLY if it accrued at least the dwell
+ * threshold. A too-short dwell (drive-by / pass-through) yields no event. PURE.
+ */
+export function closeDwell(
+  open: OpenDwell | null,
+  now: number,
+  idFor: (at: number) => string,
+  tuning: ContextTuning = CONTEXT_TUNING,
+): ContextEvent[] {
+  if (!open) return []
+  const lastAt = open.lastAt ?? open.startAt
+  if (lastAt - open.startAt < tuning.minDwellMs) return []
+  return [
+    buildContextEvent({
+      id: idFor(now),
+      at: now,
+      place: open.place,
+      placeRef: open.placeRef,
+      confidence: open.confidence,
+      durationMin: dwellMinutes(open.startAt, lastAt),
+    }),
+  ]
+}
+
+/**
+ * Dwell transition (PURE) with motion suppression + a dwell threshold. Given the open
+ * dwell and a fresh sample (coords, speed, conclusion), decide what to record:
+ *   - MOVING (transit) -> log NOTHING. Close out a prior dwell only if it already met
+ *     the threshold; carry no open place while in motion. This is what stops the
+ *     "new Venue every 1-2 s while driving" stream.
+ *   - STATIONARY, no open dwell -> open one anchored here (not yet loggable).
+ *   - STATIONARY, within dwellRadius of the anchor -> SAME place; keep accruing.
+ *   - STATIONARY, beyond the radius -> arrived somewhere new: close the old dwell (if it
+ *     met the threshold) and open a fresh one here.
+ * Stateless so the background task can drive it across wakes from the persisted dwell.
+ * `idFor` injects id generation for determinism + testability.
  */
 export function advanceDwell(
   open: OpenDwell | null,
-  conclusion: {place: ContextPlace; placeRef?: string; confidence: number},
+  sample: DwellSample,
   now: number,
   idFor: (at: number) => string,
-): {events: ContextEvent[]; open: OpenDwell} {
-  const nextOpen: OpenDwell = {
+  tuning: ContextTuning = CONTEXT_TUNING,
+): {events: ContextEvent[]; open: OpenDwell | null} {
+  const {coords, speedMps, conclusion} = sample
+  const prev =
+    open?.lastCoords && typeof open.lastAt === 'number'
+      ? {coords: open.lastCoords, at: open.lastAt}
+      : undefined
+
+  // TRANSIT: suppress all place logging. Emit a prior dwell only if it already qualified.
+  if (isInTransit(speedMps, prev, now, coords, tuning.movingSpeedMps)) {
+    return {events: closeDwell(open, now, idFor, tuning), open: null}
+  }
+
+  const fresh: OpenDwell = {
     place: conclusion.place,
     placeRef: conclusion.placeRef,
     confidence: conclusion.confidence,
     startAt: now,
+    lastAt: now,
+    anchor: coords,
+    lastCoords: coords,
   }
-  if (!placeChanged(open, conclusion)) {
-    // Still at the same place — keep the existing dwell running (or open one if none).
-    return {events: [], open: open ?? nextOpen}
+
+  if (!open) return {events: [], open: fresh}
+
+  // "Same place" is geographic proximity to the anchor (NOT the address string). Fall
+  // back to the place/ref match for an open dwell that predates coord tracking.
+  const samePlace = open.anchor
+    ? haversineMeters(coords, open.anchor) <= tuning.dwellRadiusM
+    : !placeChanged(open, conclusion)
+
+  if (samePlace) {
+    // Keep accruing; adopt a higher-confidence conclusion (e.g. anchor match arrives).
+    const better = conclusion.confidence > open.confidence
+    return {
+      events: [],
+      open: {
+        ...open,
+        place: better ? conclusion.place : open.place,
+        placeRef: better ? conclusion.placeRef : open.placeRef,
+        confidence: Math.max(open.confidence, conclusion.confidence),
+        lastAt: now,
+        anchor: open.anchor ?? coords,
+        lastCoords: coords,
+      },
+    }
   }
-  const events: ContextEvent[] = []
-  if (open) {
-    events.push(
-      buildContextEvent({
-        id: idFor(now),
-        at: now,
-        place: open.place,
-        placeRef: open.placeRef,
-        confidence: open.confidence,
-        durationMin: dwellMinutes(open.startAt, now),
-      }),
-    )
-  }
-  return {events, open: nextOpen}
+
+  // Moved (while stationary) to a new spot -> close the old dwell if it qualified.
+  return {events: closeDwell(open, now, idFor, tuning), open: fresh}
 }

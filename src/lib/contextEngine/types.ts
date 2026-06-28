@@ -68,6 +68,19 @@ export interface OpenDwell {
   confidence: number
   /** Unix ms when this place dwell began. */
   startAt: number
+  /**
+   * Unix ms of the latest sample still attributed to this dwell. The dwell duration is
+   * startAt..lastAt, so a place is only logged once this exceeds the dwell threshold
+   * (instantaneous "0 min" drive-bys are never committed).
+   */
+  lastAt?: number
+  /**
+   * Coarse anchor coords of this dwell and the last sample's coords — LOCAL transient
+   * working state only (used to decide "still here" by proximity and to detect motion
+   * across wakes). NEVER copied into a ContextEvent; events stay conclusion-only.
+   */
+  anchor?: Coords
+  lastCoords?: Coords
 }
 
 export interface Coords {

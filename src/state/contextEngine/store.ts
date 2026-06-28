@@ -21,7 +21,10 @@ const EVENTS_KEY = '@authorityOne/contextEngine/events'
 const OPEN_DWELL_KEY = '@authorityOne/contextEngine/openDwell'
 const MAX_EVENTS = 200
 
-export const DEFAULT_PREFS: ContextPrefs = {enabled: false, backgroundEnabled: false}
+export const DEFAULT_PREFS: ContextPrefs = {
+  enabled: false,
+  backgroundEnabled: false,
+}
 
 export async function loadPrefs(): Promise<ContextPrefs> {
   try {
@@ -67,7 +70,9 @@ async function saveEvents(events: ContextEvent[]): Promise<void> {
 }
 
 /** Prepend a new conclusion (newest-first), capped at MAX_EVENTS. */
-export async function appendEvent(event: ContextEvent): Promise<ContextEvent[]> {
+export async function appendEvent(
+  event: ContextEvent,
+): Promise<ContextEvent[]> {
   const events = [event, ...(await loadEvents())].slice(0, MAX_EVENTS)
   await saveEvents(events)
   return events
@@ -89,17 +94,30 @@ export async function clearEvents(): Promise<void> {
 
 // ── Phase 1.5: open-dwell persistence (background visit detection) ──────────────
 
+function asCoords(v: unknown): {lat: number; lng: number} | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const c = v as {lat?: unknown; lng?: unknown}
+  return typeof c.lat === 'number' && typeof c.lng === 'number'
+    ? {lat: c.lat, lng: c.lng}
+    : undefined
+}
+
 export async function loadOpenDwell(): Promise<OpenDwell | null> {
   try {
     const raw = await AsyncStorage.getItem(OPEN_DWELL_KEY)
     if (!raw) return null
     const d = JSON.parse(raw) as Partial<OpenDwell>
-    if (typeof d?.place !== 'string' || typeof d?.startAt !== 'number') return null
+    if (typeof d?.place !== 'string' || typeof d?.startAt !== 'number')
+      return null
     return {
       place: d.place,
       placeRef: d.placeRef,
       confidence: typeof d.confidence === 'number' ? d.confidence : 0.2,
       startAt: d.startAt,
+      // Transient motion/dwell working state (carried across background wakes).
+      lastAt: typeof d.lastAt === 'number' ? d.lastAt : undefined,
+      anchor: asCoords(d.anchor),
+      lastCoords: asCoords(d.lastCoords),
     }
   } catch {
     return null
@@ -118,6 +136,8 @@ export async function clearOpenDwell(): Promise<void> {
   try {
     await AsyncStorage.removeItem(OPEN_DWELL_KEY)
   } catch (e) {
-    logger.warn('contextEngine: clearOpenDwell failed', {safeMessage: String(e)})
+    logger.warn('contextEngine: clearOpenDwell failed', {
+      safeMessage: String(e),
+    })
   }
 }

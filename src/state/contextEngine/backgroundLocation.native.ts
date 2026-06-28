@@ -2,11 +2,16 @@ import * as Location from 'expo-location'
 import * as TaskManager from 'expo-task-manager'
 
 import {postContextEvents} from '#/lib/agent-runtime'
-import {advanceDwell, derivePlace} from '#/lib/contextEngine/derive'
+import {
+  advanceDwell,
+  derivePlace,
+  isInTransit,
+} from '#/lib/contextEngine/derive'
 import {type NormalizedGeocode} from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
 import {
   appendEvent,
+  clearOpenDwell,
   loadOpenDwell,
   loadPrefs,
   saveOpenDwell,
@@ -30,13 +35,16 @@ import {
  * pipeline below would be reused unchanged (a visit -> a conclusion).
  */
 
-export const BACKGROUND_LOCATION_TASK = 'authority-one-context-background-location'
+export const BACKGROUND_LOCATION_TASK =
+  'authority-one-context-background-location'
 
 function newId(at: number): string {
   return `${at.toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function normalizeGeocode(g: Location.LocationGeocodedAddress): NormalizedGeocode {
+function normalizeGeocode(
+  g: Location.LocationGeocodedAddress,
+): NormalizedGeocode {
   return {
     name: g.name ?? undefined,
     street: g.street ?? undefined,
@@ -71,24 +79,45 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
 
     const last = locations[locations.length - 1]
     const coords = {lat: last.coords.latitude, lng: last.coords.longitude}
-    const geocodes = await Location.reverseGeocodeAsync({
-      latitude: coords.lat,
-      longitude: coords.lng,
-    }).catch(() => [] as Location.LocationGeocodedAddress[])
-    const geocode = geocodes[0] ? normalizeGeocode(geocodes[0]) : undefined
-
-    const conclusion = derivePlace({coords, geocode, prefs})
-    // Raw coordinates are now discarded — only the conclusion proceeds.
     const now = Date.now()
     const open = await loadOpenDwell()
-    const {events, open: nextOpen} = advanceDwell(open, conclusion, now, newId)
+
+    // In transit -> nothing will be logged, so SKIP the (battery/cost-heavy) reverse-
+    // geocode entirely. Motion is judged from GPS speed, falling back to displacement
+    // vs the previous sample carried on the open dwell.
+    const prev =
+      open?.lastCoords && typeof open.lastAt === 'number'
+        ? {coords: open.lastCoords, at: open.lastAt}
+        : undefined
+    const moving = isInTransit(last.coords.speed, prev, now, coords)
+
+    let geocode: NormalizedGeocode | undefined
+    if (!moving) {
+      const geocodes = await Location.reverseGeocodeAsync({
+        latitude: coords.lat,
+        longitude: coords.lng,
+      }).catch(() => [] as Location.LocationGeocodedAddress[])
+      geocode = geocodes[0] ? normalizeGeocode(geocodes[0]) : undefined
+    }
+
+    const conclusion = derivePlace({coords, geocode, prefs})
+    // Raw coordinates stay transient (open-dwell working state only) — never synced.
+    const {events, open: nextOpen} = advanceDwell(
+      open,
+      {coords, speedMps: last.coords.speed, conclusion},
+      now,
+      newId,
+    )
     for (const event of events) {
       await appendEvent(event)
       void postContextEvents([event]) // best-effort cross-channel sync; no-ops if unreachable
     }
-    await saveOpenDwell(nextOpen)
+    if (nextOpen) await saveOpenDwell(nextOpen)
+    else await clearOpenDwell()
   } catch (e) {
-    logger.warn('contextEngine: background task failed', {safeMessage: String(e)})
+    logger.warn('contextEngine: background task failed', {
+      safeMessage: String(e),
+    })
   }
 })
 
@@ -107,9 +136,13 @@ export async function getBackgroundPermissionGranted(): Promise<boolean> {
 export async function requestBackgroundPermission(): Promise<boolean> {
   try {
     // iOS requires when-in-use before Always can be requested.
-    const fg = await Location.requestForegroundPermissionsAsync().catch(() => null)
+    const fg = await Location.requestForegroundPermissionsAsync().catch(
+      () => null,
+    )
     if (fg?.granted !== true) return false
-    const bg = await Location.requestBackgroundPermissionsAsync().catch(() => null)
+    const bg = await Location.requestBackgroundPermissionsAsync().catch(
+      () => null,
+    )
     return bg?.granted === true
   } catch {
     return false
@@ -118,7 +151,9 @@ export async function requestBackgroundPermission(): Promise<boolean> {
 
 export async function isBackgroundUpdatesRunning(): Promise<boolean> {
   try {
-    return await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)
+    return await Location.hasStartedLocationUpdatesAsync(
+      BACKGROUND_LOCATION_TASK,
+    )
   } catch {
     return false
   }
