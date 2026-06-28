@@ -10,6 +10,7 @@ import {
 } from '#/lib/routes/types'
 import {useContextEngine} from '#/state/contextEngine/ContextEngineProvider'
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
+import {PhotoContextSection} from '#/screens/Settings/ContextEngine/PhotoContextSection'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as TextField from '#/components/forms/TextField'
@@ -265,6 +266,23 @@ export function ContextEngineSettingsScreen({}: Props) {
               ) : null}
             </View>
           ) : null}
+
+          {/* ── Photo context — a SEPARATE, independently-toggleable capability,
+              consolidated into this hub so all context options live in one place.
+              Metadata-only; opt-in state is preserved (shared photo store). ── */}
+          <View
+            style={[
+              a.gap_md,
+              a.pt_lg,
+              a.mt_sm,
+              a.border_t,
+              t.atoms.border_contrast_low,
+            ]}>
+            <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
+              <Trans>Photo context</Trans>
+            </Text>
+            <PhotoContextSection />
+          </View>
         </View>
 
         <SettingsList.Container>

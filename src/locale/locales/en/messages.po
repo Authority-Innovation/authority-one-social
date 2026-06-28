@@ -908,8 +908,8 @@ msgstr "A selected recipient is not followed by the sender."
 
 #: src/Navigation.tsx:537
 #: src/screens/Settings/AboutSettings.tsx:82
-#: src/screens/Settings/Settings.tsx:278
-#: src/screens/Settings/Settings.tsx:281
+#: src/screens/Settings/Settings.tsx:271
+#: src/screens/Settings/Settings.tsx:274
 msgid "About"
 msgstr ""
 
@@ -956,8 +956,8 @@ msgid "Access requested! The group owner will review your request."
 msgstr "Access requested! The group owner will review your request."
 
 #: src/screens/Settings/AccessibilitySettings.tsx:45
-#: src/screens/Settings/Settings.tsx:256
-#: src/screens/Settings/Settings.tsx:259
+#: src/screens/Settings/Settings.tsx:249
+#: src/screens/Settings/Settings.tsx:252
 msgid "Accessibility"
 msgstr ""
 
@@ -968,8 +968,8 @@ msgstr ""
 #: src/Navigation.tsx:476
 #: src/screens/Login/LoginForm.tsx:192
 #: src/screens/Settings/AccountSettings.tsx:56
-#: src/screens/Settings/Settings.tsx:174
-#: src/screens/Settings/Settings.tsx:177
+#: src/screens/Settings/Settings.tsx:173
+#: src/screens/Settings/Settings.tsx:176
 msgid "Account"
 msgstr ""
 
@@ -1009,7 +1009,7 @@ msgstr ""
 msgid "Account Muted by List"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:660
+#: src/screens/Settings/Settings.tsx:653
 msgid "Account options"
 msgstr ""
 
@@ -1017,7 +1017,7 @@ msgstr ""
 msgid "Account provider"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:694
+#: src/screens/Settings/Settings.tsx:687
 msgid "Account removed from quick access"
 msgstr ""
 
@@ -1048,7 +1048,7 @@ msgstr ""
 msgid "Active"
 msgstr "Active"
 
-#: src/screens/Settings/ContextEngine/index.tsx:95
+#: src/screens/Settings/ContextEngine/index.tsx:101
 msgid "Active — recognizing coarse places"
 msgstr "Active — recognizing coarse places"
 
@@ -1112,8 +1112,8 @@ msgstr ""
 msgid "Add alt text (optional)"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:598
-#: src/screens/Settings/Settings.tsx:601
+#: src/screens/Settings/Settings.tsx:591
+#: src/screens/Settings/Settings.tsx:594
 #: src/view/shell/desktop/LeftNav.tsx:276
 #: src/view/shell/desktop/LeftNav.tsx:279
 msgid "Add another account"
@@ -1395,7 +1395,7 @@ msgstr ""
 msgid "All the feeds you've saved, right in one place."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:159
+#: src/screens/Settings/ContextEngine/index.tsx:170
 msgid "All-day place context"
 msgstr "All-day place context"
 
@@ -1642,7 +1642,7 @@ msgstr ""
 msgid "an unknown labeler"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:257
+#: src/screens/Settings/ContextEngine/index.tsx:291
 msgid "Anchors (stored on-device only)"
 msgstr "Anchors (stored on-device only)"
 
@@ -1788,8 +1788,8 @@ msgstr ""
 
 #: src/Navigation.tsx:436
 #: src/screens/Settings/AppearanceSettings.tsx:74
-#: src/screens/Settings/Settings.tsx:226
-#: src/screens/Settings/Settings.tsx:229
+#: src/screens/Settings/Settings.tsx:225
+#: src/screens/Settings/Settings.tsx:228
 msgid "Appearance"
 msgstr ""
 
@@ -1798,8 +1798,8 @@ msgstr ""
 msgid "Apply default recommended feeds"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:529
-#: src/screens/Settings/Settings.tsx:531
+#: src/screens/Settings/Settings.tsx:522
+#: src/screens/Settings/Settings.tsx:524
 msgid "Apply Pull Request"
 msgstr ""
 
@@ -2395,7 +2395,7 @@ msgstr "Camera access needed"
 #: src/screens/Settings/components/ChangeHandleDialog.tsx:87
 #: src/screens/Settings/components/ChangePasswordDialog.tsx:248
 #: src/screens/Settings/components/ChangePasswordDialog.tsx:254
-#: src/screens/Settings/Settings.tsx:323
+#: src/screens/Settings/Settings.tsx:316
 #: src/screens/Takendown.tsx:103
 #: src/screens/Takendown.tsx:106
 #: src/view/com/composer/Composer.tsx:1734
@@ -2694,11 +2694,11 @@ msgstr ""
 msgid "Clear all"
 msgstr "Clear all"
 
-#: src/screens/Settings/Settings.tsx:521
+#: src/screens/Settings/Settings.tsx:514
 msgid "Clear all storage data"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:523
+#: src/screens/Settings/Settings.tsx:516
 msgid "Clear all storage data (restart after this)"
 msgstr ""
 
@@ -3056,8 +3056,8 @@ msgstr ""
 msgid "Content & Media"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:206
-#: src/screens/Settings/Settings.tsx:209
+#: src/screens/Settings/Settings.tsx:205
+#: src/screens/Settings/Settings.tsx:208
 msgid "Content and media"
 msgstr ""
 
@@ -3102,9 +3102,9 @@ msgid "Content warnings"
 msgstr ""
 
 #: src/Navigation.tsx:452
-#: src/screens/Settings/ContextEngine/index.tsx:63
-#: src/screens/Settings/Settings.tsx:240
-#: src/screens/Settings/Settings.tsx:243
+#: src/screens/Settings/ContextEngine/index.tsx:67
+#: src/screens/Settings/Settings.tsx:241
+#: src/screens/Settings/Settings.tsx:244
 msgid "Context Engine"
 msgstr "Context Engine"
 
@@ -3645,7 +3645,7 @@ msgstr "Day"
 msgid "Deactivate account"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:486
+#: src/screens/Settings/Settings.tsx:479
 msgid "Debug Moderation"
 msgstr ""
 
@@ -3678,7 +3678,7 @@ msgstr ""
 #: src/screens/Chats/GroupManageScreen.tsx:252
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:275
 #: src/screens/Settings/AppPasswords.tsx:213
-#: src/screens/Settings/ContextEngine/index.tsx:341
+#: src/screens/Settings/ContextEngine/index.tsx:383
 #: src/screens/StarterPack/StarterPackScreen.tsx:615
 #: src/screens/StarterPack/StarterPackScreen.tsx:715
 #: src/screens/StarterPack/StarterPackScreen.tsx:794
@@ -3708,7 +3708,7 @@ msgstr ""
 msgid "Delete chat"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:493
+#: src/screens/Settings/Settings.tsx:486
 msgid "Delete chat declaration record"
 msgstr ""
 
@@ -3833,8 +3833,8 @@ msgctxt "toast"
 msgid "Developer mode enabled"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:305
-#: src/screens/Settings/Settings.tsx:308
+#: src/screens/Settings/Settings.tsx:298
+#: src/screens/Settings/Settings.tsx:301
 msgid "Developer options"
 msgstr ""
 
@@ -4177,7 +4177,7 @@ msgstr ""
 msgid "e.g. Spammers"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:305
+#: src/screens/Settings/ContextEngine/index.tsx:347
 msgid "e.g. Sports Practice"
 msgstr "e.g. Sports Practice"
 
@@ -5157,8 +5157,8 @@ msgstr ""
 
 #: src/features/inviteFriends/components/FollowersPromoBanner.tsx:49
 #: src/screens/Settings/FindContactsSettings.tsx:81
-#: src/screens/Settings/Settings.tsx:217
-#: src/screens/Settings/Settings.tsx:220
+#: src/screens/Settings/Settings.tsx:216
+#: src/screens/Settings/Settings.tsx:219
 msgid "Find and invite friends"
 msgstr "Find and invite friends"
 
@@ -5745,7 +5745,7 @@ msgstr ""
 msgid "Got it"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:246
+#: src/screens/Settings/ContextEngine/index.tsx:263
 msgid "Grant “Always” location permission"
 msgstr "Grant “Always” location permission"
 
@@ -5754,11 +5754,11 @@ msgstr "Grant “Always” location permission"
 msgid "Grant access"
 msgstr "Grant access"
 
-#: src/screens/Settings/ContextEngine/index.tsx:142
+#: src/screens/Settings/ContextEngine/index.tsx:153
 msgid "Grant location permission"
 msgstr "Grant location permission"
 
-#: src/screens/Settings/PhotoContext/index.tsx:157
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:129
 msgid "Grant photo permission"
 msgstr "Grant photo permission"
 
@@ -5870,7 +5870,7 @@ msgstr ""
 msgid "Half way there!"
 msgstr ""
 
-#: src/screens/Settings/PhotoContext/index.tsx:197
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:169
 msgid "Hand Bob one photo to actually look at. You pick it; it opens in your chat so you can review and send it. This is the only action that shares an image."
 msgstr "Hand Bob one photo to actually look at. You pick it; it opens in your chat so you can review and send it. This is the only action that shares an image."
 
@@ -5951,8 +5951,8 @@ msgstr ""
 msgid "Held by Bluesky for 7 days to prevent abuse, then deleted"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:270
-#: src/screens/Settings/Settings.tsx:274
+#: src/screens/Settings/Settings.tsx:263
+#: src/screens/Settings/Settings.tsx:267
 #: src/view/shell/desktop/RightNav.tsx:138
 #: src/view/shell/desktop/RightNav.tsx:141
 #: src/view/shell/Drawer.tsx:481
@@ -6705,8 +6705,8 @@ msgid "Language Settings"
 msgstr ""
 
 #: src/screens/Settings/LanguageSettings.tsx:98
-#: src/screens/Settings/Settings.tsx:262
-#: src/screens/Settings/Settings.tsx:265
+#: src/screens/Settings/Settings.tsx:255
+#: src/screens/Settings/Settings.tsx:258
 msgid "Languages"
 msgstr ""
 
@@ -7427,8 +7427,8 @@ msgstr ""
 msgid "Moderation"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:190
-#: src/screens/Settings/Settings.tsx:193
+#: src/screens/Settings/Settings.tsx:189
+#: src/screens/Settings/Settings.tsx:192
 msgid "Moderation and content filters"
 msgstr "Moderation and content filters"
 
@@ -7664,7 +7664,7 @@ msgstr "My starter pack"
 msgid "Name"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:294
+#: src/screens/Settings/ContextEngine/index.tsx:336
 msgid "Name where you are now (Home, School, Sports Practice). One is recognized by proximity and labeled in your context — coordinates stay on this device."
 msgstr "Name where you are now (Home, School, Sports Practice). One is recognized by proximity and labeled in your context — coordinates stay on this device."
 
@@ -8018,7 +8018,7 @@ msgstr "No personas"
 msgid "No personas yet"
 msgstr "No personas yet"
 
-#: src/screens/Settings/PhotoContext/index.tsx:172
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:144
 msgid "No photos found for today yet."
 msgstr "No photos found for today yet."
 
@@ -8082,7 +8082,7 @@ msgstr "No results found for “<0>{query}</0>”."
 msgid "No results."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:326
+#: src/screens/Settings/ContextEngine/index.tsx:368
 msgid "No saved places yet."
 msgstr "No saved places yet."
 
@@ -8191,8 +8191,8 @@ msgstr ""
 #: src/Navigation.tsx:828
 #: src/screens/Notifications/ActivityList.tsx:31
 #: src/screens/Settings/NotificationSettings/index.tsx:104
-#: src/screens/Settings/Settings.tsx:198
-#: src/screens/Settings/Settings.tsx:201
+#: src/screens/Settings/Settings.tsx:197
+#: src/screens/Settings/Settings.tsx:200
 #: src/view/screens/Notifications.tsx:128
 #: src/view/shell/bottom-bar/BottomBar.tsx:261
 #: src/view/shell/desktop/LeftNav.tsx:687
@@ -8215,10 +8215,10 @@ msgstr ""
 
 #: src/lib/moderation/useLabelBehaviorDescription.ts:14
 #: src/screens/Settings/AccountSettings.tsx:164
-#: src/screens/Settings/ContextEngine/index.tsx:99
-#: src/screens/Settings/ContextEngine/index.tsx:192
+#: src/screens/Settings/ContextEngine/index.tsx:105
+#: src/screens/Settings/ContextEngine/index.tsx:208
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:88
 #: src/screens/Settings/NotificationSettings/index.tsx:394
-#: src/screens/Settings/PhotoContext/index.tsx:111
 msgid "Off"
 msgstr ""
 
@@ -8258,23 +8258,23 @@ msgstr ""
 msgid "On"
 msgstr "On"
 
-#: src/screens/Settings/ContextEngine/index.tsx:188
+#: src/screens/Settings/ContextEngine/index.tsx:199
 msgid "On — recognizing places all day in the background"
 msgstr "On — recognizing places all day in the background"
 
-#: src/screens/Settings/PhotoContext/index.tsx:107
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:84
 msgid "On — summarizing today’s photos (metadata only)"
 msgstr "On — summarizing today’s photos (metadata only)"
 
-#: src/screens/Settings/ContextEngine/index.tsx:190
+#: src/screens/Settings/ContextEngine/index.tsx:204
 msgid "On, but “Always” location permission is needed"
 msgstr "On, but “Always” location permission is needed"
 
-#: src/screens/Settings/ContextEngine/index.tsx:97
+#: src/screens/Settings/ContextEngine/index.tsx:103
 msgid "On, but location permission is needed"
 msgstr "On, but location permission is needed"
 
-#: src/screens/Settings/PhotoContext/index.tsx:109
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:86
 msgid "On, but photo permission is needed"
 msgstr "On, but photo permission is needed"
 
@@ -8282,7 +8282,7 @@ msgstr "On, but photo permission is needed"
 msgid "on<0><1/><2><3/></2></0>"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:419
+#: src/screens/Settings/Settings.tsx:412
 msgid "Onboarding reset"
 msgstr ""
 
@@ -8473,7 +8473,7 @@ msgstr ""
 msgid "Open message options"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:484
+#: src/screens/Settings/Settings.tsx:477
 msgid "Open moderation debug page"
 msgstr ""
 
@@ -8511,12 +8511,12 @@ msgstr ""
 msgid "Open starter pack menu"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:477
-#: src/screens/Settings/Settings.tsx:491
+#: src/screens/Settings/Settings.tsx:470
+#: src/screens/Settings/Settings.tsx:484
 msgid "Open storybook page"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:470
+#: src/screens/Settings/Settings.tsx:463
 msgid "Open system log"
 msgstr ""
 
@@ -8596,7 +8596,7 @@ msgstr "Opens flow to sign in to your existing One account"
 msgid "Opens full image"
 msgstr "Opens full image"
 
-#: src/screens/Settings/Settings.tsx:271
+#: src/screens/Settings/Settings.tsx:264
 msgid "Opens helpdesk in browser"
 msgstr ""
 
@@ -8849,8 +8849,8 @@ msgstr ""
 
 #: src/Navigation.tsx:444
 #: src/screens/Settings/PersonaSettings/index.tsx:71
-#: src/screens/Settings/Settings.tsx:232
-#: src/screens/Settings/Settings.tsx:235
+#: src/screens/Settings/Settings.tsx:231
+#: src/screens/Settings/Settings.tsx:234
 msgid "Persona"
 msgstr "Persona"
 
@@ -8870,7 +8870,7 @@ msgstr "Personas unavailable"
 msgid "Pets"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:114
+#: src/screens/Settings/ContextEngine/index.tsx:120
 msgid "Phase 1 uses your location ONLY, only while the app is open. It runs on-device and stores CONCLUSIONS (like “home”, “a venue”, or how long you stayed) — never your raw location, and never audio, microphone, or camera. You can view and delete everything below."
 msgstr "Phase 1 uses your location ONLY, only while the app is open. It runs on-device and stores CONCLUSIONS (like “home”, “a venue”, or how long you stayed) — never your raw location, and never audio, microphone, or camera. You can view and delete everything below."
 
@@ -8883,10 +8883,12 @@ msgstr ""
 msgid "Phone number verified"
 msgstr ""
 
+#: src/screens/Settings/ContextEngine/index.tsx:282
+msgid "Photo context"
+msgstr "Photo context"
+
 #: src/Navigation.tsx:468
-#: src/screens/Settings/PhotoContext/index.tsx:73
-#: src/screens/Settings/Settings.tsx:248
-#: src/screens/Settings/Settings.tsx:251
+#: src/screens/Settings/PhotoContext/index.tsx:27
 msgid "Photo Context"
 msgstr "Photo Context"
 
@@ -8942,7 +8944,7 @@ msgstr ""
 msgid "Pinned to your feeds"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:304
+#: src/screens/Settings/ContextEngine/index.tsx:346
 msgid "Place name"
 msgstr "Place name"
 
@@ -9324,8 +9326,8 @@ msgstr ""
 msgid "Privacy"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:182
-#: src/screens/Settings/Settings.tsx:185
+#: src/screens/Settings/Settings.tsx:181
+#: src/screens/Settings/Settings.tsx:184
 msgid "Privacy and security"
 msgstr ""
 
@@ -9649,7 +9651,7 @@ msgstr ""
 #: src/screens/Messages/ConversationSettings/Member.tsx:162
 #: src/screens/Messages/ConversationSettings/prompts.tsx:170
 #: src/screens/Moderation/index.tsx:477
-#: src/screens/Settings/Settings.tsx:696
+#: src/screens/Settings/Settings.tsx:689
 #: src/view/com/modals/UserAddRemoveLists.tsx:236
 #: src/view/com/posts/PostFeedErrorMessage.tsx:221
 msgid "Remove"
@@ -9676,8 +9678,8 @@ msgstr "Remove {displayName}?"
 msgid "Remove {historyItem}"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:677
-#: src/screens/Settings/Settings.tsx:680
+#: src/screens/Settings/Settings.tsx:670
+#: src/screens/Settings/Settings.tsx:673
 msgid "Remove account"
 msgstr ""
 
@@ -9732,7 +9734,7 @@ msgstr "Remove from chat"
 msgid "Remove from my feeds"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:690
+#: src/screens/Settings/Settings.tsx:683
 msgid "Remove from quick access?"
 msgstr ""
 
@@ -10178,8 +10180,8 @@ msgstr ""
 msgid "Resend Verification Email"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:513
-#: src/screens/Settings/Settings.tsx:515
+#: src/screens/Settings/Settings.tsx:506
+#: src/screens/Settings/Settings.tsx:508
 msgid "Reset activity subscription nudge"
 msgstr ""
 
@@ -10187,8 +10189,8 @@ msgstr ""
 msgid "Reset code"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:498
-#: src/screens/Settings/Settings.tsx:500
+#: src/screens/Settings/Settings.tsx:491
+#: src/screens/Settings/Settings.tsx:493
 msgid "Reset onboarding state"
 msgstr ""
 
@@ -10314,7 +10316,7 @@ msgstr ""
 msgid "Save changes?"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:313
+#: src/screens/Settings/ContextEngine/index.tsx:355
 msgid "Save current location as this place"
 msgstr "Save current location as this place"
 
@@ -10328,7 +10330,7 @@ msgstr ""
 msgid "Save draft?"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:320
+#: src/screens/Settings/ContextEngine/index.tsx:362
 msgid "Save here"
 msgstr "Save here"
 
@@ -10369,7 +10371,7 @@ msgstr ""
 msgid "Saved Feeds"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:291
+#: src/screens/Settings/ContextEngine/index.tsx:333
 msgid "Saved places (stored on-device only)"
 msgstr "Saved places (stored on-device only)"
 
@@ -10409,11 +10411,11 @@ msgstr "Scan"
 msgid "Scan QR code"
 msgstr "Scan QR code"
 
-#: src/screens/Settings/PhotoContext/index.tsx:185
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:157
 msgid "Scan today’s photos"
 msgstr "Scan today’s photos"
 
-#: src/screens/Settings/PhotoContext/index.tsx:168
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:140
 msgid "Scanning today’s photos…"
 msgstr "Scanning today’s photos…"
 
@@ -10856,7 +10858,7 @@ msgstr ""
 msgid "Set app icon to {0}"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:268
+#: src/screens/Settings/ContextEngine/index.tsx:305
 msgid "Set Home"
 msgstr "Set Home"
 
@@ -10876,7 +10878,7 @@ msgstr ""
 msgid "Set who can reply to your post"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:279
+#: src/screens/Settings/ContextEngine/index.tsx:320
 msgid "Set Work"
 msgstr "Set Work"
 
@@ -10889,7 +10891,7 @@ msgid "Sets email for password reset"
 msgstr ""
 
 #: src/Navigation.tsx:253
-#: src/screens/Settings/Settings.tsx:99
+#: src/screens/Settings/Settings.tsx:98
 #: src/view/shell/desktop/LeftNav.tsx:755
 #: src/view/shell/Drawer.tsx:776
 msgid "Settings"
@@ -10964,11 +10966,11 @@ msgstr ""
 msgid "Share"
 msgstr ""
 
-#: src/screens/Settings/PhotoContext/index.tsx:213
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:184
 msgid "Share a photo with Bob"
 msgstr "Share a photo with Bob"
 
-#: src/screens/Settings/PhotoContext/index.tsx:194
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:166
 msgid "Share a specific photo"
 msgstr "Share a specific photo"
 
@@ -11172,7 +11174,7 @@ msgstr ""
 msgid "Shows information about when this post was created"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:124
+#: src/screens/Settings/Settings.tsx:123
 msgid "Shows other accounts you can switch to"
 msgstr ""
 
@@ -11250,9 +11252,9 @@ msgstr ""
 msgid "Sign in to your Authority One account and make sure the agent runtime is reachable. Your agent keeps working with its default name and voice in the meantime."
 msgstr "Sign in to your Authority One account and make sure the agent runtime is reachable. Your agent keeps working with its default name and voice in the meantime."
 
-#: src/screens/Settings/Settings.tsx:288
-#: src/screens/Settings/Settings.tsx:290
-#: src/screens/Settings/Settings.tsx:322
+#: src/screens/Settings/Settings.tsx:281
+#: src/screens/Settings/Settings.tsx:283
+#: src/screens/Settings/Settings.tsx:315
 #: src/screens/SignupQueued.tsx:94
 #: src/screens/SignupQueued.tsx:97
 #: src/screens/Takendown.tsx:89
@@ -11266,7 +11268,7 @@ msgstr ""
 msgid "Sign Out"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:319
+#: src/screens/Settings/Settings.tsx:312
 #: src/view/shell/desktop/LeftNav.tsx:224
 msgid "Sign out?"
 msgstr ""
@@ -11564,7 +11566,7 @@ msgstr ""
 msgid "Step {0} of {1}"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:424
+#: src/screens/Settings/Settings.tsx:417
 msgid "Storage cleared, you need to restart the app now."
 msgstr ""
 
@@ -11573,7 +11575,7 @@ msgid "Stored as part of a secure code for matching with others"
 msgstr ""
 
 #: src/Navigation.tsx:346
-#: src/screens/Settings/Settings.tsx:479
+#: src/screens/Settings/Settings.tsx:472
 msgid "Storybook"
 msgstr ""
 
@@ -11712,9 +11714,9 @@ msgstr "Suspended accounts cannot participate in chat."
 
 #: src/components/dialogs/SwitchAccount.tsx:47
 #: src/components/dialogs/SwitchAccount.tsx:50
-#: src/screens/Settings/Settings.tsx:123
-#: src/screens/Settings/Settings.tsx:135
-#: src/screens/Settings/Settings.tsx:638
+#: src/screens/Settings/Settings.tsx:122
+#: src/screens/Settings/Settings.tsx:134
+#: src/screens/Settings/Settings.tsx:631
 #: src/view/shell/desktop/LeftNav.tsx:262
 msgid "Switch account"
 msgstr ""
@@ -11738,7 +11740,7 @@ msgstr ""
 #: src/screens/Log.tsx:49
 #: src/screens/Settings/AboutSettings.tsx:114
 #: src/screens/Settings/AboutSettings.tsx:117
-#: src/screens/Settings/Settings.tsx:472
+#: src/screens/Settings/Settings.tsx:465
 msgid "System log"
 msgstr ""
 
@@ -12323,7 +12325,7 @@ msgstr ""
 msgid "This feed is no longer online. We are showing <0>Discover</0> instead."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:207
+#: src/screens/Settings/ContextEngine/index.tsx:223
 msgid "This goes further than Phase 1: it uses “Always” location so it can notice the places you go even when the app is closed. It still runs battery-light, still stores ONLY conclusions (place + how long) — never a GPS trail — and still no audio, microphone, or camera. Leave it off to keep location to when-the-app-is-open only."
 msgstr "This goes further than Phase 1: it uses “Always” location so it can notice the places you go even when the app is closed. It still runs battery-light, still stores ONLY conclusions (place + how long) — never a GPS trail — and still no audio, microphone, or camera. Leave it off to keep location to when-the-app-is-open only."
 
@@ -12539,7 +12541,7 @@ msgid "This will irreversibly delete your Bluesky account <0>{currentHandle}</0>
 msgstr ""
 
 #. placeholder {0}: account.handle
-#: src/screens/Settings/Settings.tsx:691
+#: src/screens/Settings/Settings.tsx:684
 msgid "This will remove @{0} from the quick access list."
 msgstr ""
 
@@ -12727,21 +12729,21 @@ msgstr "Try Google Translate"
 msgid "Try it"
 msgstr "Try it"
 
-#: src/screens/Settings/ContextEngine/index.tsx:131
-#: src/screens/Settings/PhotoContext/index.tsx:146
+#: src/screens/Settings/ContextEngine/index.tsx:142
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:118
 msgid "Turn off"
 msgstr "Turn off"
 
-#: src/screens/Settings/ContextEngine/index.tsx:230
+#: src/screens/Settings/ContextEngine/index.tsx:247
 msgid "Turn off all-day context"
 msgstr "Turn off all-day context"
 
-#: src/screens/Settings/ContextEngine/index.tsx:131
-#: src/screens/Settings/PhotoContext/index.tsx:146
+#: src/screens/Settings/ContextEngine/index.tsx:142
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:118
 msgid "Turn on"
 msgstr "Turn on"
 
-#: src/screens/Settings/ContextEngine/index.tsx:232
+#: src/screens/Settings/ContextEngine/index.tsx:249
 msgid "Turn on all-day context"
 msgstr "Turn on all-day context"
 
@@ -12803,11 +12805,11 @@ msgstr "Unable to find the selected recipient."
 msgid "Unable to resolve handle"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:538
+#: src/screens/Settings/Settings.tsx:531
 msgid "Unapply Pull Request"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:540
+#: src/screens/Settings/Settings.tsx:533
 msgid "Unapply Pull Request {currentChannel}"
 msgstr ""
 
@@ -13033,8 +13035,8 @@ msgstr ""
 msgid "Unpinned list"
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:505
-#: src/screens/Settings/Settings.tsx:507
+#: src/screens/Settings/Settings.tsx:498
+#: src/screens/Settings/Settings.tsx:500
 msgid "Unsnooze email reminder"
 msgstr ""
 
@@ -13087,7 +13089,7 @@ msgstr "Update app"
 msgid "Update email"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:268
+#: src/screens/Settings/ContextEngine/index.tsx:303
 msgid "Update Home"
 msgstr "Update Home"
 
@@ -13102,7 +13104,7 @@ msgstr "Update invite link"
 msgid "Update to {domain}"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:279
+#: src/screens/Settings/ContextEngine/index.tsx:318
 msgid "Update Work"
 msgstr "Update Work"
 
@@ -13534,7 +13536,7 @@ msgstr ""
 msgid "View blogpost for more details"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:359
+#: src/screens/Settings/ContextEngine/index.tsx:401
 msgid "View context log"
 msgstr "View context log"
 
@@ -13947,7 +13949,7 @@ msgstr ""
 msgid "What's up?"
 msgstr ""
 
-#: src/screens/Settings/PhotoContext/index.tsx:126
+#: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:98
 msgid "When on, this reads only the METADATA of today’s photos on your device — how many, roughly when, and a coarse place from photo location — and turns it into a conclusion like “12 photos, near a venue this afternoon.” Your photos are never read or uploaded. The only time an actual image is shared is when you tap “Share a photo with Bob” below and pick one yourself. We recommend granting LIMITED access (selected photos)."
 msgstr "When on, this reads only the METADATA of today’s photos on your device — how many, roughly when, and a coarse place from photo location — and turns it into a conclusion like “12 photos, near a venue this afternoon.” Your photos are never read or uploaded. The only time an actual image is shared is when you tap “Share a photo with Bob” below and pick one yourself. We recommend granting LIMITED access (selected photos)."
 
@@ -14466,7 +14468,7 @@ msgstr "You own this chat"
 msgid "You previously deactivated @{0}."
 msgstr ""
 
-#: src/screens/Settings/Settings.tsx:435
+#: src/screens/Settings/Settings.tsx:428
 msgid "You probably want to restart the app now."
 msgstr ""
 
@@ -14490,7 +14492,7 @@ msgstr ""
 msgid "You requested to join"
 msgstr "You requested to join"
 
-#: src/screens/Settings/Settings.tsx:320
+#: src/screens/Settings/Settings.tsx:313
 #: src/view/shell/desktop/LeftNav.tsx:225
 msgid "You will be signed out of all your accounts."
 msgstr ""

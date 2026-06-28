@@ -44,7 +44,6 @@ import {CodeBrackets_Stroke2_Corner2_Rounded as CodeBracketsIcon} from '#/compon
 import {Contacts_Stroke2_Corner2_Rounded as ContactsIcon} from '#/components/icons/Contacts'
 import {DotGrid3x1_Stroke2_Corner0_Rounded as DotsHorizontal} from '#/components/icons/DotGrid'
 import {Earth_Stroke2_Corner2_Rounded as EarthIcon} from '#/components/icons/Globe'
-import {Image_Stroke2_Corner0_Rounded as ImageIcon} from '#/components/icons/Image'
 import {Lock_Stroke2_Corner2_Rounded as LockIcon} from '#/components/icons/Lock'
 import {PaintRoller_Stroke2_Corner2_Rounded as PaintRollerIcon} from '#/components/icons/PaintRoller'
 import {
@@ -235,20 +234,14 @@ export function SettingsScreen({}: Props) {
               <Trans>Persona</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
+          {/* Context Engine is the single hub for location, photo context, and saved
+              places. The former separate "Photo Context" row folds in here. */}
           <SettingsList.LinkItem
             to="/settings/context-engine"
             label={l`Context Engine`}>
             <SettingsList.ItemIcon icon={EarthIcon} />
             <SettingsList.ItemText>
               <Trans>Context Engine</Trans>
-            </SettingsList.ItemText>
-          </SettingsList.LinkItem>
-          <SettingsList.LinkItem
-            to="/settings/photo-context"
-            label={l`Photo Context`}>
-            <SettingsList.ItemIcon icon={ImageIcon} />
-            <SettingsList.ItemText>
-              <Trans>Photo Context</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
           <SettingsList.LinkItem
