@@ -61,7 +61,23 @@ describe('prefs', () => {
       backgroundEnabled: false,
       home: {lat: 1, lng: 2, label: 'Home'},
       work: undefined,
+      places: [],
     })
+  })
+
+  it('round-trips labeled places (sanitizing malformed rows)', async () => {
+    await savePrefs({
+      enabled: true,
+      places: [
+        {id: 'p1', name: 'School', lat: 1, lon: 2, radiusM: 150},
+        // malformed (no lat/lon) -> dropped
+        {id: 'bad', name: 'X'} as never,
+      ],
+    })
+    const out = await loadPrefs()
+    expect(out.places).toEqual([
+      {id: 'p1', name: 'School', lat: 1, lon: 2, radiusM: 150},
+    ])
   })
 })
 

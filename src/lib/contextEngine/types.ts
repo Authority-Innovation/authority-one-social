@@ -7,8 +7,19 @@
  * transiently in memory while deriving a place, then are discarded.
  */
 
-/** Coarse place conclusion. Never a precise address. */
-export type ContextPlace = 'home' | 'work' | 'venue' | 'out' | 'unknown'
+/**
+ * Coarse place conclusion. Never a precise address.
+ * - 'named' is a user-LABELED place (Home, School, Sports Practice…) matched on-device by
+ *   geofence; the human label rides in `placeRef`. It is the Phase-2 guardian-rule
+ *   vocabulary, so it is its own category rather than collapsing into home/work/venue.
+ */
+export type ContextPlace =
+  | 'home'
+  | 'work'
+  | 'named'
+  | 'venue'
+  | 'out'
+  | 'unknown'
 
 /**
  * A derived context event — a CONCLUSION, not raw data. `placeRef` is a coarse
@@ -40,6 +51,26 @@ export interface Anchor {
   label?: string
 }
 
+/**
+ * A user-defined LABELED PLACE with a geofence (Home, School, Sports Practice, Grandma's).
+ * The generalization of the fixed home/work anchors: an arbitrary list the user names.
+ *
+ * PRIVACY: like anchors, the coordinates are matched ON-DEVICE and never synced — only the
+ * resolved `name` leaves the device (as a context event's `placeRef`). This is also the
+ * clean data model the Phase-2 guardian rules consume (rules reference places by `id`/`name`
+ * and evaluate enter/exit against `lat`/`lon`/`radiusM`), so keep it stable.
+ */
+export interface LabeledPlace {
+  /** Stable id (referenced by Phase-2 guardian rules). */
+  id: string
+  /** Human label shown to the user and used as the synced `placeRef` (e.g. "School"). */
+  name: string
+  lat: number
+  lon: number
+  /** Geofence radius in meters (a sample within this counts as "at" the place). */
+  radiusM: number
+}
+
 /** Local opt-in prefs + anchors. `enabled` defaults OFF. */
 export interface ContextPrefs {
   /** Phase 1: when-in-use (foreground) capture opt-in. OFF by default. */
@@ -54,6 +85,8 @@ export interface ContextPrefs {
   backgroundEnabled?: boolean
   home?: Anchor
   work?: Anchor
+  /** User-defined labeled places (geofenced). On-device only; defaults to []. */
+  places?: LabeledPlace[]
 }
 
 /**
@@ -95,4 +128,17 @@ export interface NormalizedGeocode {
   city?: string
   region?: string
   district?: string
+}
+
+/**
+ * A nearby NAMED point of interest from the runtime POI proxy (GET /app/poi/nearby),
+ * normalized. Used to label outdoor/landmark stops the bare reverse-geocoder can't name
+ * (trailheads, falls, parks) instead of a bare street number.
+ */
+export interface NearbyPlace {
+  name: string
+  category?: string
+  /** Distance from the query point in meters, when the proxy provides it. */
+  distanceM?: number
+  source?: string
 }

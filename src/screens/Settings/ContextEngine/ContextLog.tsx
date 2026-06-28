@@ -22,6 +22,7 @@ type Props = NativeStackScreenProps<CommonNavigatorParams, 'ContextLog'>
 const PLACE_LABEL: Record<ContextEvent['place'], string> = {
   home: 'Home',
   work: 'Work',
+  named: 'Place',
   venue: 'Venue',
   out: 'Out',
   unknown: 'Unknown',
@@ -78,9 +79,9 @@ export function ContextLogScreen({}: Props) {
               </Text>
               <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
                 <Trans>
-                  Conclusions appear here as you move between places while the app is
-                  open and the Context Engine is on. Only conclusions are stored —
-                  never your raw location.
+                  Conclusions appear here as you move between places while the
+                  app is open and the Context Engine is on. Only conclusions are
+                  stored — never your raw location.
                 </Trans>
               </Text>
             </View>

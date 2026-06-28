@@ -1,5 +1,6 @@
+import {useState} from 'react'
 import {View} from 'react-native'
-import {Trans} from '@lingui/react/macro'
+import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
 import {
@@ -10,13 +11,18 @@ import {
 import {useContextEngine} from '#/state/contextEngine/ContextEngineProvider'
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
 import {atoms as a, useTheme} from '#/alf'
-import {Button, ButtonText} from '#/components/Button'
+import {Button, ButtonIcon, ButtonText} from '#/components/Button'
+import * as TextField from '#/components/forms/TextField'
 import {CircleInfo_Stroke2_Corner0_Rounded as InfoIcon} from '#/components/icons/CircleInfo'
+import {Trash_Stroke2_Corner0_Rounded as TrashIcon} from '#/components/icons/Trash'
 import * as Layout from '#/components/Layout'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
 
-type Props = NativeStackScreenProps<CommonNavigatorParams, 'ContextEngineSettings'>
+type Props = NativeStackScreenProps<
+  CommonNavigatorParams,
+  'ContextEngineSettings'
+>
 
 /**
  * Context Engine (Phase 1, location-only) — OPT-IN, OFF by default. Clear privacy
@@ -25,6 +31,7 @@ type Props = NativeStackScreenProps<CommonNavigatorParams, 'ContextEngineSetting
  */
 export function ContextEngineSettingsScreen({}: Props) {
   const t = useTheme()
+  const {t: l} = useLingui()
   const navigation = useNavigation<NavigationProp>()
   const {
     prefs,
@@ -33,11 +40,22 @@ export function ContextEngineSettingsScreen({}: Props) {
     setEnabled,
     setHome,
     setWork,
+    addLabeledPlace,
+    deleteLabeledPlace,
     backgroundSupported,
     backgroundActive,
     backgroundPermissionGranted,
     setBackgroundEnabled,
   } = useContextEngine()
+
+  const [placeName, setPlaceName] = useState('')
+  const places = prefs.places ?? []
+  const onAddPlace = () => {
+    const name = placeName.trim()
+    if (!name) return
+    addLabeledPlace(name)
+    setPlaceName('')
+  }
 
   return (
     <Layout.Screen>
@@ -61,7 +79,9 @@ export function ContextEngineSettingsScreen({}: Props) {
               a.gap_sm,
               a.rounded_md,
               a.p_md,
-              active ? {backgroundColor: t.palette.positive_50} : t.atoms.bg_contrast_25,
+              active
+                ? {backgroundColor: t.palette.positive_50}
+                : t.atoms.bg_contrast_25,
             ]}>
             <View
               style={[
@@ -97,17 +117,22 @@ export function ContextEngineSettingsScreen({}: Props) {
                 t.atoms.text_contrast_medium,
               ]}>
               <Trans>
-                Phase 1 uses your location ONLY, only while the app is open. It runs
-                on-device and stores CONCLUSIONS (like “home”, “a venue”, or how long
-                you stayed) — never your raw location, and never audio, microphone, or
-                camera. You can view and delete everything below.
+                Phase 1 uses your location ONLY, only while the app is open. It
+                runs on-device and stores CONCLUSIONS (like “home”, “a venue”,
+                or how long you stayed) — never your raw location, and never
+                audio, microphone, or camera. You can view and delete everything
+                below.
               </Trans>
             </Text>
           </View>
 
           {/* One-tap on/off */}
           <Button
-            label={prefs.enabled ? 'Turn off Context Engine' : 'Turn on Context Engine'}
+            label={
+              prefs.enabled
+                ? 'Turn off Context Engine'
+                : 'Turn on Context Engine'
+            }
             size="large"
             variant="solid"
             color={prefs.enabled ? 'secondary' : 'primary'}
@@ -170,9 +195,14 @@ export function ContextEngineSettingsScreen({}: Props) {
                 />
                 <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
                   {backgroundActive ? (
-                    <Trans>On — recognizing places all day in the background</Trans>
-                  ) : prefs.backgroundEnabled && !backgroundPermissionGranted ? (
-                    <Trans>On, but “Always” location permission is needed</Trans>
+                    <Trans>
+                      On — recognizing places all day in the background
+                    </Trans>
+                  ) : prefs.backgroundEnabled &&
+                    !backgroundPermissionGranted ? (
+                    <Trans>
+                      On, but “Always” location permission is needed
+                    </Trans>
                   ) : (
                     <Trans>Off</Trans>
                   )}
@@ -190,11 +220,12 @@ export function ContextEngineSettingsScreen({}: Props) {
                     t.atoms.text_contrast_medium,
                   ]}>
                   <Trans>
-                    This goes further than Phase 1: it uses “Always” location so it can
-                    notice the places you go even when the app is closed. It still runs
-                    battery-light, still stores ONLY conclusions (place + how long) —
-                    never a GPS trail — and still no audio, microphone, or camera. Leave
-                    it off to keep location to when-the-app-is-open only.
+                    This goes further than Phase 1: it uses “Always” location so
+                    it can notice the places you go even when the app is closed.
+                    It still runs battery-light, still stores ONLY conclusions
+                    (place + how long) — never a GPS trail — and still no audio,
+                    microphone, or camera. Leave it off to keep location to
+                    when-the-app-is-open only.
                   </Trans>
                 </Text>
               </View>
@@ -250,7 +281,11 @@ export function ContextEngineSettingsScreen({}: Props) {
                 disabled={!IS_NATIVE}
                 onPress={() => setHome()}>
                 <ButtonText>
-                  {prefs.home ? <Trans>Update Home</Trans> : <Trans>Set Home</Trans>}
+                  {prefs.home ? (
+                    <Trans>Update Home</Trans>
+                  ) : (
+                    <Trans>Set Home</Trans>
+                  )}
                 </ButtonText>
               </Button>
               <Button
@@ -261,7 +296,11 @@ export function ContextEngineSettingsScreen({}: Props) {
                 disabled={!IS_NATIVE}
                 onPress={() => setWork()}>
                 <ButtonText>
-                  {prefs.work ? <Trans>Update Work</Trans> : <Trans>Set Work</Trans>}
+                  {prefs.work ? (
+                    <Trans>Update Work</Trans>
+                  ) : (
+                    <Trans>Set Work</Trans>
+                  )}
                 </ButtonText>
               </Button>
             </View>
@@ -269,6 +308,72 @@ export function ContextEngineSettingsScreen({}: Props) {
               {prefs.home ? '✓ Home set · ' : 'Home not set · '}
               {prefs.work ? '✓ Work set' : 'Work not set'}
             </Text>
+          </SettingsList.Group>
+
+          <SettingsList.Group iconInset={false}>
+            <SettingsList.ItemText>
+              <Trans>Saved places (stored on-device only)</Trans>
+            </SettingsList.ItemText>
+            <Text style={[a.text_xs, t.atoms.text_contrast_medium, a.pt_2xs]}>
+              <Trans>
+                Name where you are now (Home, School, Sports Practice). One is
+                recognized by proximity and labeled in your context —
+                coordinates stay on this device.
+              </Trans>
+            </Text>
+            <View style={[a.flex_row, a.gap_sm, a.pt_xs]}>
+              <View style={[a.flex_1]}>
+                <TextField.Root>
+                  <TextField.Input
+                    label={l`Place name`}
+                    placeholder={l`e.g. Sports Practice`}
+                    value={placeName}
+                    onChangeText={setPlaceName}
+                    onSubmitEditing={onAddPlace}
+                  />
+                </TextField.Root>
+              </View>
+              <Button
+                label={l`Save current location as this place`}
+                size="small"
+                variant="solid"
+                color="primary"
+                disabled={!IS_NATIVE || !placeName.trim()}
+                onPress={onAddPlace}>
+                <ButtonText>
+                  <Trans>Save here</Trans>
+                </ButtonText>
+              </Button>
+            </View>
+            {places.length === 0 ? (
+              <Text style={[a.text_xs, t.atoms.text_contrast_low, a.pt_xs]}>
+                <Trans>No saved places yet.</Trans>
+              </Text>
+            ) : (
+              <View style={[a.gap_2xs, a.pt_sm]}>
+                {places.map(p => (
+                  <View
+                    key={p.id}
+                    style={[a.flex_row, a.align_center, a.gap_sm, a.py_2xs]}>
+                    <Text
+                      emoji
+                      style={[a.flex_1, a.text_md, t.atoms.text]}
+                      numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                    <Button
+                      label={`${l`Delete`} ${p.name}`}
+                      size="tiny"
+                      variant="ghost"
+                      color="negative"
+                      shape="round"
+                      onPress={() => deleteLabeledPlace(p.id)}>
+                      <ButtonIcon icon={TrashIcon} />
+                    </Button>
+                  </View>
+                ))}
+              </View>
+            )}
           </SettingsList.Group>
 
           <SettingsList.PressableItem

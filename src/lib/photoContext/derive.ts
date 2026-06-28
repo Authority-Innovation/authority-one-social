@@ -1,4 +1,5 @@
 import {type ContextPlace} from '#/lib/contextEngine/types'
+import {fusePlaceAndScene, normalizeSceneTags} from './sceneTags'
 import {type PhotoContextConclusion, type PhotoMeta} from './types'
 
 /**
@@ -72,9 +73,19 @@ export function derivePhotoConclusion(input: {
   id: string
   place?: ContextPlace
   placeRef?: string
+  /** Coarse scene tags from the small vision call (explicit photo only); optional. */
+  sceneTags?: string[]
 }): PhotoContextConclusion | null {
   if (input.photos.length === 0) return null
   const s = summarizePhotos(input.photos)
+  const sceneTags = normalizeSceneTags(input.sceneTags)
+  const activityHint = sceneTags.length
+    ? fusePlaceAndScene({
+        place: input.place,
+        placeRef: input.placeRef,
+        tags: sceneTags,
+      })
+    : undefined
   return {
     id: input.id,
     source: 'photos',
@@ -84,6 +95,8 @@ export function derivePhotoConclusion(input: {
     lastAt: s.lastAt,
     place: input.place,
     placeRef: input.placeRef,
+    ...(sceneTags.length ? {sceneTags} : {}),
+    ...(activityHint ? {activityHint} : {}),
   }
 }
 

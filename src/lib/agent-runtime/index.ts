@@ -49,6 +49,12 @@ export {
 } from './personasClient'
 export {postPhotoContext} from './photoContextClient'
 export {
+  fetchNearbyPoi,
+  normalizeNearbyPlace,
+  pickNearestNamed,
+} from './poiClient'
+export {fetchSceneTags, type SceneImage} from './sceneClient'
+export {
   createThread,
   deleteThread,
   fetchThreadMembers,

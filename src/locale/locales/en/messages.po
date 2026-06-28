@@ -1048,7 +1048,7 @@ msgstr ""
 msgid "Active"
 msgstr "Active"
 
-#: src/screens/Settings/ContextEngine/index.tsx:80
+#: src/screens/Settings/ContextEngine/index.tsx:95
 msgid "Active — recognizing coarse places"
 msgstr "Active — recognizing coarse places"
 
@@ -1182,7 +1182,7 @@ msgstr ""
 msgid "Add muted words and tags"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:188
+#: src/screens/Chats/GroupManageScreen.tsx:198
 #: src/screens/Messages/components/MessagesListGroupInfoPanel.tsx:133
 #: src/screens/Messages/components/MessagesListGroupInfoPanel.tsx:172
 #: src/screens/ProfileList/AboutSection.tsx:72
@@ -1285,7 +1285,7 @@ msgstr ""
 msgid "Additional details (limit 300 characters)"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:285
+#: src/screens/Chats/GroupManageScreen.tsx:295
 #: src/screens/Messages/ConversationSettings/Member.tsx:94
 #: src/screens/Messages/ConversationSettings/MemberMenu.tsx:155
 msgid "Admin"
@@ -1346,7 +1346,7 @@ msgid "Age assurance only takes a few minutes"
 msgstr ""
 
 #: src/screens/Chats/AddPeople.tsx:124
-#: src/screens/Chats/GroupManageScreen.tsx:280
+#: src/screens/Chats/GroupManageScreen.tsx:290
 msgid "Agent persona"
 msgstr "Agent persona"
 
@@ -1395,7 +1395,7 @@ msgstr ""
 msgid "All the feeds you've saved, right in one place."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:144
+#: src/screens/Settings/ContextEngine/index.tsx:159
 msgid "All-day place context"
 msgstr "All-day place context"
 
@@ -1642,7 +1642,7 @@ msgstr ""
 msgid "an unknown labeler"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:242
+#: src/screens/Settings/ContextEngine/index.tsx:257
 msgid "Anchors (stored on-device only)"
 msgstr "Anchors (stored on-device only)"
 
@@ -2690,7 +2690,7 @@ msgstr ""
 msgid "Choose your username"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/ContextLog.tsx:125
+#: src/screens/Settings/ContextEngine/ContextLog.tsx:126
 msgid "Clear all"
 msgstr "Clear all"
 
@@ -2976,7 +2976,7 @@ msgstr ""
 msgid "Compressing video..."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/ContextLog.tsx:80
+#: src/screens/Settings/ContextEngine/ContextLog.tsx:81
 msgid "Conclusions appear here as you move between places while the app is open and the Context Engine is on. Only conclusions are stored — never your raw location."
 msgstr "Conclusions appear here as you move between places while the app is open and the Context Engine is on. Only conclusions are stored — never your raw location."
 
@@ -3102,14 +3102,14 @@ msgid "Content warnings"
 msgstr ""
 
 #: src/Navigation.tsx:452
-#: src/screens/Settings/ContextEngine/index.tsx:48
+#: src/screens/Settings/ContextEngine/index.tsx:63
 #: src/screens/Settings/Settings.tsx:240
 #: src/screens/Settings/Settings.tsx:243
 msgid "Context Engine"
 msgstr "Context Engine"
 
 #: src/Navigation.tsx:460
-#: src/screens/Settings/ContextEngine/ContextLog.tsx:56
+#: src/screens/Settings/ContextEngine/ContextLog.tsx:57
 msgid "Context log"
 msgstr "Context log"
 
@@ -3321,7 +3321,7 @@ msgstr ""
 msgid "Could not copy – please try again"
 msgstr "Could not copy – please try again"
 
-#: src/screens/Chats/GroupManageScreen.tsx:250
+#: src/screens/Chats/GroupManageScreen.tsx:260
 msgid "Could not delete the group."
 msgstr "Could not delete the group."
 
@@ -3675,9 +3675,10 @@ msgstr ""
 
 #: src/components/dms/MessageOverlays.tsx:184
 #: src/components/PostControls/PostMenu/PostMenuItems.tsx:812
-#: src/screens/Chats/GroupManageScreen.tsx:242
+#: src/screens/Chats/GroupManageScreen.tsx:252
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:275
 #: src/screens/Settings/AppPasswords.tsx:213
+#: src/screens/Settings/ContextEngine/index.tsx:341
 #: src/screens/StarterPack/StarterPackScreen.tsx:615
 #: src/screens/StarterPack/StarterPackScreen.tsx:715
 #: src/screens/StarterPack/StarterPackScreen.tsx:794
@@ -3727,8 +3728,8 @@ msgstr ""
 msgid "Delete for me"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:197
-#: src/screens/Chats/GroupManageScreen.tsx:204
+#: src/screens/Chats/GroupManageScreen.tsx:207
+#: src/screens/Chats/GroupManageScreen.tsx:214
 msgid "Delete group"
 msgstr "Delete group"
 
@@ -3764,7 +3765,7 @@ msgstr ""
 msgid "Delete starter pack?"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:240
+#: src/screens/Chats/GroupManageScreen.tsx:250
 msgid "Delete this group?"
 msgstr "Delete this group?"
 
@@ -4175,6 +4176,10 @@ msgstr ""
 #: src/components/dialogs/lists/CreateOrEditListDialog.tsx:371
 msgid "e.g. Spammers"
 msgstr ""
+
+#: src/screens/Settings/ContextEngine/index.tsx:305
+msgid "e.g. Sports Practice"
+msgstr "e.g. Sports Practice"
 
 #: src/components/dialogs/lists/CreateOrEditListDialog.tsx:374
 msgid "e.g. The posters who never miss."
@@ -5740,7 +5745,7 @@ msgstr ""
 msgid "Got it"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:231
+#: src/screens/Settings/ContextEngine/index.tsx:246
 msgid "Grant “Always” location permission"
 msgstr "Grant “Always” location permission"
 
@@ -5749,7 +5754,7 @@ msgstr "Grant “Always” location permission"
 msgid "Grant access"
 msgstr "Grant access"
 
-#: src/screens/Settings/ContextEngine/index.tsx:127
+#: src/screens/Settings/ContextEngine/index.tsx:142
 msgid "Grant location permission"
 msgstr "Grant location permission"
 
@@ -5832,8 +5837,8 @@ msgstr "Group is locked"
 
 #: src/components/dms/InitiateChatFlow.tsx:264
 #: src/components/dms/InitiateChatFlow.tsx:600
-#: src/screens/Chats/GroupManageScreen.tsx:156
-#: src/screens/Chats/GroupManageScreen.tsx:162
+#: src/screens/Chats/GroupManageScreen.tsx:161
+#: src/screens/Chats/GroupManageScreen.tsx:167
 #: src/screens/Chats/NewGroupScreen.tsx:91
 #: src/screens/Messages/ConversationSettings/prompts.tsx:42
 msgid "Group name"
@@ -6567,7 +6572,7 @@ msgid "Invite your friends to follow your favorite feeds and people"
 msgstr ""
 
 #: src/screens/Chats/AddPeople.tsx:224
-#: src/screens/Chats/GroupManageScreen.tsx:287
+#: src/screens/Chats/GroupManageScreen.tsx:297
 #: src/screens/Messages/ConversationSettings/MemberMenu.tsx:155
 msgid "Invited"
 msgstr "Invited"
@@ -6805,7 +6810,7 @@ msgid "Learn more."
 msgstr ""
 
 #: src/components/dms/LeaveConvoPrompt.tsx:59
-#: src/screens/Chats/GroupManageScreen.tsx:228
+#: src/screens/Chats/GroupManageScreen.tsx:238
 #: src/screens/Messages/ConversationSettings/index.tsx:590
 msgid "Leave"
 msgstr ""
@@ -6841,8 +6846,8 @@ msgctxt "button"
 msgid "Leave conversation"
 msgstr "Leave conversation"
 
-#: src/screens/Chats/GroupManageScreen.tsx:209
-#: src/screens/Chats/GroupManageScreen.tsx:216
+#: src/screens/Chats/GroupManageScreen.tsx:219
+#: src/screens/Chats/GroupManageScreen.tsx:226
 msgid "Leave group"
 msgstr "Leave group"
 
@@ -6855,7 +6860,7 @@ msgstr "Leave group chat"
 msgid "Leave this group chat"
 msgstr "Leave this group chat"
 
-#: src/screens/Chats/GroupManageScreen.tsx:226
+#: src/screens/Chats/GroupManageScreen.tsx:236
 msgid "Leave this group?"
 msgstr "Leave this group?"
 
@@ -7659,6 +7664,10 @@ msgstr "My starter pack"
 msgid "Name"
 msgstr ""
 
+#: src/screens/Settings/ContextEngine/index.tsx:294
+msgid "Name where you are now (Home, School, Sports Practice). One is recognized by proximity and labeled in your context — coordinates stay on this device."
+msgstr "Name where you are now (Home, School, Sports Practice). One is recognized by proximity and labeled in your context — coordinates stay on this device."
+
 #: src/lib/interests.ts:66
 msgid "Nature"
 msgstr ""
@@ -7878,7 +7887,7 @@ msgstr ""
 msgid "No app passwords yet"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/ContextLog.tsx:77
+#: src/screens/Settings/ContextEngine/ContextLog.tsx:78
 msgid "No conclusions yet"
 msgstr "No conclusions yet"
 
@@ -8073,6 +8082,10 @@ msgstr "No results found for “<0>{query}</0>”."
 msgid "No results."
 msgstr ""
 
+#: src/screens/Settings/ContextEngine/index.tsx:326
+msgid "No saved places yet."
+msgstr "No saved places yet."
+
 #: src/view/screens/Profile.tsx:557
 msgid "No Starter Packs yet"
 msgstr ""
@@ -8202,8 +8215,8 @@ msgstr ""
 
 #: src/lib/moderation/useLabelBehaviorDescription.ts:14
 #: src/screens/Settings/AccountSettings.tsx:164
-#: src/screens/Settings/ContextEngine/index.tsx:84
-#: src/screens/Settings/ContextEngine/index.tsx:177
+#: src/screens/Settings/ContextEngine/index.tsx:99
+#: src/screens/Settings/ContextEngine/index.tsx:192
 #: src/screens/Settings/NotificationSettings/index.tsx:394
 #: src/screens/Settings/PhotoContext/index.tsx:111
 msgid "Off"
@@ -8245,7 +8258,7 @@ msgstr ""
 msgid "On"
 msgstr "On"
 
-#: src/screens/Settings/ContextEngine/index.tsx:173
+#: src/screens/Settings/ContextEngine/index.tsx:188
 msgid "On — recognizing places all day in the background"
 msgstr "On — recognizing places all day in the background"
 
@@ -8253,11 +8266,11 @@ msgstr "On — recognizing places all day in the background"
 msgid "On — summarizing today’s photos (metadata only)"
 msgstr "On — summarizing today’s photos (metadata only)"
 
-#: src/screens/Settings/ContextEngine/index.tsx:175
+#: src/screens/Settings/ContextEngine/index.tsx:190
 msgid "On, but “Always” location permission is needed"
 msgstr "On, but “Always” location permission is needed"
 
-#: src/screens/Settings/ContextEngine/index.tsx:82
+#: src/screens/Settings/ContextEngine/index.tsx:97
 msgid "On, but location permission is needed"
 msgstr "On, but location permission is needed"
 
@@ -8720,7 +8733,7 @@ msgid "Our moderators have reviewed reports and decided to disable your access t
 msgstr ""
 
 #: src/components/dialogs/StarterPackDialog.tsx:384
-#: src/screens/Chats/GroupManageScreen.tsx:283
+#: src/screens/Chats/GroupManageScreen.tsx:293
 msgid "Owner"
 msgstr "Owner"
 
@@ -8857,7 +8870,7 @@ msgstr "Personas unavailable"
 msgid "Pets"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:99
+#: src/screens/Settings/ContextEngine/index.tsx:114
 msgid "Phase 1 uses your location ONLY, only while the app is open. It runs on-device and stores CONCLUSIONS (like “home”, “a venue”, or how long you stayed) — never your raw location, and never audio, microphone, or camera. You can view and delete everything below."
 msgstr "Phase 1 uses your location ONLY, only while the app is open. It runs on-device and stores CONCLUSIONS (like “home”, “a venue”, or how long you stayed) — never your raw location, and never audio, microphone, or camera. You can view and delete everything below."
 
@@ -8928,6 +8941,10 @@ msgstr ""
 #: src/screens/ProfileList/components/Header.tsx:77
 msgid "Pinned to your feeds"
 msgstr ""
+
+#: src/screens/Settings/ContextEngine/index.tsx:304
+msgid "Place name"
+msgstr "Place name"
 
 #: src/components/Post/Embed/VideoEmbed/VideoEmbedInner/VideoEmbedInnerNative.tsx:155
 #: src/components/Post/Embed/VideoEmbed/VideoEmbedInner/web-controls/VideoControls.tsx:396
@@ -9627,8 +9644,8 @@ msgstr ""
 #: src/components/StarterPack/Wizard/WizardListCard.tsx:106
 #: src/components/StarterPack/Wizard/WizardListCard.tsx:113
 #: src/screens/Bookmarks/index.tsx:265
-#: src/screens/Chats/GroupManageScreen.tsx:314
-#: src/screens/Chats/GroupManageScreen.tsx:321
+#: src/screens/Chats/GroupManageScreen.tsx:324
+#: src/screens/Chats/GroupManageScreen.tsx:331
 #: src/screens/Messages/ConversationSettings/Member.tsx:162
 #: src/screens/Messages/ConversationSettings/prompts.tsx:170
 #: src/screens/Moderation/index.tsx:477
@@ -9823,11 +9840,11 @@ msgstr ""
 msgid "Removed verification"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:177
+#: src/screens/Chats/GroupManageScreen.tsx:182
 msgid "Rename"
 msgstr "Rename"
 
-#: src/screens/Chats/GroupManageScreen.tsx:170
+#: src/screens/Chats/GroupManageScreen.tsx:175
 msgid "Rename group"
 msgstr "Rename group"
 
@@ -10297,6 +10314,10 @@ msgstr ""
 msgid "Save changes?"
 msgstr ""
 
+#: src/screens/Settings/ContextEngine/index.tsx:313
+msgid "Save current location as this place"
+msgstr "Save current location as this place"
+
 #: src/view/com/composer/Composer.tsx:1451
 #: src/view/com/composer/drafts/DraftsButton.tsx:125
 msgid "Save draft"
@@ -10306,6 +10327,10 @@ msgstr ""
 #: src/view/com/composer/drafts/DraftsButton.tsx:95
 msgid "Save draft?"
 msgstr ""
+
+#: src/screens/Settings/ContextEngine/index.tsx:320
+msgid "Save here"
+msgstr "Save here"
 
 #: src/components/Lightbox/chrome/ImageMenu.tsx:98
 #: src/components/MediaPreview.tsx:231
@@ -10343,6 +10368,10 @@ msgstr ""
 #: src/screens/SavedFeeds.tsx:375
 msgid "Saved Feeds"
 msgstr ""
+
+#: src/screens/Settings/ContextEngine/index.tsx:291
+msgid "Saved places (stored on-device only)"
+msgstr "Saved places (stored on-device only)"
 
 #: src/components/dialogs/nuxs/BookmarksAnnouncement.tsx:145
 #: src/Navigation.tsx:633
@@ -10827,7 +10856,7 @@ msgstr ""
 msgid "Set app icon to {0}"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:253
+#: src/screens/Settings/ContextEngine/index.tsx:268
 msgid "Set Home"
 msgstr "Set Home"
 
@@ -10847,7 +10876,7 @@ msgstr ""
 msgid "Set who can reply to your post"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:264
+#: src/screens/Settings/ContextEngine/index.tsx:279
 msgid "Set Work"
 msgstr "Set Work"
 
@@ -12294,7 +12323,7 @@ msgstr ""
 msgid "This feed is no longer online. We are showing <0>Discover</0> instead."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:192
+#: src/screens/Settings/ContextEngine/index.tsx:207
 msgid "This goes further than Phase 1: it uses “Always” location so it can notice the places you go even when the app is closed. It still runs battery-light, still stores ONLY conclusions (place + how long) — never a GPS trail — and still no audio, microphone, or camera. Leave it off to keep location to when-the-app-is-open only."
 msgstr "This goes further than Phase 1: it uses “Always” location so it can notice the places you go even when the app is closed. It still runs battery-light, still stores ONLY conclusions (place + how long) — never a GPS trail — and still no audio, microphone, or camera. Leave it off to keep location to when-the-app-is-open only."
 
@@ -12386,7 +12415,7 @@ msgstr ""
 msgid "This moderation was applied to the entire user account and will appear on all posts."
 msgstr "This moderation was applied to the entire user account and will appear on all posts."
 
-#: src/screens/Chats/GroupManageScreen.tsx:241
+#: src/screens/Chats/GroupManageScreen.tsx:251
 msgid "This permanently deletes the group for everyone. This can't be undone."
 msgstr "This permanently deletes the group for everyone. This can't be undone."
 
@@ -12698,21 +12727,21 @@ msgstr "Try Google Translate"
 msgid "Try it"
 msgstr "Try it"
 
-#: src/screens/Settings/ContextEngine/index.tsx:116
+#: src/screens/Settings/ContextEngine/index.tsx:131
 #: src/screens/Settings/PhotoContext/index.tsx:146
 msgid "Turn off"
 msgstr "Turn off"
 
-#: src/screens/Settings/ContextEngine/index.tsx:215
+#: src/screens/Settings/ContextEngine/index.tsx:230
 msgid "Turn off all-day context"
 msgstr "Turn off all-day context"
 
-#: src/screens/Settings/ContextEngine/index.tsx:116
+#: src/screens/Settings/ContextEngine/index.tsx:131
 #: src/screens/Settings/PhotoContext/index.tsx:146
 msgid "Turn on"
 msgstr "Turn on"
 
-#: src/screens/Settings/ContextEngine/index.tsx:217
+#: src/screens/Settings/ContextEngine/index.tsx:232
 msgid "Turn on all-day context"
 msgstr "Turn on all-day context"
 
@@ -13058,7 +13087,7 @@ msgstr "Update app"
 msgid "Update email"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:253
+#: src/screens/Settings/ContextEngine/index.tsx:268
 msgid "Update Home"
 msgstr "Update Home"
 
@@ -13073,7 +13102,7 @@ msgstr "Update invite link"
 msgid "Update to {domain}"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:264
+#: src/screens/Settings/ContextEngine/index.tsx:279
 msgid "Update Work"
 msgstr "Update Work"
 
@@ -13505,7 +13534,7 @@ msgstr ""
 msgid "View blogpost for more details"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:278
+#: src/screens/Settings/ContextEngine/index.tsx:359
 msgid "View context log"
 msgstr "View context log"
 
@@ -14522,7 +14551,7 @@ msgstr ""
 msgid "You'll stay updated with these feeds"
 msgstr ""
 
-#: src/screens/Chats/GroupManageScreen.tsx:227
+#: src/screens/Chats/GroupManageScreen.tsx:237
 msgid "You'll stop receiving its messages. You can be re-invited later."
 msgstr "You'll stop receiving its messages. You can be re-invited later."
 

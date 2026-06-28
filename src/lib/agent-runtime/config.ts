@@ -86,6 +86,27 @@ export const CONTEXT_RECENT_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/context/re
 export const CONTEXT_DELETE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/context/delete`
 
 /**
+ * POI proxy (owner-scoped). The runtime resolves the nearest NAMED place for a coordinate
+ * (self-hosted OSM/Overpass behind the proxy, per CONTEXT-COMPANION-GUARDIAN-SCOPE.md), so
+ * the app can label outdoor stops (trailheads/falls/parks) the bare reverse-geocoder can't.
+ * GET /app/poi/nearby?lat=&lon=&radius= -> {places:[{name,category,distanceM,...}], resolvedAt}.
+ */
+export const POI_NEARBY_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/poi/nearby`
+export const poiNearbyUrl = (lat: number, lon: number, radiusM: number) =>
+  `${POI_NEARBY_ENDPOINT}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(
+    lon,
+  )}&radius=${encodeURIComponent(radiusM)}`
+
+/**
+ * Scene-tag vision proxy (owner-scoped). The "small vision call" for Photo Context: the
+ * app POSTs RAW image bytes (same shape as /app/media/upload) for an EXPLICITLY-captured
+ * photo and gets back coarse scene tags (forest/trail/rocks/indoor…). The passive EXIF
+ * photo sampler never sends bytes — only this explicit path does.
+ * POST /app/vision/scene (image bytes) -> {tags:[string,...]}.
+ */
+export const SCENE_TAGS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/vision/scene`
+
+/**
  * ElevenLabs voice id for spoken replies. Configurable at build time via
  * EXPO_PUBLIC_BOB_VOICE_ID; the default is "Bob v3" (iM3OrSmZmAzd2Lk50nop), the
  * same voice the runtime defaults to. Sending it from the app is OPTIONAL — the

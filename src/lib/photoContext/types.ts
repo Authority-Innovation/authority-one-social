@@ -42,4 +42,12 @@ export interface PhotoContextConclusion {
   place?: ContextPlace
   /** Coarse place label (venue name / city), never coordinates. */
   placeRef?: string
+  /**
+   * Coarse scene tags for an explicitly-captured photo (forest/trail/rocks/indoor…),
+   * from the small vision call. Absent for the passive metadata-only scan. Enables the
+   * agent to fuse photo + location ("trailhead + forest -> hiking").
+   */
+  sceneTags?: string[]
+  /** Coarse activity inferred from place + scene (e.g. "hiking"), when they combine. */
+  activityHint?: string
 }

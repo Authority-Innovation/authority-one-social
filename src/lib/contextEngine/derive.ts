@@ -4,6 +4,8 @@ import {
   type ContextPlace,
   type ContextPrefs,
   type Coords,
+  type LabeledPlace,
+  type NearbyPlace,
   type NormalizedGeocode,
   type OpenDwell,
 } from './types'
@@ -45,31 +47,105 @@ export function matchAnchor(
   return undefined
 }
 
+/** Default geofence radius (m) for a labeled place when the user doesn't set one. */
+export const DEFAULT_LABELED_RADIUS_M = 120
+
 /**
- * A coarse venue/place conclusion + confidence. Order of preference:
- *   1. user-set home/work anchor (high confidence)
- *   2. a named place from reverse-geocode that isn't just the street -> 'venue'
- *   3. a city -> 'out'
- *   4. nothing -> 'unknown'
+ * Is this reverse-geocode `name` just a bare street NUMBER (e.g. "3471", "49", "49a",
+ * "49-51")? Expo's geocoder hands back the street number as the POI `name` at unnamed
+ * outdoor places — the source of the "Venue · 3471" bug. Such names are NOT real venues.
+ * PURE.
+ */
+export function isBareStreetName(name?: string): boolean {
+  const t = name?.trim()
+  if (!t) return true
+  return /^\d+\s*[a-z]?$/i.test(t) || /^\d+\s*[-/]\s*\d+\s*[a-z]?$/i.test(t)
+}
+
+/** A real named venue from the reverse-geocode (distinct from the street, not a bare
+ *  number), or undefined. PURE. */
+export function geocodeVenueName(
+  geocode?: NormalizedGeocode,
+): string | undefined {
+  const name = geocode?.name?.trim()
+  const street = geocode?.street?.trim()
+  if (name && name !== street && !isBareStreetName(name)) return name
+  return undefined
+}
+
+/** The nearest user-labeled place whose geofence contains the sample, if any. PURE. */
+export function matchLabeledPlace(
+  coords: Coords,
+  places?: LabeledPlace[],
+): LabeledPlace | undefined {
+  if (!places || places.length === 0) return undefined
+  let best: LabeledPlace | undefined
+  let bestDist = Infinity
+  for (const p of places) {
+    const radius = p.radiusM > 0 ? p.radiusM : DEFAULT_LABELED_RADIUS_M
+    const d = haversineMeters(coords, {lat: p.lat, lng: p.lon})
+    if (d <= radius && d < bestDist) {
+      best = p
+      bestDist = d
+    }
+  }
+  return best
+}
+
+/**
+ * Should the caller query the POI proxy for this sample? Only when a named place would
+ * actually help: no labeled-place or home/work match, AND the bare reverse-geocode gave
+ * no real venue name (bare street number / city-only / nothing). When the geocode already
+ * names a venue we skip the lookup (saves the call). PURE — lets the async POI fetch stay
+ * in the caller while the decision stays testable here.
+ */
+export function needsPoiLookup(input: {
+  coords: Coords
+  geocode?: NormalizedGeocode
+  prefs: ContextPrefs
+}): boolean {
+  if (matchLabeledPlace(input.coords, input.prefs.places)) return false
+  if (matchAnchor(input.coords, input.prefs)) return false
+  return !geocodeVenueName(input.geocode)
+}
+
+/**
+ * A coarse place conclusion + confidence. Order of preference:
+ *   1. user-LABELED place (geofence) -> 'named' (highest; user intent)
+ *   2. user-set home/work anchor -> 'home'/'work'
+ *   3. a NAMED nearby POI from the proxy -> 'venue' (the "Venue · 3471" fix)
+ *   4. a named place from reverse-geocode (not a bare street number) -> 'venue'
+ *   5. a city -> 'out'
+ *   6. nothing -> 'unknown'
+ * `poi` is the nearest named place the caller already fetched (or undefined); keeping the
+ * I/O in the caller leaves this pure + tested.
  */
 export function derivePlace(input: {
   coords: Coords
   geocode?: NormalizedGeocode
   prefs: ContextPrefs
+  poi?: NearbyPlace
 }): {place: ContextPlace; placeRef?: string; confidence: number} {
+  const labeled = matchLabeledPlace(input.coords, input.prefs.places)
+  if (labeled) {
+    return {place: 'named', placeRef: labeled.name, confidence: 0.95}
+  }
   const anchor = matchAnchor(input.coords, input.prefs)
   if (anchor) {
     const ref =
       anchor === 'home' ? input.prefs.home?.label : input.prefs.work?.label
     return {place: anchor, placeRef: ref, confidence: 0.9}
   }
-  const g = input.geocode
-  const name = g?.name?.trim()
-  const street = g?.street?.trim()
-  // A POI name distinct from the street suggests a venue (bar/arena/cafe/etc.).
-  if (name && name !== street) {
-    return {place: 'venue', placeRef: name, confidence: 0.6}
+  // A named POI from the proxy beats the bare reverse-geocoder for outdoor landmarks.
+  const poiName = input.poi?.name?.trim()
+  if (poiName && !isBareStreetName(poiName)) {
+    return {place: 'venue', placeRef: poiName, confidence: 0.7}
   }
+  const venueName = geocodeVenueName(input.geocode)
+  if (venueName) {
+    return {place: 'venue', placeRef: venueName, confidence: 0.6}
+  }
+  const g = input.geocode
   const city = g?.city?.trim() || g?.district?.trim() || g?.region?.trim()
   if (city) {
     return {place: 'out', placeRef: city, confidence: 0.4}

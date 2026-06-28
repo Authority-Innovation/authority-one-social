@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   type ContextEvent,
   type ContextPrefs,
+  type LabeledPlace,
   type OpenDwell,
 } from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
@@ -24,6 +25,33 @@ const MAX_EVENTS = 200
 export const DEFAULT_PREFS: ContextPrefs = {
   enabled: false,
   backgroundEnabled: false,
+  places: [],
+}
+
+/** Keep only well-formed labeled places (id/name/lat/lon/radiusM). On-device only. */
+function sanitizePlaces(raw: unknown): LabeledPlace[] {
+  if (!Array.isArray(raw)) return []
+  const out: LabeledPlace[] = []
+  for (const v of raw) {
+    if (!v || typeof v !== 'object') continue
+    const p = v as Record<string, unknown>
+    if (
+      typeof p.id === 'string' &&
+      typeof p.name === 'string' &&
+      typeof p.lat === 'number' &&
+      typeof p.lon === 'number'
+    ) {
+      out.push({
+        id: p.id,
+        name: p.name,
+        lat: p.lat,
+        lon: p.lon,
+        radiusM:
+          typeof p.radiusM === 'number' && p.radiusM > 0 ? p.radiusM : 120,
+      })
+    }
+  }
+  return out
 }
 
 export async function loadPrefs(): Promise<ContextPrefs> {
@@ -36,6 +64,7 @@ export async function loadPrefs(): Promise<ContextPrefs> {
       backgroundEnabled: p.backgroundEnabled === true,
       home: p.home,
       work: p.work,
+      places: sanitizePlaces(p.places),
     }
   } catch {
     return DEFAULT_PREFS

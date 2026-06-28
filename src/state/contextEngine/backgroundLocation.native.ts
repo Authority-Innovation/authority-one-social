@@ -1,13 +1,17 @@
 import * as Location from 'expo-location'
 import * as TaskManager from 'expo-task-manager'
 
-import {postContextEvents} from '#/lib/agent-runtime'
+import {fetchNearbyPoi, postContextEvents} from '#/lib/agent-runtime'
 import {
   advanceDwell,
   derivePlace,
   isInTransit,
+  needsPoiLookup,
 } from '#/lib/contextEngine/derive'
-import {type NormalizedGeocode} from '#/lib/contextEngine/types'
+import {
+  type NearbyPlace,
+  type NormalizedGeocode,
+} from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
 import {
   appendEvent,
@@ -100,7 +104,14 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
       geocode = geocodes[0] ? normalizeGeocode(geocodes[0]) : undefined
     }
 
-    const conclusion = derivePlace({coords, geocode, prefs})
+    // POI proxy fills in a NAMED place when the bare reverse-geocode can't, but only when
+    // stationary AND a name would actually help (not a labeled/anchor/named-venue match).
+    let poi: NearbyPlace | undefined
+    if (!moving && needsPoiLookup({coords, geocode, prefs})) {
+      poi = (await fetchNearbyPoi(coords, 150)) ?? undefined
+    }
+
+    const conclusion = derivePlace({coords, geocode, prefs, poi})
     // Raw coordinates stay transient (open-dwell working state only) — never synced.
     const {events, open: nextOpen} = advanceDwell(
       open,

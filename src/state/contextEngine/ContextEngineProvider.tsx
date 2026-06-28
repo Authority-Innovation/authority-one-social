@@ -3,6 +3,7 @@ import * as Location from 'expo-location'
 
 import {
   deleteContextEvent,
+  fetchNearbyPoi,
   fetchRecentContext,
   postContextEvents,
 } from '#/lib/agent-runtime'
@@ -10,14 +11,18 @@ import {getCurrentState} from '#/lib/appState'
 import {
   advanceDwell,
   closeDwell,
+  DEFAULT_LABELED_RADIUS_M,
   derivePlace,
   isInTransit,
+  needsPoiLookup,
   shouldCapture,
   shouldCaptureBackground,
 } from '#/lib/contextEngine/derive'
 import {
   type ContextEvent,
   type ContextPrefs,
+  type LabeledPlace,
+  type NearbyPlace,
   type NormalizedGeocode,
   type OpenDwell,
 } from '#/lib/contextEngine/types'
@@ -48,6 +53,7 @@ import {
  */
 
 const CAPTURE_INTERVAL_MS = 4 * 60 * 1000 // battery-light foreground sampling
+const POI_RADIUS_M = 150 // search radius for the nearest named place
 
 interface ContextEngineApi {
   prefs: ContextPrefs
@@ -58,6 +64,9 @@ interface ContextEngineApi {
   setEnabled: (on: boolean) => void
   setHome: () => void
   setWork: () => void
+  /** Save the CURRENT location as a user-labeled place (Home, School, …). On-device. */
+  addLabeledPlace: (name: string, radiusM?: number) => void
+  deleteLabeledPlace: (id: string) => void
   deleteEvent: (id: string) => void
   clearAll: () => void
   refresh: () => void
@@ -79,6 +88,8 @@ const Context = createContext<ContextEngineApi>({
   setEnabled: () => {},
   setHome: () => {},
   setWork: () => {},
+  addLabeledPlace: () => {},
+  deleteLabeledPlace: () => {},
   deleteEvent: () => {},
   clearAll: () => {},
   refresh: () => {},
@@ -204,7 +215,22 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
           if (cancelled) return
           geocode = geos[0] ? normalizeGeocode(geos[0]) : undefined
         }
-        const concl = derivePlace({coords, geocode, prefs: prefsRef.current})
+        // POI proxy fills in a NAMED place when the bare reverse-geocode can't (the
+        // "Venue · 3471" fix). Only when stationary AND a name would actually help.
+        let poi: NearbyPlace | undefined
+        if (
+          !moving &&
+          needsPoiLookup({coords, geocode, prefs: prefsRef.current})
+        ) {
+          poi = (await fetchNearbyPoi(coords, POI_RADIUS_M)) ?? undefined
+          if (cancelled) return
+        }
+        const concl = derivePlace({
+          coords,
+          geocode,
+          prefs: prefsRef.current,
+          poi,
+        })
         // Raw coords stay transient (open-dwell working state only) — never recorded.
         const {events, open: nextOpen} = advanceDwell(
           open,
@@ -288,6 +314,59 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
     })()
   }
 
+  // Save the current location as an arbitrary labeled place (Home, School, Sports
+  // Practice…). Generalizes the fixed home/work anchors; coords stay on-device, only the
+  // label syncs (as a context event placeRef). Foundation for Phase-2 guardian rules.
+  const addLabeledPlace = (
+    name: string,
+    radiusM = DEFAULT_LABELED_RADIUS_M,
+  ) => {
+    void (async () => {
+      if (!IS_NATIVE) return
+      const label = name.trim()
+      if (!label) return
+      try {
+        let granted = (await Location.getForegroundPermissionsAsync()).granted
+        if (!granted) {
+          granted = (await Location.requestForegroundPermissionsAsync()).granted
+          setPermissionGranted(granted)
+        }
+        if (!granted) return
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        })
+        const place: LabeledPlace = {
+          id: newId(Date.now()),
+          name: label,
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          radiusM,
+        }
+        const next: ContextPrefs = {
+          ...prefsRef.current,
+          places: [...(prefsRef.current.places ?? []), place],
+        }
+        setPrefs(next)
+        await savePrefs(next)
+      } catch (e) {
+        logger.warn('contextEngine: addLabeledPlace failed', {
+          safeMessage: String(e),
+        })
+      }
+    })()
+  }
+
+  const deleteLabeledPlace = (id: string) => {
+    void (async () => {
+      const next: ContextPrefs = {
+        ...prefsRef.current,
+        places: (prefsRef.current.places ?? []).filter(p => p.id !== id),
+      }
+      setPrefs(next)
+      await savePrefs(next)
+    })()
+  }
+
   const deleteEvent = (id: string) => {
     void (async () => {
       const next = await deleteEventFromStore(id)
@@ -326,6 +405,8 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
     setEnabled,
     setHome: () => setAnchor('home'),
     setWork: () => setAnchor('work'),
+    addLabeledPlace,
+    deleteLabeledPlace,
     deleteEvent,
     clearAll,
     refresh,
