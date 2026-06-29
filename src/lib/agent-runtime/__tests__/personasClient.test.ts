@@ -10,6 +10,7 @@ import {
   normalizeKnowledgeBase,
   normalizePersonaDetail,
   normalizePersonasResponse,
+  normalizeReferenceImages,
   pickActiveVoiceId,
   pickAgentHeaderName,
   setActivePersona,
@@ -155,12 +156,13 @@ describe('CRUD request shaping', () => {
 
     mockToken.mockResolvedValue('tok')
     mockOkJson({})
-    // Nested split shape: identity + knowledgeBase.
+    // Nested split shape: identity + knowledgeBase + referenceImages.
     await createPersona({
       name: 'Ada',
       voiceId: 'v2',
       identity: {personality: 'curious'},
       knowledgeBase: {summary: 'a curious mind', entries: []},
+      referenceImages: [{name: 'avatar', url: 'https://r2/a.jpg'}],
     })
     await updatePersona({id: 'p2', name: 'Ada 2'})
     await deletePersona({id: 'p2'})
@@ -177,6 +179,7 @@ describe('CRUD request shaping', () => {
       voiceId: 'v2',
       identity: {personality: 'curious'},
       knowledgeBase: {summary: 'a curious mind', entries: []},
+      referenceImages: [{name: 'avatar', url: 'https://r2/a.jpg'}],
     })
     expect(bodyOf(byUrl('/app/personas/update')!)).toMatchObject({
       id: 'p2',
@@ -254,8 +257,25 @@ describe('normalizeKnowledgeBase (pure)', () => {
   })
 })
 
+describe('normalizeReferenceImages (pure)', () => {
+  it('keeps url-bearing entries (tolerant of imageUrl/uri + missing name); drops the rest', () => {
+    expect(
+      normalizeReferenceImages([
+        {id: 'r1', name: 'avatar', url: 'https://r2/a.jpg'},
+        {imageUrl: 'https://r2/car.jpg'}, // alias + no name
+        {name: 'nourl'}, // dropped
+        null,
+      ]),
+    ).toEqual([
+      {id: 'r1', name: 'avatar', url: 'https://r2/a.jpg'},
+      {id: undefined, name: '', url: 'https://r2/car.jpg'},
+    ])
+    expect(normalizeReferenceImages(undefined)).toEqual([])
+  })
+})
+
 describe('normalizePersonaDetail (pure)', () => {
-  it('reads the nested {persona:{identity,knowledgeBase,fiction}} shape', () => {
+  it('reads the nested shape incl. referenceImages', () => {
     const d = normalizePersonaDetail({
       persona: {
         id: 'p1',
@@ -266,13 +286,23 @@ describe('normalizePersonaDetail (pure)', () => {
           summary: 'hockey star',
           entries: [{id: 'e1', title: 'Team', keywords: ['nhl'], body: '...'}],
         },
+        referenceImages: [
+          {id: 'r1', name: 'avatar', url: 'https://r2/a.jpg'},
+          {name: 'car', url: 'https://r2/car.jpg'},
+        ],
         fiction: {enabled: true, haunts: ['the rink']},
       },
     })
     expect(d?.identity.personality).toBe('an ice hog')
     expect(d?.knowledgeBase.summary).toBe('hockey star')
     expect(d?.knowledgeBase.entries[0].keywords).toEqual(['nhl'])
+    expect(d?.referenceImages.map(r => r.name)).toEqual(['avatar', 'car'])
     expect(d?.fiction?.enabled).toBe(true)
+  })
+
+  it('defaults referenceImages to [] when absent', () => {
+    const d = normalizePersonaDetail({persona: {id: 'p9'}})
+    expect(d?.referenceImages).toEqual([])
   })
 
   it('lifts a legacy flat personality into identity; null without an id', () => {

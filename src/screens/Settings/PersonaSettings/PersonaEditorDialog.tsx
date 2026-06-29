@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react'
 import {ActivityIndicator, Pressable, View} from 'react-native'
+import {Image} from 'expo-image'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {
@@ -8,7 +9,10 @@ import {
   normalizeKeywords,
   type Persona,
   type PersonaVoice,
+  type ReferenceImage,
+  uploadChatImage,
 } from '#/lib/agent-runtime'
+import {openPicker} from '#/lib/media/picker'
 import {
   PersonaWriteError,
   useCreatePersonaMutation,
@@ -22,6 +26,7 @@ import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Che
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
 import {TimesLarge_Stroke2_Corner0_Rounded as CloseIcon} from '#/components/icons/Times'
 import {Trash_Stroke2_Corner0_Rounded as TrashIcon} from '#/components/icons/Trash'
+import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {
   addHaunt,
@@ -97,6 +102,22 @@ function toDraft(e: KnowledgeBaseEntry): KbEntryDraft {
   }
 }
 
+/** Editable reference image (a NAMED photo the AI can draw on for image generation). */
+interface RefImageDraft {
+  key: string
+  id?: string
+  name: string
+  /** Hosted R2 url once uploaded; empty while the upload is in flight. */
+  url: string
+  /** Local picker uri shown as the thumbnail until `url` arrives. */
+  previewUri?: string
+  uploading?: boolean
+}
+
+function toRefDraft(r: ReferenceImage): RefImageDraft {
+  return {key: r.id ?? newDraftKey(), id: r.id, name: r.name, url: r.url}
+}
+
 /**
  * Create / edit a persona on the SPLIT schema: IDENTITY (name + voice + compact always-on
  * personality) and a KNOWLEDGE BASE (summary + retrievable entries). On open (edit) the
@@ -156,6 +177,7 @@ function EditorInner({
   const [personality, setPersonality] = useState('')
   const [kbSummary, setKbSummary] = useState('')
   const [entries, setEntries] = useState<KbEntryDraft[]>([])
+  const [refImages, setRefImages] = useState<RefImageDraft[]>([])
   const [fiction, setFiction] = useState<PersonaFictionDraft>(() =>
     fictionDraftFrom(undefined),
   )
@@ -174,6 +196,7 @@ function EditorInner({
         setPersonality(d.identity.personality ?? '')
         setKbSummary(d.knowledgeBase.summary ?? '')
         setEntries(d.knowledgeBase.entries.map(toDraft))
+        setRefImages(d.referenceImages.map(toRefDraft))
         setFiction(fictionDraftFrom(d.fiction))
         const vi = voices.findIndex(v => v.voiceId === d.voiceId)
         if (vi >= 0) setVoiceIndex(vi)
@@ -220,6 +243,46 @@ function EditorInner({
     setEntries(prev => prev.filter(e => e.key !== key))
   }
 
+  const updateRefImage = (key: string, patch: Partial<RefImageDraft>) => {
+    setRefImages(prev => prev.map(r => (r.key === key ? {...r, ...patch} : r)))
+  }
+  const removeRefImage = (key: string) => {
+    setRefImages(prev => prev.filter(r => r.key !== key))
+  }
+  // Pick a photo, upload it via the raw-bytes media path (same as chat photos), and add
+  // it as a NAMED reference. The first one defaults to "avatar" (the primary image).
+  const addReferenceImage = async () => {
+    let picked
+    try {
+      picked = await openPicker({selectionLimit: 1})
+    } catch {
+      Toast.show(l`Could not open the photo picker.`, {type: 'warning'})
+      return
+    }
+    const img = picked?.[0]
+    if (!img) return
+    const key = newDraftKey()
+    setRefImages(prev => [
+      ...prev,
+      {
+        key,
+        name: prev.length === 0 ? 'avatar' : '',
+        url: '',
+        previewUri: img.path,
+        uploading: true,
+      },
+    ])
+    const url = await uploadChatImage({uri: img.path, mime: img.mime})
+    if (url) {
+      updateRefImage(key, {url, uploading: false, previewUri: undefined})
+    } else {
+      removeRefImage(key)
+      Toast.show(l`Could not upload the image. Please try again.`, {
+        type: 'error',
+      })
+    }
+  }
+
   const onSave = () => {
     if (!canSave) return
     const done = () => control.close()
@@ -235,6 +298,14 @@ function EditorInner({
         }))
         .filter(e => e.title.length > 0 || e.body.length > 0),
     }
+    // Only fully-uploaded references (have a url); a blank name defaults so none is empty.
+    const referenceImages = refImages
+      .filter(r => !!r.url)
+      .map((r, i) => ({
+        ...(r.id ? {id: r.id} : {}),
+        name: r.name.trim() || (i === 0 ? 'avatar' : 'reference'),
+        url: r.url,
+      }))
     if (isEdit && persona) {
       update.mutate(
         {
@@ -243,13 +314,14 @@ function EditorInner({
           voiceId,
           identity,
           knowledgeBase,
+          referenceImages,
           fiction: fictionForUpdate(fiction),
         },
         {onSuccess: done},
       )
     } else {
       create.mutate(
-        {name: trimmedName, voiceId, identity, knowledgeBase},
+        {name: trimmedName, voiceId, identity, knowledgeBase, referenceImages},
         {onSuccess: done},
       )
     }
@@ -509,6 +581,115 @@ function EditorInner({
                 </ButtonText>
               </Button>
             </View>
+          </View>
+
+          {/* ── REFERENCE IMAGES — named photos the AI draws on for image generation ── */}
+          <View
+            style={[
+              a.gap_lg,
+              a.pt_lg,
+              a.border_t,
+              t.atoms.border_contrast_low,
+            ]}>
+            <View style={[a.gap_2xs]}>
+              <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
+                <Trans>Reference images</Trans>
+              </Text>
+              <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+                <Trans>
+                  Named photos the agent can reference when it generates images
+                  — your avatar, car, pet, home… The first one is the primary
+                  profile image.
+                </Trans>
+              </Text>
+            </View>
+
+            {refImages.length === 0 ? (
+              <Text style={[a.text_xs, t.atoms.text_contrast_low]}>
+                <Trans>No reference images yet.</Trans>
+              </Text>
+            ) : (
+              <View style={[a.gap_sm]}>
+                {refImages.map((r, i) => (
+                  <View
+                    key={r.key}
+                    style={[
+                      a.flex_row,
+                      a.align_center,
+                      a.gap_sm,
+                      a.rounded_sm,
+                      a.p_sm,
+                      a.border,
+                      t.atoms.border_contrast_low,
+                    ]}>
+                    <View
+                      style={[
+                        a.rounded_sm,
+                        a.align_center,
+                        a.justify_center,
+                        t.atoms.bg_contrast_25,
+                        {width: 48, height: 48},
+                      ]}>
+                      {r.uploading ? (
+                        <ActivityIndicator size="small" />
+                      ) : (
+                        <Image
+                          source={{uri: r.url || r.previewUri}}
+                          style={[a.rounded_sm, {width: 48, height: 48}]}
+                          contentFit="cover"
+                          accessibilityIgnoresInvertColors
+                          alt={r.name || 'Reference image'}
+                        />
+                      )}
+                    </View>
+                    <View style={[a.flex_1, a.gap_2xs]}>
+                      <TextField.Root>
+                        <TextField.Input
+                          label="Reference image name"
+                          placeholder={
+                            i === 0 ? l`avatar` : l`e.g. car, pet, home`
+                          }
+                          defaultValue={r.name}
+                          onChangeText={text =>
+                            updateRefImage(r.key, {name: text})
+                          }
+                          autoCapitalize="none"
+                        />
+                      </TextField.Root>
+                      {i === 0 ? (
+                        <Text style={[a.text_xs, t.atoms.text_contrast_low]}>
+                          <Trans>Primary profile image</Trans>
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Button
+                      label={`${l`Remove`} ${r.name || 'reference image'}`}
+                      size="small"
+                      variant="ghost"
+                      color="negative"
+                      shape="round"
+                      disabled={r.uploading}
+                      onPress={() => removeRefImage(r.key)}>
+                      <ButtonIcon icon={TrashIcon} />
+                    </Button>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <Button
+              label="Add reference image"
+              size="small"
+              variant="solid"
+              color="secondary"
+              onPress={() => {
+                void addReferenceImage()
+              }}>
+              <ButtonIcon icon={PlusIcon} />
+              <ButtonText>
+                <Trans>Add reference image</Trans>
+              </ButtonText>
+            </Button>
           </View>
 
           {/* ── FICTIONAL LIFE — authored on an existing persona ── */}

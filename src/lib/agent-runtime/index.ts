@@ -43,6 +43,8 @@ export {
   normalizeKnowledgeBase,
   normalizePersonaDetail,
   normalizePersonasResponse,
+  normalizeReferenceImage,
+  normalizeReferenceImages,
   type Persona,
   type PersonaDetail,
   type PersonaDetailResult,
@@ -55,6 +57,7 @@ export {
   type PersonaWriteResult,
   pickActiveVoiceId,
   pickAgentHeaderName,
+  type ReferenceImage,
   setActivePersona,
   updatePersona,
 } from './personasClient'

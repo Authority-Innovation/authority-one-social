@@ -69,6 +69,17 @@ export interface KnowledgeBase {
   entries: KnowledgeBaseEntry[]
 }
 
+/**
+ * A NAMED reference image the AI can draw on when generating images for this persona
+ * (e.g. "avatar", "car", "pet", "house"). `url` is the hosted R2 URL from the media
+ * upload path. The first one is treated as the primary profile image / avatar.
+ */
+export interface ReferenceImage {
+  id?: string
+  name: string
+  url: string
+}
+
 /** Full persona detail from POST /app/personas/get. */
 export interface PersonaDetail {
   id: string
@@ -76,6 +87,8 @@ export interface PersonaDetail {
   voiceId?: string
   identity: PersonaIdentity
   knowledgeBase: KnowledgeBase
+  /** Named reference photos for image generation. First = primary avatar. */
+  referenceImages: ReferenceImage[]
   fiction?: PersonaFiction
 }
 
@@ -240,6 +253,24 @@ export function normalizeKnowledgeBase(raw: unknown): KnowledgeBase {
   }
 }
 
+/** Normalize one reference image. Returns null without a usable url. PURE. */
+export function normalizeReferenceImage(raw: unknown): ReferenceImage | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const url = str(r.url) ?? str(r.imageUrl) ?? str(r.uri)
+  if (!url) return null
+  return {id: str(r.id), name: str(r.name) ?? str(r.label) ?? '', url}
+}
+
+/** Normalize the persona's named reference images (tolerant of field drift). PURE. */
+export function normalizeReferenceImages(raw: unknown): ReferenceImage[] {
+  return Array.isArray(raw)
+    ? raw
+        .map(normalizeReferenceImage)
+        .filter((r): r is ReferenceImage => r !== null)
+    : []
+}
+
 /**
  * Normalize the POST /app/personas/get payload ({persona:{...}}) into a PersonaDetail.
  * Tolerates a legacy flat `personality` by lifting it into `identity`. Returns null
@@ -265,6 +296,7 @@ export function normalizePersonaDetail(json: unknown): PersonaDetail | null {
     voiceId: str(raw.voiceId),
     identity: {personality},
     knowledgeBase: normalizeKnowledgeBase(raw.knowledgeBase),
+    referenceImages: normalizeReferenceImages(raw.referenceImages),
     fiction: normalizeFiction(raw.fiction),
   }
 }
@@ -443,6 +475,8 @@ export interface PersonaWriteInput {
   voiceId?: string
   identity?: PersonaIdentity
   knowledgeBase?: KnowledgeBase
+  /** Named reference photos for image generation (first = primary avatar). */
+  referenceImages?: ReferenceImage[]
   fiction?: PersonaFiction
 }
 
@@ -454,6 +488,8 @@ function personaBody(input: PersonaWriteInput): Record<string, unknown> {
   if (input.identity !== undefined) body.identity = input.identity
   if (input.knowledgeBase !== undefined)
     body.knowledgeBase = input.knowledgeBase
+  if (input.referenceImages !== undefined)
+    body.referenceImages = input.referenceImages
   if (input.fiction !== undefined) body.fiction = input.fiction
   return body
 }
