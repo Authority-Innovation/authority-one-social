@@ -48,6 +48,7 @@ function sanitizePlaces(raw: unknown): LabeledPlace[] {
         lon: p.lon,
         radiusM:
           typeof p.radiusM === 'number' && p.radiusM > 0 ? p.radiusM : 120,
+        ...(typeof p.savedAt === 'number' ? {savedAt: p.savedAt} : {}),
       })
     }
   }

@@ -55,6 +55,15 @@ import {
 const CAPTURE_INTERVAL_MS = 4 * 60 * 1000 // battery-light foreground sampling
 const POI_RADIUS_M = 150 // search radius for the nearest named place
 
+/**
+ * Outcome of saving a labeled place, so the UI can confirm success or explain why it
+ * didn't save (capturing the current location is async and can fail or be denied — the
+ * old fire-and-forget path gave the user no feedback either way).
+ */
+export type AddLabeledPlaceResult =
+  | {ok: true; name: string}
+  | {ok: false; reason: 'unsupported' | 'empty' | 'permission' | 'location'}
+
 interface ContextEngineApi {
   prefs: ContextPrefs
   events: ContextEvent[]
@@ -64,8 +73,14 @@ interface ContextEngineApi {
   setEnabled: (on: boolean) => void
   setHome: () => void
   setWork: () => void
-  /** Save the CURRENT location as a user-labeled place (Home, School, …). On-device. */
-  addLabeledPlace: (name: string, radiusM?: number) => void
+  /**
+   * Save the CURRENT location as a user-labeled place (Home, School, …). On-device.
+   * Resolves with the outcome so the caller can confirm the save or explain a failure.
+   */
+  addLabeledPlace: (
+    name: string,
+    radiusM?: number,
+  ) => Promise<AddLabeledPlaceResult>
   deleteLabeledPlace: (id: string) => void
   deleteEvent: (id: string) => void
   clearAll: () => void
@@ -88,7 +103,7 @@ const Context = createContext<ContextEngineApi>({
   setEnabled: () => {},
   setHome: () => {},
   setWork: () => {},
-  addLabeledPlace: () => {},
+  addLabeledPlace: () => Promise.resolve({ok: false, reason: 'unsupported'}),
   deleteLabeledPlace: () => {},
   deleteEvent: () => {},
   clearAll: () => {},
@@ -317,43 +332,45 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
   // Save the current location as an arbitrary labeled place (Home, School, Sports
   // Practice…). Generalizes the fixed home/work anchors; coords stay on-device, only the
   // label syncs (as a context event placeRef). Foundation for Phase-2 guardian rules.
-  const addLabeledPlace = (
+  const addLabeledPlace = async (
     name: string,
     radiusM = DEFAULT_LABELED_RADIUS_M,
-  ) => {
-    void (async () => {
-      if (!IS_NATIVE) return
-      const label = name.trim()
-      if (!label) return
-      try {
-        let granted = (await Location.getForegroundPermissionsAsync()).granted
-        if (!granted) {
-          granted = (await Location.requestForegroundPermissionsAsync()).granted
-          setPermissionGranted(granted)
-        }
-        if (!granted) return
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        })
-        const place: LabeledPlace = {
-          id: newId(Date.now()),
-          name: label,
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          radiusM,
-        }
-        const next: ContextPrefs = {
-          ...prefsRef.current,
-          places: [...(prefsRef.current.places ?? []), place],
-        }
-        setPrefs(next)
-        await savePrefs(next)
-      } catch (e) {
-        logger.warn('contextEngine: addLabeledPlace failed', {
-          safeMessage: String(e),
-        })
+  ): Promise<AddLabeledPlaceResult> => {
+    if (!IS_NATIVE) return {ok: false, reason: 'unsupported'}
+    const label = name.trim()
+    if (!label) return {ok: false, reason: 'empty'}
+    try {
+      let granted = (await Location.getForegroundPermissionsAsync()).granted
+      if (!granted) {
+        granted = (await Location.requestForegroundPermissionsAsync()).granted
+        setPermissionGranted(granted)
       }
-    })()
+      if (!granted) return {ok: false, reason: 'permission'}
+      const at = Date.now()
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      })
+      const place: LabeledPlace = {
+        id: newId(at),
+        name: label,
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        radiusM,
+        savedAt: at,
+      }
+      const next: ContextPrefs = {
+        ...prefsRef.current,
+        places: [...(prefsRef.current.places ?? []), place],
+      }
+      setPrefs(next)
+      await savePrefs(next)
+      return {ok: true, name: label}
+    } catch (e) {
+      logger.warn('contextEngine: addLabeledPlace failed', {
+        safeMessage: String(e),
+      })
+      return {ok: false, reason: 'location'}
+    }
   }
 
   const deleteLabeledPlace = (id: string) => {

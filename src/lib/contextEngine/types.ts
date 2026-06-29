@@ -69,6 +69,12 @@ export interface LabeledPlace {
   lon: number
   /** Geofence radius in meters (a sample within this counts as "at" the place). */
   radiusM: number
+  /**
+   * Unix ms when the user saved this place. ON-DEVICE display only (a "Saved <time>"
+   * confirmation line) — like the coordinates, it never leaves the device. Optional so
+   * places persisted before this field round-trip cleanly.
+   */
+  savedAt?: number
 }
 
 /** Local opt-in prefs + anchors. `enabled` defaults OFF. */

@@ -17,6 +17,7 @@ import * as TextField from '#/components/forms/TextField'
 import {CircleInfo_Stroke2_Corner0_Rounded as InfoIcon} from '#/components/icons/CircleInfo'
 import {Trash_Stroke2_Corner0_Rounded as TrashIcon} from '#/components/icons/Trash'
 import * as Layout from '#/components/Layout'
+import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
 
@@ -32,7 +33,7 @@ type Props = NativeStackScreenProps<
  */
 export function ContextEngineSettingsScreen({}: Props) {
   const t = useTheme()
-  const {t: l} = useLingui()
+  const {t: l, i18n} = useLingui()
   const navigation = useNavigation<NavigationProp>()
   const {
     prefs,
@@ -50,12 +51,32 @@ export function ContextEngineSettingsScreen({}: Props) {
   } = useContextEngine()
 
   const [placeName, setPlaceName] = useState('')
+  // Capturing the current location is async (and can fail/be denied), so reflect a
+  // "saving…" state and confirm the outcome with a toast — the old path gave no feedback.
+  const [saving, setSaving] = useState(false)
   const places = prefs.places ?? []
-  const onAddPlace = () => {
+  const onAddPlace = async () => {
     const name = placeName.trim()
-    if (!name) return
-    addLabeledPlace(name)
-    setPlaceName('')
+    if (!name || saving) return
+    setSaving(true)
+    const res = await addLabeledPlace(name)
+    setSaving(false)
+    if (res.ok) {
+      setPlaceName('') // clear the field so the new row is the visible confirmation
+      Toast.show(l`Saved “${res.name}” at your current location.`)
+    } else if (res.reason === 'permission') {
+      Toast.show(l`Location permission is needed to save a place.`, {
+        type: 'warning',
+      })
+    } else if (res.reason === 'unsupported') {
+      Toast.show(l`Saving a place is only available on the mobile app.`, {
+        type: 'warning',
+      })
+    } else if (res.reason === 'location') {
+      Toast.show(l`Could not read your location. Please try again.`, {
+        type: 'error',
+      })
+    }
   }
 
   return (
@@ -347,7 +368,9 @@ export function ContextEngineSettingsScreen({}: Props) {
                     placeholder={l`e.g. Sports Practice`}
                     value={placeName}
                     onChangeText={setPlaceName}
-                    onSubmitEditing={onAddPlace}
+                    onSubmitEditing={() => {
+                      void onAddPlace()
+                    }}
                   />
                 </TextField.Root>
               </View>
@@ -356,10 +379,12 @@ export function ContextEngineSettingsScreen({}: Props) {
                 size="small"
                 variant="solid"
                 color="primary"
-                disabled={!IS_NATIVE || !placeName.trim()}
-                onPress={onAddPlace}>
+                disabled={!IS_NATIVE || !placeName.trim() || saving}
+                onPress={() => {
+                  void onAddPlace()
+                }}>
                 <ButtonText>
-                  <Trans>Save here</Trans>
+                  {saving ? <Trans>Saving…</Trans> : <Trans>Save here</Trans>}
                 </ButtonText>
               </Button>
             </View>
@@ -373,14 +398,23 @@ export function ContextEngineSettingsScreen({}: Props) {
                   <View
                     key={p.id}
                     style={[a.flex_row, a.align_center, a.gap_sm, a.py_2xs]}>
-                    <Text
-                      emoji
-                      style={[a.flex_1, a.text_md, t.atoms.text]}
-                      numberOfLines={1}>
-                      {p.name}
-                    </Text>
+                    <View style={[a.flex_1, a.gap_2xs]}>
+                      <Text
+                        emoji
+                        style={[a.text_md, a.font_bold, t.atoms.text]}
+                        numberOfLines={1}>
+                        {p.name || l`Unnamed place`}
+                      </Text>
+                      <Text
+                        style={[a.text_xs, t.atoms.text_contrast_medium]}
+                        numberOfLines={1}>
+                        {p.savedAt
+                          ? l`Saved ${i18n.date(p.savedAt, {dateStyle: 'medium', timeStyle: 'short'})} · stays on this device`
+                          : l`Coordinates stay on this device`}
+                      </Text>
+                    </View>
                     <Button
-                      label={`${l`Delete`} ${p.name}`}
+                      label={`${l`Delete`} ${p.name || l`place`}`}
                       size="tiny"
                       variant="ghost"
                       color="negative"

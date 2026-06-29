@@ -79,6 +79,21 @@ describe('prefs', () => {
       {id: 'p1', name: 'School', lat: 1, lon: 2, radiusM: 150},
     ])
   })
+
+  it('preserves savedAt when present, omits it when absent', async () => {
+    await savePrefs({
+      enabled: true,
+      places: [
+        {id: 'p1', name: 'Library', lat: 1, lon: 2, radiusM: 150, savedAt: 42},
+        {id: 'p2', name: 'Gym', lat: 3, lon: 4, radiusM: 150},
+      ],
+    })
+    const out = await loadPrefs()
+    expect(out.places).toEqual([
+      {id: 'p1', name: 'Library', lat: 1, lon: 2, radiusM: 150, savedAt: 42},
+      {id: 'p2', name: 'Gym', lat: 3, lon: 4, radiusM: 150},
+    ])
+  })
 })
 
 describe('events', () => {

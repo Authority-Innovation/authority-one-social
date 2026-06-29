@@ -1048,7 +1048,7 @@ msgstr ""
 msgid "Active"
 msgstr "Active"
 
-#: src/screens/Settings/ContextEngine/index.tsx:101
+#: src/screens/Settings/ContextEngine/index.tsx:122
 msgid "Active — recognizing coarse places"
 msgstr "Active — recognizing coarse places"
 
@@ -1397,7 +1397,7 @@ msgstr ""
 msgid "All the feeds you've saved, right in one place."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:170
+#: src/screens/Settings/ContextEngine/index.tsx:191
 msgid "All-day place context"
 msgstr "All-day place context"
 
@@ -1631,7 +1631,7 @@ msgstr ""
 msgid "An mockup of a iPhone showing the Bluesky app open to the profile of a verified user with a blue checkmark next to their display name."
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:754
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:756
 msgid "An optional authored backstory and routine. The agent draws on it when “bring to life” is on."
 msgstr "An optional authored backstory and routine. The agent draws on it when “bring to life” is on."
 
@@ -1644,7 +1644,7 @@ msgstr ""
 msgid "an unknown labeler"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:291
+#: src/screens/Settings/ContextEngine/index.tsx:312
 msgid "Anchors (stored on-device only)"
 msgstr "Anchors (stored on-device only)"
 
@@ -1961,7 +1961,7 @@ msgstr ""
 msgid "Back to Chats"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:810
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:812
 msgid "Backstory"
 msgstr "Backstory"
 
@@ -2226,7 +2226,7 @@ msgstr ""
 msgid "Breaking site rules"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:780
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:782
 msgid "Bring this persona to life"
 msgstr "Bring this persona to life"
 
@@ -3104,7 +3104,7 @@ msgid "Content warnings"
 msgstr ""
 
 #: src/Navigation.tsx:452
-#: src/screens/Settings/ContextEngine/index.tsx:67
+#: src/screens/Settings/ContextEngine/index.tsx:88
 #: src/screens/Settings/Settings.tsx:241
 #: src/screens/Settings/Settings.tsx:244
 msgid "Context Engine"
@@ -3179,6 +3179,10 @@ msgstr "Conversation left"
 #: src/screens/Messages/JoinRequests.tsx:229
 msgid "Conversation not found."
 msgstr "Conversation not found."
+
+#: src/screens/Settings/ContextEngine/index.tsx:413
+msgid "Coordinates stay on this device"
+msgstr "Coordinates stay on this device"
 
 #: src/screens/Settings/AboutSettings.tsx:166
 msgid "Copied build version to clipboard"
@@ -3390,6 +3394,10 @@ msgstr "Could not open the photo picker."
 msgid "Could not process your video"
 msgstr ""
 
+#: src/screens/Settings/ContextEngine/index.tsx:76
+msgid "Could not read your location. Please try again."
+msgstr "Could not read your location. Please try again."
+
 #: src/components/moderation/BlockDialog.tsx:310
 msgid "Could not remove member."
 msgstr "Could not remove member."
@@ -3559,7 +3567,7 @@ msgstr "Create or modify an invite link for this group chat"
 
 #: src/screens/Settings/PersonaSettings/index.tsx:132
 #: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:366
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:948
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:950
 msgid "Create persona"
 msgstr "Create persona"
 
@@ -3692,7 +3700,7 @@ msgstr ""
 #: src/screens/Chats/GroupManageScreen.tsx:267
 #: src/screens/ProfileList/components/MoreOptionsMenu.tsx:275
 #: src/screens/Settings/AppPasswords.tsx:213
-#: src/screens/Settings/ContextEngine/index.tsx:383
+#: src/screens/Settings/ContextEngine/index.tsx:417
 #: src/screens/StarterPack/StarterPackScreen.tsx:615
 #: src/screens/StarterPack/StarterPackScreen.tsx:715
 #: src/screens/StarterPack/StarterPackScreen.tsx:794
@@ -4199,7 +4207,7 @@ msgstr ""
 msgid "e.g. Spammers"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:347
+#: src/screens/Settings/ContextEngine/index.tsx:368
 msgid "e.g. Sports Practice"
 msgstr "e.g. Sports Practice"
 
@@ -5127,7 +5135,7 @@ msgstr ""
 msgid "Fetch update"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:751
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:753
 msgid "Fictional life"
 msgstr "Fictional life"
 
@@ -5775,7 +5783,7 @@ msgstr ""
 msgid "Got it"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:263
+#: src/screens/Settings/ContextEngine/index.tsx:284
 msgid "Grant “Always” location permission"
 msgstr "Grant “Always” location permission"
 
@@ -5784,7 +5792,7 @@ msgstr "Grant “Always” location permission"
 msgid "Grant access"
 msgstr "Grant access"
 
-#: src/screens/Settings/ContextEngine/index.tsx:153
+#: src/screens/Settings/ContextEngine/index.tsx:174
 msgid "Grant location permission"
 msgstr "Grant location permission"
 
@@ -5960,7 +5968,7 @@ msgstr ""
 msgid "Hate speech"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:844
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:846
 msgid "Haunts"
 msgstr "Haunts"
 
@@ -6174,7 +6182,7 @@ msgstr ""
 msgid "Home"
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:828
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:830
 msgid "Home base"
 msgstr "Home base"
 
@@ -7207,6 +7215,10 @@ msgstr ""
 msgid "Loading..."
 msgstr ""
 
+#: src/screens/Settings/ContextEngine/index.tsx:68
+msgid "Location permission is needed to save a place."
+msgstr "Location permission is needed to save a place."
+
 #: src/screens/Messages/ConversationSettings/index.tsx:570
 msgid "Lock"
 msgstr "Lock"
@@ -7714,7 +7726,7 @@ msgstr "My starter pack"
 msgid "Name"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:336
+#: src/screens/Settings/ContextEngine/index.tsx:357
 msgid "Name where you are now (Home, School, Sports Practice). One is recognized by proximity and labeled in your context — coordinates stay on this device."
 msgstr "Name where you are now (Home, School, Sports Practice). One is recognized by proximity and labeled in your context — coordinates stay on this device."
 
@@ -8139,7 +8151,7 @@ msgstr "No results found for “<0>{query}</0>”."
 msgid "No results."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:368
+#: src/screens/Settings/ContextEngine/index.tsx:393
 msgid "No saved places yet."
 msgstr "No saved places yet."
 
@@ -8272,8 +8284,8 @@ msgstr ""
 
 #: src/lib/moderation/useLabelBehaviorDescription.ts:14
 #: src/screens/Settings/AccountSettings.tsx:164
-#: src/screens/Settings/ContextEngine/index.tsx:105
-#: src/screens/Settings/ContextEngine/index.tsx:208
+#: src/screens/Settings/ContextEngine/index.tsx:126
+#: src/screens/Settings/ContextEngine/index.tsx:229
 #: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:90
 #: src/screens/Settings/NotificationSettings/index.tsx:394
 msgid "Off"
@@ -8315,7 +8327,7 @@ msgstr ""
 msgid "On"
 msgstr "On"
 
-#: src/screens/Settings/ContextEngine/index.tsx:199
+#: src/screens/Settings/ContextEngine/index.tsx:220
 msgid "On — recognizing places all day in the background"
 msgstr "On — recognizing places all day in the background"
 
@@ -8323,11 +8335,11 @@ msgstr "On — recognizing places all day in the background"
 msgid "On — summarizing today’s photos (metadata only)"
 msgstr "On — summarizing today’s photos (metadata only)"
 
-#: src/screens/Settings/ContextEngine/index.tsx:204
+#: src/screens/Settings/ContextEngine/index.tsx:225
 msgid "On, but “Always” location permission is needed"
 msgstr "On, but “Always” location permission is needed"
 
-#: src/screens/Settings/ContextEngine/index.tsx:103
+#: src/screens/Settings/ContextEngine/index.tsx:124
 msgid "On, but location permission is needed"
 msgstr "On, but location permission is needed"
 
@@ -8931,7 +8943,7 @@ msgstr "Personas unavailable"
 msgid "Pets"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:120
+#: src/screens/Settings/ContextEngine/index.tsx:141
 msgid "Phase 1 uses your location ONLY, only while the app is open. It runs on-device and stores CONCLUSIONS (like “home”, “a venue”, or how long you stayed) — never your raw location, and never audio, microphone, or camera. You can view and delete everything below."
 msgstr "Phase 1 uses your location ONLY, only while the app is open. It runs on-device and stores CONCLUSIONS (like “home”, “a venue”, or how long you stayed) — never your raw location, and never audio, microphone, or camera. You can view and delete everything below."
 
@@ -8944,7 +8956,7 @@ msgstr ""
 msgid "Phone number verified"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:282
+#: src/screens/Settings/ContextEngine/index.tsx:303
 msgid "Photo context"
 msgstr "Photo context"
 
@@ -9005,7 +9017,11 @@ msgstr ""
 msgid "Pinned to your feeds"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:346
+#: src/screens/Settings/ContextEngine/index.tsx:417
+msgid "place"
+msgstr "place"
+
+#: src/screens/Settings/ContextEngine/index.tsx:367
 msgid "Place name"
 msgstr "Place name"
 
@@ -10379,7 +10395,7 @@ msgstr ""
 #: src/screens/SavedFeeds.tsx:124
 #: src/screens/SavedFeeds.tsx:311
 #: src/screens/SavedFeeds.tsx:315
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:946
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:948
 #: src/view/com/composer/Composer.tsx:1451
 #: src/view/com/composer/drafts/DraftsButton.tsx:125
 msgid "Save changes"
@@ -10390,7 +10406,7 @@ msgstr ""
 msgid "Save changes?"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:355
+#: src/screens/Settings/ContextEngine/index.tsx:378
 msgid "Save current location as this place"
 msgstr "Save current location as this place"
 
@@ -10404,7 +10420,7 @@ msgstr ""
 msgid "Save draft?"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:362
+#: src/screens/Settings/ContextEngine/index.tsx:387
 msgid "Save here"
 msgstr "Save here"
 
@@ -10440,12 +10456,22 @@ msgctxt "link to bookmarks screen"
 msgid "Saved"
 msgstr ""
 
+#. placeholder {0}: res.name
+#: src/screens/Settings/ContextEngine/index.tsx:66
+msgid "Saved “{0}” at your current location."
+msgstr "Saved “{0}” at your current location."
+
+#. placeholder {0}: i18n.date(p.savedAt, {dateStyle: 'medium', timeStyle: 'short'})
+#: src/screens/Settings/ContextEngine/index.tsx:412
+msgid "Saved {0} · stays on this device"
+msgstr "Saved {0} · stays on this device"
+
 #: src/screens/SavedFeeds.tsx:198
 #: src/screens/SavedFeeds.tsx:375
 msgid "Saved Feeds"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:333
+#: src/screens/Settings/ContextEngine/index.tsx:354
 msgid "Saved places (stored on-device only)"
 msgstr "Saved places (stored on-device only)"
 
@@ -10459,6 +10485,14 @@ msgstr ""
 #: src/screens/ProfileList/components/Header.tsx:88
 msgid "Saved to your feeds"
 msgstr ""
+
+#: src/screens/Settings/ContextEngine/index.tsx:72
+msgid "Saving a place is only available on the mobile app."
+msgstr "Saving a place is only available on the mobile app."
+
+#: src/screens/Settings/ContextEngine/index.tsx:387
+msgid "Saving…"
+msgstr "Saving…"
 
 #: src/components/NewskieDialog.tsx:141
 #: src/view/com/notifications/NotificationFeedItem.tsx:899
@@ -10932,7 +10966,7 @@ msgstr ""
 msgid "Set app icon to {0}"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:305
+#: src/screens/Settings/ContextEngine/index.tsx:326
 msgid "Set Home"
 msgstr "Set Home"
 
@@ -10952,7 +10986,7 @@ msgstr ""
 msgid "Set who can reply to your post"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:320
+#: src/screens/Settings/ContextEngine/index.tsx:341
 msgid "Set Work"
 msgstr "Set Work"
 
@@ -12403,7 +12437,7 @@ msgstr ""
 msgid "This feed is no longer online. We are showing <0>Discover</0> instead."
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:223
+#: src/screens/Settings/ContextEngine/index.tsx:244
 msgid "This goes further than Phase 1: it uses “Always” location so it can notice the places you go even when the app is closed. It still runs battery-light, still stores ONLY conclusions (place + how long) — never a GPS trail — and still no audio, microphone, or camera. Leave it off to keep location to when-the-app-is-open only."
 msgstr "This goes further than Phase 1: it uses “Always” location so it can notice the places you go even when the app is closed. It still runs battery-light, still stores ONLY conclusions (place + how long) — never a GPS trail — and still no audio, microphone, or camera. Leave it off to keep location to when-the-app-is-open only."
 
@@ -12812,21 +12846,21 @@ msgstr "Try Google Translate"
 msgid "Try it"
 msgstr "Try it"
 
-#: src/screens/Settings/ContextEngine/index.tsx:142
+#: src/screens/Settings/ContextEngine/index.tsx:163
 #: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:128
 msgid "Turn off"
 msgstr "Turn off"
 
-#: src/screens/Settings/ContextEngine/index.tsx:247
+#: src/screens/Settings/ContextEngine/index.tsx:268
 msgid "Turn off all-day context"
 msgstr "Turn off all-day context"
 
-#: src/screens/Settings/ContextEngine/index.tsx:142
+#: src/screens/Settings/ContextEngine/index.tsx:163
 #: src/screens/Settings/ContextEngine/PhotoContextSection.tsx:128
 msgid "Turn on"
 msgstr "Turn on"
 
-#: src/screens/Settings/ContextEngine/index.tsx:249
+#: src/screens/Settings/ContextEngine/index.tsx:270
 msgid "Turn on all-day context"
 msgstr "Turn on all-day context"
 
@@ -13078,6 +13112,10 @@ msgstr ""
 msgid "Unmute video"
 msgstr ""
 
+#: src/screens/Settings/ContextEngine/index.tsx:406
+msgid "Unnamed place"
+msgstr "Unnamed place"
+
 #: src/screens/ProfileList/components/Header.tsx:151
 #: src/screens/ProfileList/components/Header.tsx:158
 msgid "Unpin"
@@ -13172,7 +13210,7 @@ msgstr "Update app"
 msgid "Update email"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:303
+#: src/screens/Settings/ContextEngine/index.tsx:324
 msgid "Update Home"
 msgstr "Update Home"
 
@@ -13187,7 +13225,7 @@ msgstr "Update invite link"
 msgid "Update to {domain}"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:318
+#: src/screens/Settings/ContextEngine/index.tsx:339
 msgid "Update Work"
 msgstr "Update Work"
 
@@ -13619,7 +13657,7 @@ msgstr ""
 msgid "View blogpost for more details"
 msgstr ""
 
-#: src/screens/Settings/ContextEngine/index.tsx:401
+#: src/screens/Settings/ContextEngine/index.tsx:435
 msgid "View context log"
 msgstr "View context log"
 
@@ -14006,7 +14044,7 @@ msgstr ""
 msgid "We've confirmed your age assurance status. You can now close this dialog."
 msgstr ""
 
-#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:912
+#: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:914
 msgid "Weekly rhythm"
 msgstr "Weekly rhythm"
 
