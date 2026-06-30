@@ -1,8 +1,7 @@
 import {Platform} from 'react-native'
 
-import {tokens} from '#/alf'
 import {darkPalette, dimPalette, lightPalette} from '#/alf/themes'
-import {fontWeight} from '#/alf/tokens'
+import {fontWeight, TRACKING} from '#/alf/tokens'
 import {colors} from './styles'
 import {type Theme} from './ThemeContext'
 
@@ -69,163 +68,163 @@ export const defaultTheme: Theme = {
   typography: {
     '2xl-thin': {
       fontSize: 18,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     '2xl': {
       fontSize: 18,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     '2xl-medium': {
       fontSize: 18,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     '2xl-bold': {
       fontSize: 18,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     '2xl-heavy': {
       fontSize: 18,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.bold,
     },
     'xl-thin': {
       fontSize: 17,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     xl: {
       fontSize: 17,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     'xl-medium': {
       fontSize: 17,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'xl-bold': {
       fontSize: 17,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'xl-heavy': {
       fontSize: 17,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.bold,
     },
     'lg-thin': {
       fontSize: 16,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     lg: {
       fontSize: 16,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     'lg-medium': {
       fontSize: 16,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'lg-bold': {
       fontSize: 16,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'lg-heavy': {
       fontSize: 16,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.bold,
     },
     'md-thin': {
       fontSize: 15,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     md: {
       fontSize: 15,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     'md-medium': {
       fontSize: 15,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'md-bold': {
       fontSize: 15,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'md-heavy': {
       fontSize: 15,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.bold,
     },
     'sm-thin': {
       fontSize: 14,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     sm: {
       fontSize: 14,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     'sm-medium': {
       fontSize: 14,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'sm-bold': {
       fontSize: 14,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'sm-heavy': {
       fontSize: 14,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.bold,
     },
     'xs-thin': {
       fontSize: 13,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     xs: {
       fontSize: 13,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     'xs-medium': {
       fontSize: 13,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'xs-bold': {
       fontSize: 13,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'xs-heavy': {
       fontSize: 13,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.bold,
     },
 
     'title-2xl': {
       fontSize: 34,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'title-xl': {
       fontSize: 28,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.semiBold,
     },
     'title-lg': {
@@ -235,32 +234,32 @@ export const defaultTheme: Theme = {
     title: {
       fontWeight: fontWeight.semiBold,
       fontSize: 20,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
     },
     'title-sm': {
       fontWeight: fontWeight.semiBold,
       fontSize: 17,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
     },
     'post-text': {
       fontSize: 16,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     'post-text-lg': {
       fontSize: 20,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
       fontWeight: fontWeight.normal,
     },
     'button-lg': {
       fontWeight: fontWeight.semiBold,
       fontSize: 18,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
     },
     button: {
       fontWeight: fontWeight.semiBold,
       fontSize: 14,
-      letterSpacing: tokens.TRACKING,
+      letterSpacing: TRACKING,
     },
     mono: {
       fontSize: 14,
