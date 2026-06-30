@@ -1,0 +1,67 @@
+name: Deploy web (Cloudflare Pages)
+
+# Deploys the One web app to Cloudflare Pages.
+#
+# Trigger: push to `main` only. The day-to-day feature branches
+# (feat/*) carry mixed in-progress work, so we deliberately do NOT
+# auto-deploy them. Merge/fast-forward to `main` to ship. A manual
+# `workflow_dispatch` is also provided for re-running a deploy without
+# a new commit.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Serialize deploys so two pushes can't race to publish.
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - name: Install node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      # Compiled locale files are gitignored, so a fresh checkout has none.
+      # Compile them from the committed .po sources before the export, or
+      # `expo export:web` fails to resolve translations.
+      - name: Compile i18n
+        run: pnpm intl:compile
+
+      - name: Clean previous build output
+        run: rm -rf web-build
+
+      - name: Build web (Cloudflare target)
+        env:
+          EXPO_PUBLIC_ENV: production
+          EXPO_PUBLIC_AGENT_RUNTIME_URL: https://authority-one-agent-runtime.e-479.workers.dev
+          EXPO_PUBLIC_PDS_URL: https://pds.authority-one.com
+          EXPO_PUBLIC_APPVIEW_URL: https://appview.authority-one.com
+          EXPO_PUBLIC_APPVIEW_DID: did:web:appview.authority-one.com
+          EXPO_PUBLIC_BLUESKY_PROXY_DID: did:web:appview.authority-one.com
+        run: pnpm build-web-cf
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web-build --project-name authority-one-app --branch main
