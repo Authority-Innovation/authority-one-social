@@ -8,6 +8,7 @@ import {FocusGuards, FocusScope} from 'radix-ui/internal'
 
 import {useLoggedOutViewControls} from '#/state/shell/logged-out'
 import {Logo} from '#/view/icons/Logo'
+import {Logotype} from '#/view/icons/Logotype'
 import {atoms as a, flatten, useBreakpoints, web} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {TimesLarge_Stroke2_Corner0_Rounded as XIcon} from '#/components/icons/Times'
@@ -108,15 +109,9 @@ export function WelcomeModal({control}: WelcomeModalProps) {
                 ]}>
                 <View style={[a.flex_row, a.align_center, a.gap_xs]}>
                   <Logo width={26} />
-                  <Text
-                    style={[
-                      a.text_2xl,
-                      a.font_semi_bold,
-                      a.user_select_none,
-                      {color: '#354358', letterSpacing: -0.5},
-                    ]}>
-                    Bluesky
-                  </Text>
+                  <View style={[{paddingTop: 4}]}>
+                    <Logotype width={64} fill="#354358" />
+                  </View>
                 </View>
               </View>
               <View
