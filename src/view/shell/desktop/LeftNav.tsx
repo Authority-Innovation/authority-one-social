@@ -22,6 +22,7 @@ import {useUnreadNotifications} from '#/state/queries/notifications/unread'
 import {useProfilesQuery} from '#/state/queries/profile'
 import {type SessionAccount, useSession, useSessionApi} from '#/state/session'
 import {useLoggedOutViewControls} from '#/state/shell/logged-out'
+import {useSupabaseSession} from '#/state/supabase'
 import {useCloseAllActiveElements} from '#/state/util'
 import {LoadingPlaceholder} from '#/view/com/util/LoadingPlaceholder'
 import {PressableWithHover} from '#/view/com/util/PressableWithHover'
@@ -37,6 +38,7 @@ import {
 } from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {type DialogControlProps} from '#/components/Dialog'
+import {Divider} from '#/components/Divider'
 import {ArrowBoxLeft_Stroke2_Corner0_Rounded as LeaveIcon} from '#/components/icons/ArrowBoxLeft'
 import {
   Bell_Filled_Corner0_Rounded as BellFilledIcon,
@@ -46,6 +48,7 @@ import {
   Bookmark as BookmarkIcon,
   BookmarkFilled as BookmarkFilledIcon,
 } from '#/components/icons/Bookmark'
+import {Bubbles_Stroke2_Corner2_Rounded as BubblesIcon} from '#/components/icons/Bubble'
 import {
   BulletList_Filled_Corner0_Rounded as ListFilledIcon,
   BulletList_Stroke2_Corner0_Rounded as ListIcon,
@@ -61,6 +64,7 @@ import {
   HomeOpen_Filled_Corner0_Rounded as HomeFilledIcon,
   HomeOpen_Stoke2_Corner0_Rounded as HomeIcon,
 } from '#/components/icons/HomeOpen'
+import {Key_Stroke2_Corner2_Rounded as KeyIcon} from '#/components/icons/Key'
 import {
   MagnifyingGlass_Filled_Stroke2_Corner0_Rounded as MagnifyingGlassFilledIcon,
   MagnifyingGlass_Stroke2_Corner0_Rounded as MagnifyingGlassIcon,
@@ -69,6 +73,7 @@ import {
   Message_Stroke2_Corner0_Rounded as MessageIcon,
   Message_Stroke2_Corner0_Rounded_Filled as MessageFilledIcon,
 } from '#/components/icons/Message'
+import {Microphone_Stroke2_Corner0_Rounded as MicrophoneIcon} from '#/components/icons/Microphone'
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
 import {
   SettingsGear2_Filled_Corner0_Rounded as SettingsFilledIcon,
@@ -392,7 +397,9 @@ interface NavItemProps {
   }
   label: string
   minimal: boolean
-  navItem: Events['nav:click']['item']
+  // Optional so custom (non-Bluesky) items can omit analytics tagging without
+  // widening the strict nav:click union.
+  navItem?: Events['nav:click']['item']
 }
 function NavItem({
   count,
@@ -425,7 +432,9 @@ function NavItem({
   const navigation = useNavigation<NavigationProp>()
   const onPressWrapped = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-      ax.metric('nav:click', {item: navItem, surface: 'leftNav'})
+      if (navItem) {
+        ax.metric('nav:click', {item: navItem, surface: 'leftNav'})
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) {
         return
       }
@@ -607,6 +616,9 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
   const {hasSession, currentAccount} = useSession()
   const {t: l} = useLingui()
   const {gtMobile} = useBreakpoints()
+  // Authority One account works off the Supabase session, independent of the
+  // atproto/PDS login, so reflect that state directly in the nav label.
+  const {status: supabaseStatus} = useSupabaseSession()
 
   const aa = useAgeAssurance()
   // splitview uses the minimal variant of the leftnav. unfortunately there's no easy
@@ -663,6 +675,54 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
       ) : null}
       {hasSession && (
         <>
+          {/* Authority One custom items. Promoted to the top so the agent and
+              chats are the first, obvious entry points (parity with the native
+              drawer). Labels are plain literals - these are non-Bluesky strings
+              that are not in the compiled Lingui catalog, so wrapping them would
+              render as raw message IDs. */}
+          <NavItem
+            label="Talk to your agent"
+            href="/agent"
+            minimal={leftNavMinimal}
+            icons={{
+              inactive: MicrophoneIcon,
+              active: MicrophoneIcon,
+            }}
+          />
+          <NavItem
+            label="Chats"
+            href="/chats"
+            minimal={leftNavMinimal}
+            icons={{
+              inactive: BubblesIcon,
+              active: BubblesIcon,
+            }}
+          />
+          <NavItem
+            label="For You"
+            href="/for-you"
+            minimal={leftNavMinimal}
+            icons={{
+              inactive: HashtagIcon,
+              active: HashtagFilledIcon,
+            }}
+          />
+          <NavItem
+            label={
+              supabaseStatus === 'signedIn'
+                ? 'Authority One account'
+                : 'Sign in to Authority One'
+            }
+            href="/account"
+            minimal={leftNavMinimal}
+            icons={{
+              inactive: KeyIcon,
+              active: KeyIcon,
+            }}
+          />
+          <View style={[a.py_sm]}>
+            <Divider />
+          </View>
           <NavItem
             label={l`Home`}
             href="/"
