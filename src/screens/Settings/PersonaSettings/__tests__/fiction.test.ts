@@ -9,6 +9,7 @@ import {
   fictionDraftFromPersona,
   fictionForUpdate,
   fictionHasContent,
+  foldPendingHaunt,
   removeHaunt,
 } from '../fiction'
 
@@ -24,6 +25,40 @@ describe('haunts list ops', () => {
   })
   it('cleanHaunts trims, drops empties, de-dupes', () => {
     expect(cleanHaunts([' a ', 'A', '', 'b'])).toEqual(['a', 'b'])
+  })
+})
+
+describe('foldPendingHaunt — the "saved places don\'t save" fix', () => {
+  it('folds a typed-but-not-Added haunt into the list on save', () => {
+    const draft = {...emptyFictionDraft(), haunts: ['Cafe']}
+    expect(foldPendingHaunt(draft, '  Gym ').haunts).toEqual(['Cafe', 'Gym'])
+  })
+  it('leaves the draft untouched (same ref) when pending is blank', () => {
+    const draft = {...emptyFictionDraft(), haunts: ['Cafe']}
+    expect(foldPendingHaunt(draft, '   ')).toBe(draft)
+  })
+  it('de-dupes a pending haunt already in the list (case-insensitive)', () => {
+    const draft = {...emptyFictionDraft(), haunts: ['Cafe']}
+    expect(foldPendingHaunt(draft, 'cafe').haunts).toEqual(['Cafe'])
+  })
+  it('exact live repro: a place typed but not Added still reaches the save payload', () => {
+    // User types a saved place and hits Save WITHOUT clicking "+" — previously dropped.
+    const out = fictionForUpdate(
+      foldPendingHaunt(emptyFictionDraft(), 'The Roxy'),
+    )
+    expect(out?.haunts).toEqual(['The Roxy'])
+  })
+  it('round-trips: typed haunt → save payload → reload seeds it back', () => {
+    const saved = fictionForUpdate(
+      foldPendingHaunt(emptyFictionDraft(), 'The Roxy'),
+    )
+    // The runtime stores + returns fiction verbatim on persona detail; seed the editor back.
+    const reloaded = fictionDraftFromPersona({
+      id: 'p',
+      name: 'P',
+      fiction: saved,
+    })
+    expect(reloaded.haunts).toEqual(['The Roxy'])
   })
 })
 
@@ -61,14 +96,18 @@ describe('fictionHasContent', () => {
     expect(fictionHasContent(emptyFictionDraft())).toBe(false)
   })
   it('true when enabled or any field has content', () => {
-    expect(fictionHasContent({...emptyFictionDraft(), enabled: true})).toBe(true)
-    expect(
-      fictionHasContent({...emptyFictionDraft(), backstory: 'hi'}),
-    ).toBe(true)
-    expect(
-      fictionHasContent({...emptyFictionDraft(), haunts: ['  ']}),
-    ).toBe(false) // whitespace-only doesn't count
-    expect(fictionHasContent({...emptyFictionDraft(), haunts: ['x']})).toBe(true)
+    expect(fictionHasContent({...emptyFictionDraft(), enabled: true})).toBe(
+      true,
+    )
+    expect(fictionHasContent({...emptyFictionDraft(), backstory: 'hi'})).toBe(
+      true,
+    )
+    expect(fictionHasContent({...emptyFictionDraft(), haunts: ['  ']})).toBe(
+      false,
+    ) // whitespace-only doesn't count
+    expect(fictionHasContent({...emptyFictionDraft(), haunts: ['x']})).toBe(
+      true,
+    )
   })
 })
 

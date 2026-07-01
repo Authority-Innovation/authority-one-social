@@ -59,6 +59,23 @@ export function removeHaunt(haunts: string[], index: number): string[] {
   return haunts.filter((_, i) => i !== index)
 }
 
+/**
+ * Fold a still-in-the-input haunt (typed but not yet committed via the "+" / Add button)
+ * into the draft's haunts list. THIS IS THE "saved places don't save" FIX: every other
+ * fiction field commits to the draft on each keystroke (onChangeText), but a haunt only
+ * reaches the list on an explicit Add — so a user who types a place and hits Save loses it
+ * while backstory/home base/etc. persist. Called from onSave so the pending text is
+ * committed just like Add would. Blank/whitespace pending ⇒ draft returned unchanged
+ * (referentially identical). PURE — reuses addHaunt (trim + case-insensitive de-dupe).
+ */
+export function foldPendingHaunt(
+  draft: PersonaFictionDraft,
+  pending: string,
+): PersonaFictionDraft {
+  if (!pending.trim()) return draft
+  return {...draft, haunts: addHaunt(draft.haunts, pending)}
+}
+
 function trimToUndef(v: string): string | undefined {
   const t = v.trim()
   return t.length > 0 ? t : undefined

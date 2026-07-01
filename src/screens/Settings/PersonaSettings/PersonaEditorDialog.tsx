@@ -32,6 +32,7 @@ import {
   addHaunt,
   fictionDraftFrom,
   fictionForUpdate,
+  foldPendingHaunt,
   type PersonaFictionDraft,
   removeHaunt,
 } from './fiction'
@@ -341,7 +342,10 @@ function EditorInner({
           identity,
           knowledgeBase,
           referenceImages,
-          fiction: fictionForUpdate(fiction),
+          // Commit a haunt typed into the input but not yet "Added" (the "+"/enter step)
+          // so it saves instead of being silently dropped — every other field commits on
+          // keystroke; haunts otherwise only reach the list on an explicit Add.
+          fiction: fictionForUpdate(foldPendingHaunt(fiction, haunt)),
         },
         {onSuccess: done},
       )
