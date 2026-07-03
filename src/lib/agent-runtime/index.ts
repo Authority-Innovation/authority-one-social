@@ -1,5 +1,10 @@
 export {
+  type CreateAgentErrorKind,
+  type CreateAgentResult,
+  type CreatedAgent,
+  createOwnerAgent,
   fetchOwnerAgents,
+  normalizeCreatedAgent,
   normalizeOwnerAgents,
   type OwnerAgent,
   type OwnerAgentsResult,

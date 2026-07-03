@@ -23,6 +23,8 @@ export type CommonNavigatorParams = {
   // Authority One: multi-chat (threads + groups).
   ChatList: undefined
   NewGroup: undefined
+  // Authority One: create a new agent under the logged-in owner (POST /app/agents).
+  NewAgent: undefined
   GroupManage: {threadId: string; title: string}
   Lists: undefined
   Moderation: undefined

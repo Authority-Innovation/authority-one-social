@@ -1,8 +1,10 @@
 import {useState} from 'react'
 import {ActivityIndicator, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
+import {useNavigation} from '@react-navigation/native'
 
 import {type OwnerAgent} from '#/lib/agent-runtime'
+import {type NavigationProp} from '#/lib/routes/types'
 import {sanitizeHandle} from '#/lib/strings/handles'
 import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {
@@ -10,7 +12,8 @@ import {
   useThreadMembersQuery,
 } from '#/state/queries/threads'
 import {atoms as a, useTheme} from '#/alf'
-import {Button, ButtonText} from '#/components/Button'
+import {Button, ButtonIcon, ButtonText} from '#/components/Button'
+import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
 import {Text} from '#/components/Typography'
 
 /**
@@ -55,7 +58,12 @@ export function AddAgents({threadId}: {threadId: string}) {
   }
 
   if (agents.length === 0) {
-    return <Empty text={l`You don't have any agents to add yet.`} />
+    return (
+      <View style={[a.gap_xs]}>
+        <Empty text={l`You don't have any agents to add yet.`} />
+        <CreateAgentButton />
+      </View>
+    )
   }
 
   return (
@@ -73,6 +81,29 @@ export function AddAgents({threadId}: {threadId: string}) {
           />
         )
       })}
+      <CreateAgentButton />
+    </View>
+  )
+}
+
+/** Entry point to the new-agent flow. The owner-agents list is refreshed by the create
+ *  mutation, so the new agent appears here when the user comes back from that screen. */
+function CreateAgentButton() {
+  const {t: l} = useLingui()
+  const navigation = useNavigation<NavigationProp>()
+  return (
+    <View style={[a.flex_row, a.pt_xs]}>
+      <Button
+        label={l`Create a new agent`}
+        size="small"
+        variant="outline"
+        color="secondary"
+        onPress={() => navigation.navigate('NewAgent')}>
+        <ButtonIcon icon={PlusIcon} />
+        <ButtonText>
+          <Trans>Create a new agent</Trans>
+        </ButtonText>
+      </Button>
     </View>
   )
 }

@@ -77,6 +77,7 @@ import {AgentChatScreen} from '#/screens/AgentChat'
 import {BookmarksScreen} from '#/screens/Bookmarks'
 import {ChatListScreen} from '#/screens/Chats/ChatListScreen'
 import {GroupManageScreen} from '#/screens/Chats/GroupManageScreen'
+import {NewAgentScreen} from '#/screens/Chats/NewAgentScreen'
 import {NewGroupScreen} from '#/screens/Chats/NewGroupScreen'
 import {SharedPreferencesTesterScreen} from '#/screens/E2E/SharedPreferencesTesterScreen'
 import {FindContactsFlowScreen} from '#/screens/FindContactsFlowScreen'
@@ -189,6 +190,11 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="NewGroup"
         getComponent={() => NewGroupScreen}
         options={{title: title(msg`New group`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="NewAgent"
+        getComponent={() => NewAgentScreen}
+        options={{title: title(msg`New agent`), requireAuth: true}}
       />
       <Stack.Screen
         name="GroupManage"

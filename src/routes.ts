@@ -55,6 +55,7 @@ export const router = new Router<AllNavigatableRoutes>({
   PersonaSettings: '/settings/persona',
   ChatList: '/chats',
   NewGroup: '/chats/new-group',
+  NewAgent: '/chats/new-agent',
   GroupManage: '/chats/group/:threadId',
   ContextEngineSettings: '/settings/context-engine',
   ContextLog: '/settings/context-engine/log',
