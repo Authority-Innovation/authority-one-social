@@ -1,6 +1,6 @@
 import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
-import {AGENTS_ENDPOINT} from './config'
+import {AGENTS_ENDPOINT, AGENTS_PAUSE_ENDPOINT} from './config'
 
 /**
  * Owner-agents client: the read side that lets an owner CHOOSE one of THEIR agents to add
@@ -17,6 +17,14 @@ export interface OwnerAgent {
   displayName?: string
   /** Avatar URL when the runtime resolves one; usually null (the UI enriches it). */
   avatar?: string
+  /** The agent's SMS line (E.164), when one is provisioned. */
+  number?: string
+  /** Owner-set pause state. Undefined when the runtime row predates enrichment. */
+  paused?: boolean
+  /** Whether the agent is provisioned/active on the runtime. */
+  active?: boolean
+  /** active && !paused — the runtime computes it; derived here when not echoed. */
+  live?: boolean
 }
 
 export interface OwnerAgentsResult {
@@ -78,10 +86,21 @@ export function normalizeOwnerAgents(json: unknown): OwnerAgent[] {
     const handle = str(r.handle) ?? str(r.id) ?? str(r.did)
     if (!handle || seen.has(handle.toLowerCase())) continue
     seen.add(handle.toLowerCase())
+    const paused = typeof r.paused === 'boolean' ? r.paused : undefined
+    const active = typeof r.active === 'boolean' ? r.active : undefined
     out.push({
       handle,
       displayName: str(r.displayName) ?? str(r.name),
       avatar: str(r.avatar),
+      number: str(r.number),
+      paused,
+      active,
+      live:
+        typeof r.live === 'boolean'
+          ? r.live
+          : active === undefined
+            ? undefined
+            : active && paused !== true,
     })
   }
   return out
@@ -147,10 +166,7 @@ export async function createOwnerAgent(input: {
         data: normalizeCreatedAgent(json, input.targetHandle),
       }
     }
-    const body = (await res.json().catch(() => ({}))) as Record<
-      string,
-      unknown
-    >
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
     const serverError = str(body.error) ?? str(body.message)
     if (res.status === 401 || res.status === 403) {
       return {
@@ -225,6 +241,68 @@ export async function fetchOwnerAgents(): Promise<OwnerAgentsResult> {
     logger.warn('agents: fetch failed', {safeMessage: String(e)})
     return {
       agents: [],
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
+  }
+}
+
+export interface PauseAgentResult {
+  ok: boolean
+  signedOut: boolean
+  error?: string
+  /** Machine-readable error code from a 4xx (e.g. 'not-your-agent'). */
+  code?: string
+  /** Echoed on success: which agent was toggled, and its new pause state. */
+  agent?: string
+  paused?: boolean
+}
+
+/**
+ * POST /app/agents/pause {agent?, paused} — pause/unpause one of the owner's agents.
+ * `agent` is the FULL handle from a GET /app/agents row; omitted = the owner's
+ * token-mapped agent. Typed result, never throws, so the toggle can message failures.
+ */
+export async function pauseOwnerAgent(input: {
+  agent?: string
+  paused: boolean
+}): Promise<PauseAgentResult> {
+  const headers = await authHeaders().catch(() => null)
+  if (!headers) return {ok: false, signedOut: true}
+  try {
+    const res = await fetch(AGENTS_PAUSE_ENDPOINT, {
+      method: 'POST',
+      headers: {...headers, 'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        agent: input.agent || undefined,
+        paused: input.paused,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok) {
+      const code = str(body.code)
+      // A 403 not-your-agent is an ownership error, not a dead session.
+      if ((res.status === 401 || res.status === 403) && !code) {
+        return {ok: false, signedOut: true}
+      }
+      return {
+        ok: false,
+        signedOut: false,
+        code,
+        error:
+          str(body.error) ?? str(body.message) ?? `Runtime error ${res.status}`,
+      }
+    }
+    return {
+      ok: true,
+      signedOut: false,
+      agent: str(body.agent) ?? input.agent,
+      paused: typeof body.paused === 'boolean' ? body.paused : input.paused,
+    }
+  } catch (e) {
+    logger.warn('agents: pause failed', {safeMessage: String(e)})
+    return {
+      ok: false,
       signedOut: false,
       error: errorMessage(e) ?? 'network error',
     }

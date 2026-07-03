@@ -7,7 +7,10 @@ import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
 } from '#/lib/routes/types'
+import {sanitizeHandle} from '#/lib/strings/handles'
+import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {
+  PersonaWriteError,
   useDeletePersonaMutation,
   usePersonasQuery,
   useSetActivePersonaMutation,
@@ -33,12 +36,18 @@ type Props = NativeStackScreenProps<CommonNavigatorParams, 'PersonaSettings'>
  * the agent's identity (name + voice + personality), skin is the app's look. Lists
  * personas, shows the active one, switches active, and supports full CRUD. Degrades
  * gracefully when the runtime persona endpoints aren't reachable yet.
+ *
+ * Optionally SCOPED to one of the owner's agents via route param `agent` (the FULL
+ * handle from My Agents); without it, this manages the owner's token-mapped agent
+ * exactly as before.
  */
-export function PersonaSettingsScreen({}: Props) {
+export function PersonaSettingsScreen({route}: Props) {
   const {t: l} = useLingui()
-  const {data, isLoading, error} = usePersonasQuery()
-  const setActive = useSetActivePersonaMutation()
-  const del = useDeletePersonaMutation()
+  const agent = route.params?.agent
+  const {data, isLoading, error} = usePersonasQuery(agent)
+  const ownerAgents = useOwnerAgentsQuery()
+  const setActive = useSetActivePersonaMutation(agent)
+  const del = useDeletePersonaMutation(agent)
   const editorControl = Dialog.useDialogControl()
   const deletePrompt = Prompt.usePromptControl()
   const [editing, setEditing] = useState<Persona | null>(null)
@@ -48,6 +57,13 @@ export function PersonaSettingsScreen({}: Props) {
   const voices = data?.voices ?? []
   const activeId = data?.activePersonaId
   const canDelete = personas.length > 1
+  const agentRow = agent
+    ? ownerAgents.data?.agents.find(
+        a2 => a2.handle.toLowerCase() === agent.toLowerCase(),
+      )
+    : undefined
+  const notYourAgent =
+    error instanceof PersonaWriteError && error.code === 'not-your-agent'
 
   const openCreate = () => {
     setEditing(null)
@@ -68,7 +84,11 @@ export function PersonaSettingsScreen({}: Props) {
         <Layout.Header.BackButton />
         <Layout.Header.Content>
           <Layout.Header.TitleText>
-            <Trans>Persona</Trans>
+            {agent ? (
+              (agentRow?.displayName ?? sanitizeHandle(agent, '@'))
+            ) : (
+              <Trans>Persona</Trans>
+            )}
           </Layout.Header.TitleText>
         </Layout.Header.Content>
         <Layout.Header.Slot />
@@ -76,10 +96,19 @@ export function PersonaSettingsScreen({}: Props) {
 
       <Layout.Content>
         <SettingsList.Container>
+          {agent ? (
+            <AgentInfo
+              handle={agent}
+              displayName={agentRow?.displayName}
+              number={agentRow?.number}
+            />
+          ) : null}
           {isLoading ? (
             <View style={[a.py_2xl, a.align_center]}>
               <ActivityIndicator />
             </View>
+          ) : notYourAgent ? (
+            <NotYourAgentNotice />
           ) : !data ? (
             <UnavailableNotice />
           ) : personas.length === 0 ? (
@@ -119,20 +148,24 @@ export function PersonaSettingsScreen({}: Props) {
             </Text>
           ) : null}
 
-          <SettingsList.Divider />
-          <View style={[a.px_lg, a.py_sm]}>
-            <Button
-              label="Create persona"
-              size="large"
-              variant="solid"
-              color="primary"
-              onPress={openCreate}>
-              <ButtonIcon icon={PlusIcon} />
-              <ButtonText>
-                <Trans>Create persona</Trans>
-              </ButtonText>
-            </Button>
-          </View>
+          {!notYourAgent ? (
+            <>
+              <SettingsList.Divider />
+              <View style={[a.px_lg, a.py_sm]}>
+                <Button
+                  label="Create persona"
+                  size="large"
+                  variant="solid"
+                  color="primary"
+                  onPress={openCreate}>
+                  <ButtonIcon icon={PlusIcon} />
+                  <ButtonText>
+                    <Trans>Create persona</Trans>
+                  </ButtonText>
+                </Button>
+              </View>
+            </>
+          ) : null}
         </SettingsList.Container>
       </Layout.Content>
 
@@ -140,6 +173,7 @@ export function PersonaSettingsScreen({}: Props) {
         control={editorControl}
         persona={editing}
         voices={voices}
+        agent={agent}
       />
 
       <Prompt.Basic
@@ -264,6 +298,50 @@ function PersonaRow({
         ) : null}
       </View>
     </SettingsList.Item>
+  )
+}
+
+/** Which agent this screen is editing (scoped mode): handle + its SMS line. */
+function AgentInfo({
+  handle,
+  displayName,
+  number,
+}: {
+  handle: string
+  displayName?: string
+  number?: string
+}) {
+  const t = useTheme()
+  return (
+    <View style={[a.px_lg, a.pb_sm, a.gap_2xs]}>
+      {displayName ? (
+        <Text emoji style={[a.text_sm, t.atoms.text_contrast_medium]}>
+          {sanitizeHandle(handle, '@')}
+        </Text>
+      ) : null}
+      {number ? (
+        <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
+          <Trans>Phone: {number}</Trans>
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function NotYourAgentNotice() {
+  const t = useTheme()
+  return (
+    <View style={[a.px_lg, a.py_2xl, a.gap_sm]}>
+      <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
+        <Trans>Not your agent</Trans>
+      </Text>
+      <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
+        <Trans>
+          This agent isn’t linked to your account, so its persona can’t be
+          managed from here. Pick one of your own agents from My Agents.
+        </Trans>
+      </Text>
+    </View>
   )
 }
 

@@ -69,7 +69,10 @@ export type CommonNavigatorParams = {
   AccessibilitySettings: undefined
   AppearanceSettings: undefined
   // Authority One: agent persona/avatar selector (name + voice + personality).
-  PersonaSettings: undefined
+  // agent = FULL handle of one of the owner's agents; omitted = token-mapped agent.
+  PersonaSettings: {agent?: string} | undefined
+  // Authority One: list of ALL the owner's agents (number, live state, persona entry).
+  MyAgents: undefined
   // Authority One: Context Engine (Phase 1, location-only) opt-in + log.
   ContextEngineSettings: undefined
   ContextLog: undefined

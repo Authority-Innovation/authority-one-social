@@ -5,6 +5,7 @@ import {
   fetchOwnerAgents,
   normalizeCreatedAgent,
   normalizeOwnerAgents,
+  pauseOwnerAgent,
 } from '../agentsClient'
 import {getSupabaseAccessToken} from '../authToken'
 
@@ -51,6 +52,124 @@ describe('normalizeOwnerAgents (pure)', () => {
     expect(normalizeOwnerAgents({})).toEqual([])
     expect(normalizeOwnerAgents({agents: 'nope'})).toEqual([])
     expect(normalizeOwnerAgents(null)).toEqual([])
+  })
+
+  it('carries the enriched fields (number/paused/active/live)', () => {
+    const out = normalizeOwnerAgents({
+      agents: [
+        {
+          handle: 'fran-agent.pds.authority-one.com',
+          displayName: 'Fran',
+          number: '+16595555881',
+          paused: false,
+          active: true,
+          live: true,
+        },
+      ],
+    })
+    expect(out[0]).toMatchObject({
+      handle: 'fran-agent.pds.authority-one.com',
+      number: '+16595555881',
+      paused: false,
+      active: true,
+      live: true,
+    })
+  })
+
+  it('derives live from active && !paused when not echoed; undefined when unenriched', () => {
+    const out = normalizeOwnerAgents({
+      agents: [
+        {handle: 'a.pds.example.com', active: true, paused: false},
+        {handle: 'b.pds.example.com', active: true, paused: true},
+        {handle: 'c.pds.example.com'}, // legacy row: no enrichment at all
+      ],
+    })
+    expect(out[0].live).toBe(true)
+    expect(out[1].live).toBe(false)
+    expect(out[2].live).toBeUndefined()
+    expect(out[2].paused).toBeUndefined()
+  })
+})
+
+describe('pauseOwnerAgent', () => {
+  function status(code: number, body: unknown = {}) {
+    return jest.fn(() =>
+      Promise.resolve({
+        ok: code >= 200 && code < 300,
+        status: code,
+        json: () => Promise.resolve(body),
+      }),
+    ) as unknown as typeof fetch
+  }
+
+  it('signed out -> no fetch, signedOut true', async () => {
+    mockToken.mockResolvedValue(null)
+    global.fetch = status(200)
+    const res = await pauseOwnerAgent({paused: true})
+    expect(res).toMatchObject({ok: false, signedOut: true})
+    expect((global.fetch as unknown as jest.Mock).mock.calls).toHaveLength(0)
+  })
+
+  it('POSTs {agent, paused} to /app/agents/pause and echoes the result', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = status(200, {
+      ok: true,
+      agent: 'fran-agent.pds.authority-one.com',
+      paused: true,
+    })
+    const res = await pauseOwnerAgent({
+      agent: 'fran-agent.pds.authority-one.com',
+      paused: true,
+    })
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0] as [
+      string,
+      {method: string; body: string},
+    ]
+    expect(String(call[0])).toContain('/app/agents/pause')
+    expect(JSON.parse(call[1].body)).toEqual({
+      agent: 'fran-agent.pds.authority-one.com',
+      paused: true,
+    })
+    expect(res).toMatchObject({
+      ok: true,
+      agent: 'fran-agent.pds.authority-one.com',
+      paused: true,
+    })
+  })
+
+  it('omits agent for the token-mapped default', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = status(200, {ok: true, paused: false})
+    await pauseOwnerAgent({paused: false})
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0] as [
+      string,
+      {body: string},
+    ]
+    expect(JSON.parse(call[1].body)).toEqual({paused: false})
+  })
+
+  it('403 not-your-agent -> ownership error, NOT signedOut', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = status(403, {code: 'not-your-agent', error: 'nope'})
+    const res = await pauseOwnerAgent({
+      agent: 'other.pds.example.com',
+      paused: true,
+    })
+    expect(res).toMatchObject({
+      ok: false,
+      signedOut: false,
+      code: 'not-your-agent',
+    })
+  })
+
+  it('uncoded 401 -> signedOut; network throw -> error', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = status(401)
+    expect((await pauseOwnerAgent({paused: true})).signedOut).toBe(true)
+    global.fetch = jest.fn(() => Promise.reject(new Error('boom')))
+    const res = await pauseOwnerAgent({paused: true})
+    expect(res.ok).toBe(false)
+    expect(res.error).toBeDefined()
   })
 })
 

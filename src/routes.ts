@@ -52,7 +52,10 @@ export const router = new Router<AllNavigatableRoutes>({
   PreferencesExternalEmbeds: '/settings/external-embeds',
   AccessibilitySettings: '/settings/accessibility',
   AppearanceSettings: '/settings/appearance',
-  PersonaSettings: '/settings/persona',
+  // Plain path FIRST: matchName picks the first pattern for URL building, and the
+  // agent-scoped form then rides in as a query param (which matchPath reads back).
+  PersonaSettings: ['/settings/persona', '/settings/persona/:agent'],
+  MyAgents: '/settings/agents',
   ChatList: '/chats',
   NewGroup: '/chats/new-group',
   NewAgent: '/chats/new-agent',

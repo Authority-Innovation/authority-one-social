@@ -11,9 +11,13 @@ import {
 
 /**
  * Client for the runtime's owner-scoped persona/avatar system. Owner-scoping is
- * enforced server-side from the Supabase bearer; no agent/handle is sent. Every
- * call is resilient (never throws): reads return `signedOut`/`unreachable` flags
- * so the UI degrades to the profile-name behavior, and writes return ok/error.
+ * enforced server-side from the Supabase bearer. Every call optionally targets one
+ * of the owner's OTHER agents via `agent` (the FULL handle from a GET /app/agents
+ * row): `?agent=` on GETs, an `agent` body field on POSTs. Omitted = the owner's
+ * token-mapped agent (today's behavior). A non-owned handle gets a 403
+ * {code:'not-your-agent'}, surfaced as a code — NOT as signedOut. Every call is
+ * resilient (never throws): reads return `signedOut`/`unreachable` flags so the UI
+ * degrades to the profile-name behavior, and writes return ok/error.
  */
 
 export interface PersonaVoice {
@@ -114,14 +118,29 @@ export interface PersonasResult {
   state?: PersonasState
   signedOut: boolean
   error?: string
+  /** Machine-readable error code from a 4xx (e.g. 'not-your-agent'). */
+  code?: string
+}
+
+/**
+ * Echoed by POST /app/personas/update when renaming the ACTIVE persona: the runtime
+ * also republishes the agent's atproto profile, and reports how that went. A save can
+ * succeed while the republish fails — surface `published:false` as a subtle warning.
+ */
+export interface PersonaProfilePublish {
+  published: boolean
+  displayName?: string
+  error?: string
 }
 
 export interface PersonaWriteResult {
   ok: boolean
   signedOut: boolean
   error?: string
-  /** Machine-readable error code from a 4xx (e.g. 'identity-too-long', 'persona-too-large'). */
+  /** Machine-readable error code from a 4xx (e.g. 'identity-too-long', 'not-your-agent'). */
   code?: string
+  /** Profile-republish outcome, echoed on an active-persona rename. */
+  profile?: PersonaProfilePublish
   /**
    * The refreshed personas view the runtime returns on a successful mutation (the same
    * shape as GET /app/personas). Lets the caller update the cache from the authoritative
@@ -332,8 +351,31 @@ async function authHeaders(): Promise<Record<string, string> | null> {
   return {Authorization: `Bearer ${token}`}
 }
 
-/** GET /app/personas — the full persona state. Never throws. */
-export async function fetchPersonas(): Promise<PersonasResult> {
+/** Append the optional agent scope to a GET url (`?agent=<full handle>`). */
+function withAgent(url: string, agent?: string): string {
+  return agent ? `${url}?agent=${encodeURIComponent(agent)}` : url
+}
+
+/** Merge the optional agent scope into a POST body (omitted when unset). */
+function scoped(
+  body: Record<string, unknown>,
+  agent?: string,
+): Record<string, unknown> {
+  return agent ? {...body, agent} : body
+}
+
+/** Parse a response body as JSON, absorbing sync AND async failures (empty body etc). */
+function safeJson(res: {json?: () => Promise<unknown>}): Promise<unknown> {
+  return Promise.resolve()
+    .then(() => res.json?.())
+    .catch(() => undefined)
+}
+
+/**
+ * GET /app/personas — the full persona state. Optionally scoped to one of the
+ * owner's agents via `agent` (full handle). Never throws.
+ */
+export async function fetchPersonas(agent?: string): Promise<PersonasResult> {
   let headers: Record<string, string> | null
   try {
     headers = await authHeaders()
@@ -343,8 +385,21 @@ export async function fetchPersonas(): Promise<PersonasResult> {
   if (!headers) return {signedOut: true}
 
   try {
-    const res = await fetch(PERSONAS_ENDPOINT, {method: 'GET', headers})
-    if (res.status === 401 || res.status === 403) return {signedOut: false}
+    const res = await fetch(withAgent(PERSONAS_ENDPOINT, agent), {
+      method: 'GET',
+      headers,
+    })
+    if (res.status === 401 || res.status === 403) {
+      // Distinguish "you don't own that agent" from a dead session.
+      const errJson = (await safeJson(res)) as
+        | {code?: unknown; error?: unknown}
+        | undefined
+      const code = str(errJson?.code)
+      if (code) {
+        return {signedOut: false, code, error: str(errJson?.error)}
+      }
+      return {signedOut: false}
+    }
     if (!res.ok) return {signedOut: false, error: `Runtime error ${res.status}`}
     const json: unknown = await res.json()
     return {state: normalizePersonasResponse(json), signedOut: false}
@@ -380,6 +435,7 @@ export async function fetchVoices(): Promise<PersonaVoice[]> {
  */
 export async function fetchPersonaDetail(
   id: string,
+  agent?: string,
 ): Promise<PersonaDetailResult> {
   let headers: Record<string, string> | null
   try {
@@ -392,9 +448,21 @@ export async function fetchPersonaDetail(
     const res = await fetch(PERSONAS_GET_ENDPOINT, {
       method: 'POST',
       headers: {...headers, 'Content-Type': 'application/json'},
-      body: JSON.stringify({id}),
+      body: JSON.stringify(scoped({id}, agent)),
     })
-    if (res.status === 401 || res.status === 403) return {signedOut: true}
+    if (res.status === 401 || res.status === 403) {
+      const errJson = (await safeJson(res)) as
+        | {code?: unknown; error?: unknown}
+        | undefined
+      const code = str(errJson?.code)
+      if (code) {
+        return {
+          signedOut: false,
+          error: str(errJson?.error) ?? `Runtime error ${res.status}`,
+        }
+      }
+      return {signedOut: true}
+    }
     if (!res.ok) return {signedOut: false, error: `Runtime error ${res.status}`}
     const detail = normalizePersonaDetail(await res.json()) ?? undefined
     return {detail, signedOut: false}
@@ -421,19 +489,22 @@ async function postJson(
       headers: {...headers, 'Content-Type': 'application/json'},
       body: JSON.stringify(body),
     })
-    if (res.status === 401 || res.status === 403) {
-      return {ok: false, signedOut: true}
-    }
     if (!res.ok) {
       // Surface the runtime's machine-readable code (e.g. identity-too-long,
-      // persona-too-large) + message so the editor can show a specific, helpful error.
-      const errJson = (await res.json().catch(() => undefined)) as
+      // not-your-agent) + message so the editor can show a specific, helpful error.
+      // A coded 401/403 (e.g. not-your-agent) is an ownership error, NOT a dead
+      // session — only an uncoded one degrades to signedOut.
+      const errJson = (await safeJson(res)) as
         | {code?: unknown; error?: unknown; message?: unknown}
         | undefined
+      const code = str(errJson?.code)
+      if ((res.status === 401 || res.status === 403) && !code) {
+        return {ok: false, signedOut: true}
+      }
       return {
         ok: false,
         signedOut: false,
-        code: str(errJson?.code),
+        code,
         error:
           str(errJson?.error) ??
           str(errJson?.message) ??
@@ -449,10 +520,26 @@ async function postJson(
       !!json &&
       typeof json === 'object' &&
       Array.isArray((json as {personas?: unknown}).personas)
+    const profileRaw =
+      json && typeof json === 'object'
+        ? (json as {profile?: unknown}).profile
+        : undefined
+    const profile =
+      profileRaw && typeof profileRaw === 'object'
+        ? (() => {
+            const p = profileRaw as Record<string, unknown>
+            return {
+              published: p.published === true,
+              displayName: str(p.displayName),
+              error: str(p.error),
+            }
+          })()
+        : undefined
     return {
       ok: true,
       signedOut: false,
       ...(hasView ? {state: normalizePersonasResponse(json)} : {}),
+      ...(profile ? {profile} : {}),
     }
   } catch (e) {
     logger.warn('personas: write failed', {safeMessage: String(e)})
@@ -496,27 +583,31 @@ function personaBody(input: PersonaWriteInput): Record<string, unknown> {
 
 export function createPersona(
   input: PersonaWriteInput & {name: string},
+  agent?: string,
 ): Promise<PersonaWriteResult> {
-  return postJson(PERSONAS_ENDPOINT, personaBody(input))
+  return postJson(PERSONAS_ENDPOINT, scoped(personaBody(input), agent))
 }
 
 export function updatePersona(
   input: PersonaWriteInput & {id: string},
+  agent?: string,
 ): Promise<PersonaWriteResult> {
-  return postJson(PERSONAS_UPDATE_ENDPOINT, {
-    id: input.id,
-    ...personaBody(input),
-  })
+  return postJson(
+    PERSONAS_UPDATE_ENDPOINT,
+    scoped({id: input.id, ...personaBody(input)}, agent),
+  )
 }
 
-export function deletePersona(input: {
-  id: string
-}): Promise<PersonaWriteResult> {
-  return postJson(PERSONAS_DELETE_ENDPOINT, {id: input.id})
+export function deletePersona(
+  input: {id: string},
+  agent?: string,
+): Promise<PersonaWriteResult> {
+  return postJson(PERSONAS_DELETE_ENDPOINT, scoped({id: input.id}, agent))
 }
 
-export function setActivePersona(input: {
-  id: string
-}): Promise<PersonaWriteResult> {
-  return postJson(PERSONAS_ACTIVE_ENDPOINT, {id: input.id})
+export function setActivePersona(
+  input: {id: string},
+  agent?: string,
+): Promise<PersonaWriteResult> {
+  return postJson(PERSONAS_ACTIVE_ENDPOINT, scoped({id: input.id}, agent))
 }

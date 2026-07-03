@@ -8,6 +8,8 @@ export {
   normalizeOwnerAgents,
   type OwnerAgent,
   type OwnerAgentsResult,
+  type PauseAgentResult,
+  pauseOwnerAgent,
 } from './agentsClient'
 export {postApprovalDecision} from './approvals'
 export {
@@ -61,6 +63,7 @@ export {
   type PersonaDetailResult,
   type PersonaFiction,
   type PersonaIdentity,
+  type PersonaProfilePublish,
   type PersonasResult,
   type PersonasState,
   type PersonaVoice,

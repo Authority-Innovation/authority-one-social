@@ -123,6 +123,7 @@ import {FollowingFeedPreferencesScreen} from '#/screens/Settings/FollowingFeedPr
 import {InterestsSettingsScreen} from '#/screens/Settings/InterestsSettings'
 import {LanguageSettingsScreen} from '#/screens/Settings/LanguageSettings'
 import {LegacyNotificationSettingsScreen} from '#/screens/Settings/LegacyNotificationSettings'
+import {MyAgentsScreen} from '#/screens/Settings/MyAgents'
 import {NotificationSettingsScreen} from '#/screens/Settings/NotificationSettings'
 import {PersonaSettingsScreen} from '#/screens/Settings/PersonaSettings'
 import {PhotoContextSettingsScreen} from '#/screens/Settings/PhotoContext'
@@ -442,6 +443,14 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         getComponent={() => PersonaSettingsScreen}
         options={{
           title: title(msg`Persona`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="MyAgents"
+        getComponent={() => MyAgentsScreen}
+        options={{
+          title: title(msg`My Agents`),
           requireAuth: true,
         }}
       />

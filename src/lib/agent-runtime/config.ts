@@ -40,6 +40,13 @@ export const threadDeleteUrl = (id: string) =>
 export const AGENTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents`
 
 /**
+ * Pause/unpause one of the owner's agents. POST {agent?, paused:boolean} ->
+ * {ok, agent, paused}. `agent` is the FULL handle from a GET /app/agents row;
+ * omitted = the owner's token-mapped agent.
+ */
+export const AGENTS_PAUSE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/pause`
+
+/**
  * Chat image upload endpoint (owner-scoped). The app POSTs the RAW image bytes with an
  * image `Content-Type` header; the runtime hosts them in R2 (the same `putRawImage` path
  * the inbound SMS/MMS media uses) and returns the public URL, which the app then sends

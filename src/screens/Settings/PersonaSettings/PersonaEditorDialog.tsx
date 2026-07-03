@@ -140,15 +140,18 @@ function loadRefDrafts(refs: ReferenceImage[]): RefImageDraft[] {
  * Create / edit a persona on the SPLIT schema: IDENTITY (name + voice + compact always-on
  * personality) and a KNOWLEDGE BASE (summary + retrievable entries). On open (edit) the
  * full detail is loaded from /app/personas/get; on save we send the nested shape.
+ * Optionally scoped to one of the owner's agents via `agent` (full handle).
  */
 export function PersonaEditorDialog({
   control,
   persona,
   voices,
+  agent,
 }: {
   control: Dialog.DialogControlProps
   persona: Persona | null
   voices: PersonaVoice[]
+  agent?: string
 }) {
   return (
     <Dialog.Outer control={control}>
@@ -159,6 +162,7 @@ export function PersonaEditorDialog({
         persona={persona}
         voices={voices}
         control={control}
+        agent={agent}
       />
     </Dialog.Outer>
   )
@@ -173,15 +177,17 @@ function EditorInner({
   persona,
   voices,
   control,
+  agent,
 }: {
   persona: Persona | null
   voices: PersonaVoice[]
   control: Dialog.DialogControlProps
+  agent?: string
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
-  const create = useCreatePersonaMutation()
-  const update = useUpdatePersonaMutation()
+  const create = useCreatePersonaMutation(agent)
+  const update = useUpdatePersonaMutation(agent)
   const isEdit = !!persona
 
   // Edit mode loads full detail; create starts empty + ready.
@@ -206,7 +212,7 @@ function EditorInner({
     if (!isEdit || !persona) return
     let cancelled = false
     void (async () => {
-      const res = await fetchPersonaDetail(persona.id)
+      const res = await fetchPersonaDetail(persona.id, agent)
       if (cancelled) return
       if (res.detail) {
         const d = res.detail
@@ -347,7 +353,19 @@ function EditorInner({
           // keystroke; haunts otherwise only reach the list on an explicit Add.
           fiction: fictionForUpdate(foldPendingHaunt(fiction, haunt)),
         },
-        {onSuccess: done},
+        {
+          onSuccess: res => {
+            // Renaming the ACTIVE persona also republishes the agent's public
+            // profile; the save can land while that republish fails. Warn softly.
+            if (res.profile && !res.profile.published) {
+              Toast.show(
+                l`Saved, but the agent's public profile name couldn't be updated right now.`,
+                {type: 'warning'},
+              )
+            }
+            done()
+          },
+        },
       )
     } else {
       create.mutate(

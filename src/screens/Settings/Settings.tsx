@@ -228,6 +228,12 @@ export function SettingsScreen({}: Props) {
               <Trans>Appearance</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
+          <SettingsList.LinkItem to="/settings/agents" label={l`My Agents`}>
+            <SettingsList.ItemIcon icon={PersonGroupIcon} />
+            <SettingsList.ItemText>
+              <Trans>My Agents</Trans>
+            </SettingsList.ItemText>
+          </SettingsList.LinkItem>
           <SettingsList.LinkItem to="/settings/persona" label={l`Persona`}>
             <SettingsList.ItemIcon icon={PersonIcon} />
             <SettingsList.ItemText>

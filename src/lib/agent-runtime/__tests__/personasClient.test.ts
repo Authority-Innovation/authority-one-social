@@ -226,6 +226,79 @@ describe('CRUD request shaping', () => {
     expect(res.code).toBe('identity-too-long')
     expect(res.error).toBe('too long')
   })
+
+  it('surfaces the profile-republish echo on an active-persona rename', async () => {
+    mockToken.mockResolvedValue('tok')
+    mockOkJson({
+      personas: [{id: 'p1', name: 'Fran 2'}],
+      activePersonaId: 'p1',
+      profile: {published: false, error: 'pds unreachable'},
+    })
+    const res = await updatePersona({id: 'p1', name: 'Fran 2'})
+    expect(res.ok).toBe(true)
+    expect(res.profile).toEqual({
+      published: false,
+      displayName: undefined,
+      error: 'pds unreachable',
+    })
+  })
+})
+
+describe('agent scoping', () => {
+  const AGENT = 'fran-agent.pds.authority-one.com'
+
+  it('GET /app/personas carries ?agent=; omitted without one', async () => {
+    mockToken.mockResolvedValue('tok')
+    mockOkJson({personas: []})
+    await fetchPersonas(AGENT)
+    await fetchPersonas()
+    const calls = (global.fetch as unknown as jest.Mock).mock.calls
+    expect(String(calls[0][0])).toContain(
+      `/app/personas?agent=${encodeURIComponent(AGENT)}`,
+    )
+    expect(String(calls[1][0])).not.toContain('agent=')
+  })
+
+  it('POST bodies carry the agent field on every persona write + detail read', async () => {
+    mockToken.mockResolvedValue('tok')
+    mockOkJson({})
+    await fetchPersonaDetail('p1', AGENT)
+    await createPersona({name: 'Ada'}, AGENT)
+    await updatePersona({id: 'p1', name: 'Ada 2'}, AGENT)
+    await deletePersona({id: 'p1'}, AGENT)
+    await setActivePersona({id: 'p1'}, AGENT)
+    const calls = (global.fetch as unknown as jest.Mock).mock.calls
+    for (const call of calls) {
+      const body = JSON.parse(String((call[1] as {body: string}).body)) as {
+        agent?: string
+      }
+      expect(body.agent).toBe(AGENT)
+    }
+  })
+
+  it('403 not-your-agent is an ownership error, NOT signedOut (read + write)', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 403,
+        json: () =>
+          Promise.resolve({code: 'not-your-agent', error: 'not yours'}),
+      }),
+    ) as unknown as typeof fetch
+    const read = await fetchPersonas('other.pds.example.com')
+    expect(read.signedOut).toBe(false)
+    expect(read.code).toBe('not-your-agent')
+    const write = await updatePersona(
+      {id: 'p1', name: 'X'},
+      'other.pds.example.com',
+    )
+    expect(write).toMatchObject({
+      ok: false,
+      signedOut: false,
+      code: 'not-your-agent',
+    })
+  })
 })
 
 describe('normalizeKeywords (pure)', () => {

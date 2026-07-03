@@ -14,29 +14,47 @@ import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
 
 const personasQueryKeyRoot = 'agentPersonas'
-export const createPersonasQueryKey = () =>
-  createQueryKey(personasQueryKeyRoot, {})
+/**
+ * Keyed by the optional agent scope (full handle) so each agent's persona view
+ * caches independently. No agent = the owner's token-mapped agent (legacy view).
+ */
+export const createPersonasQueryKey = (agent?: string) =>
+  createQueryKey(personasQueryKeyRoot, {agent: agent ?? null})
 
 /**
- * The owner's agent personas + active selection + available voices, from the
- * runtime (GET /app/personas). Resolves to `undefined` data when signed out or the
- * endpoint isn't reachable yet, so consumers degrade gracefully (the chat header
- * falls back to the atproto profile name). Never throws.
+ * The agent personas + active selection + available voices, from the runtime
+ * (GET /app/personas). Optionally scoped to one of the owner's agents via `agent`
+ * (the FULL handle from a GET /app/agents row); omitted = the owner's token-mapped
+ * agent. Resolves to `undefined` data when signed out or the endpoint isn't
+ * reachable yet, so consumers degrade gracefully (the chat header falls back to
+ * the atproto profile name). Throws only on an ownership error (403
+ * not-your-agent) so the scoped screen can message it specifically.
  */
-export function usePersonasQuery() {
+export function usePersonasQuery(agent?: string) {
   return useQuery<PersonasState | undefined>({
-    queryKey: createPersonasQueryKey(),
+    queryKey: createPersonasQueryKey(agent),
     queryFn: async () => {
-      const result = await fetchPersonas()
+      const result = await fetchPersonas(agent)
+      if (result.code === 'not-your-agent') {
+        throw new PersonaWriteError(
+          result.error ?? 'This agent is not linked to your account.',
+          result.code,
+        )
+      }
       return result.state
     },
     staleTime: STALE.MINUTES.ONE,
+    retry: (failureCount, error) =>
+      // Ownership won't change on retry.
+      !(
+        error instanceof PersonaWriteError && error.code === 'not-your-agent'
+      ) && failureCount < 3,
   })
 }
 
-function useInvalidatePersonas() {
+function useInvalidatePersonas(agent?: string) {
   const qc = useQueryClient()
-  return () => qc.invalidateQueries({queryKey: createPersonasQueryKey()})
+  return () => qc.invalidateQueries({queryKey: createPersonasQueryKey(agent)})
 }
 
 /**
@@ -64,55 +82,67 @@ function ensureOk(
   throw new PersonaWriteError(res.error ?? fallback, res.code)
 }
 
-export function useCreatePersonaMutation() {
+export function useCreatePersonaMutation(agent?: string) {
   const qc = useQueryClient()
-  const invalidate = useInvalidatePersonas()
+  const invalidate = useInvalidatePersonas(agent)
   return useMutation({
     mutationFn: async (input: PersonaWriteInput & {name: string}) =>
-      ensureOk(await createPersona(input), 'Could not create the persona.'),
+      ensureOk(
+        await createPersona(input, agent),
+        'Could not create the persona.',
+      ),
     onSuccess: res => {
       // Apply the authoritative refreshed view immediately (no refetch race), then
       // invalidate so any other observers reconcile too.
-      if (res.state) qc.setQueryData(createPersonasQueryKey(), res.state)
+      if (res.state) qc.setQueryData(createPersonasQueryKey(agent), res.state)
       void invalidate()
     },
   })
 }
 
-export function useUpdatePersonaMutation() {
+export function useUpdatePersonaMutation(agent?: string) {
   const qc = useQueryClient()
-  const invalidate = useInvalidatePersonas()
+  const invalidate = useInvalidatePersonas(agent)
   return useMutation({
     mutationFn: async (input: PersonaWriteInput & {id: string}) =>
-      ensureOk(await updatePersona(input), 'Could not save the persona.'),
+      ensureOk(
+        await updatePersona(input, agent),
+        'Could not save the persona.',
+      ),
     onSuccess: res => {
-      if (res.state) qc.setQueryData(createPersonasQueryKey(), res.state)
+      if (res.state) qc.setQueryData(createPersonasQueryKey(agent), res.state)
       void invalidate()
     },
   })
 }
 
-export function useDeletePersonaMutation() {
+export function useDeletePersonaMutation(agent?: string) {
   const qc = useQueryClient()
-  const invalidate = useInvalidatePersonas()
+  const invalidate = useInvalidatePersonas(agent)
   return useMutation({
     mutationFn: async (input: {id: string}) =>
-      ensureOk(await deletePersona(input), 'Could not delete the persona.'),
+      ensureOk(
+        await deletePersona(input, agent),
+        'Could not delete the persona.',
+      ),
     onSuccess: res => {
-      if (res.state) qc.setQueryData(createPersonasQueryKey(), res.state)
+      if (res.state) qc.setQueryData(createPersonasQueryKey(agent), res.state)
       void invalidate()
     },
   })
 }
 
-export function useSetActivePersonaMutation() {
+export function useSetActivePersonaMutation(agent?: string) {
   const qc = useQueryClient()
-  const invalidate = useInvalidatePersonas()
+  const invalidate = useInvalidatePersonas(agent)
   return useMutation({
     mutationFn: async (input: {id: string}) =>
-      ensureOk(await setActivePersona(input), 'Could not switch persona.'),
+      ensureOk(
+        await setActivePersona(input, agent),
+        'Could not switch persona.',
+      ),
     onSuccess: res => {
-      if (res.state) qc.setQueryData(createPersonasQueryKey(), res.state)
+      if (res.state) qc.setQueryData(createPersonasQueryKey(agent), res.state)
       void invalidate()
     },
   })

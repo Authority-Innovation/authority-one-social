@@ -5,6 +5,8 @@ import {
   createOwnerAgent,
   fetchOwnerAgents,
   type OwnerAgent,
+  type PauseAgentResult,
+  pauseOwnerAgent,
 } from '#/lib/agent-runtime'
 import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
@@ -50,6 +52,49 @@ export function useCreateOwnerAgentMutation() {
           queryKey: createOwnerAgentsQueryKey(),
         })
       }
+    },
+  })
+}
+
+/**
+ * Pause/unpause one of the owner's agents (POST /app/agents/pause). Same typed-result
+ * pattern as create: failures land in onSuccess with ok:false so the toggle can show a
+ * message. A real success patches the cached row immediately (paused + live flip) and
+ * then invalidates so the list reconciles with the runtime.
+ */
+export function usePauseOwnerAgentMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation<
+    PauseAgentResult,
+    Error,
+    {agent?: string; paused: boolean}
+  >({
+    mutationFn: pauseOwnerAgent,
+    onSuccess: (result, variables) => {
+      if (!result.ok) return
+      const handle = (result.agent ?? variables.agent)?.toLowerCase()
+      if (handle) {
+        queryClient.setQueryData<{agents: OwnerAgent[]; signedOut: boolean}>(
+          createOwnerAgentsQueryKey(),
+          old =>
+            old && {
+              ...old,
+              agents: old.agents.map(a =>
+                a.handle.toLowerCase() === handle
+                  ? {
+                      ...a,
+                      paused: result.paused,
+                      live: a.active !== false && !result.paused,
+                    }
+                  : a,
+              ),
+            },
+        )
+      }
+      void queryClient.invalidateQueries({
+        queryKey: createOwnerAgentsQueryKey(),
+      })
     },
   })
 }
