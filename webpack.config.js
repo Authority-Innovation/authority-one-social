@@ -71,8 +71,12 @@ module.exports = async function (env, argv) {
       })
     }
   } else {
-    // Support static CDN for chunks
-    config.output.publicPath = 'auto'
+    // Support static CDN for chunks. 'auto' makes html-webpack-plugin emit
+    // RELATIVE asset URLs in index.html, which breaks deployments that serve
+    // index.html directly on nested routes (Cloudflare Pages SPA fallback:
+    // /settings/agents would fetch /settings/static/js/...). build-web-cf
+    // overrides this to '/' so asset URLs are root-absolute.
+    config.output.publicPath = process.env.WEB_PUBLIC_PATH || 'auto'
   }
 
   if (GENERATE_STATS || OPEN_ANALYZER) {
