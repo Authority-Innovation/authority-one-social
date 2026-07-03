@@ -150,7 +150,10 @@ module.exports = function (_config) {
         // Authority One: CFBundleVersion. The first upload defaulted to "1" and
         // was rejected; bumped to "2" so the re-upload isn't treated as a
         // duplicate build. Increment on every subsequent App Store Connect upload.
-        buildNumber: '12',
+        // NOTE: App Store Connect reported the last uploaded build as 20 (2026-07-03),
+        // so uploads bumped past this file without being committed. Trust ASC's
+        // "must be higher than N" error over this value when they disagree.
+        buildNumber: '21',
         config: {
           usesNonExemptEncryption: false,
         },
