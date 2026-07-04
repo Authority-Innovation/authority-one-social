@@ -59,6 +59,11 @@ function updateDocument(theme: ThemeName, skin: SkinDefinition) {
     html.className = html.className.replace(/(theme|themepack)--[\w-]+/g, '')
     html.classList.add(`theme--${theme}`)
     html.classList.add(`themepack--${skin.id}`)
+    // Paint the DOCUMENT itself with the active theme/skin background. The static
+    // index.html CSS only knows the base light/dark/dim colors, so on a skinned
+    // theme (e.g. warm paper) any scroll or overscroll past the app's own painted
+    // views exposed the stale white/black document background underneath.
+    html.style.backgroundColor = getBackgroundColor(theme, skin)
     // set color to 'theme-color' meta tag
     meta?.setAttribute('content', getBackgroundColor(theme, skin))
     window.localStorage.setItem('ALF_THEME', theme)

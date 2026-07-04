@@ -16,6 +16,57 @@ type TurnHistory = {role: ChatRole; text: string}[]
 let idSeq = 0
 const newId = (p: string) => `${p}_${Date.now()}_${idSeq++}`
 
+/** How often a mounted thread chat re-reads its server history for live updates. */
+export const THREAD_POLL_INTERVAL_MS = 4000
+
+/** Content identity of a message, ignoring client-generated ids. */
+function contentSig(m: ChatMessage): string {
+  return JSON.stringify([m.role, m.senderName ?? '', m.text, m.mediaUrls ?? []])
+}
+
+/**
+ * Merge a freshly-fetched server history into the local list. Server content is
+ * authoritative for settled turns, but fetched rows get NEW client ids each time, so
+ * matching rows REUSE the existing local objects (stable React keys, and an unchanged
+ * poll returns `prev` itself — no re-render, no scroll jump). Local-only rows survive
+ * when they are still meaningful: an in-flight pending placeholder, or a just-sent
+ * local turn the server hasn't persisted yet (newer than the newest server row).
+ * Exported for tests. PURE.
+ */
+export function mergeServerMessages(
+  prev: ChatMessage[],
+  server: ChatMessage[],
+): ChatMessage[] {
+  const unused = [...prev]
+  let changed = false
+  const out: ChatMessage[] = server.map(srow => {
+    const i = unused.findIndex(
+      p => !p.pending && contentSig(p) === contentSig(srow),
+    )
+    if (i !== -1) {
+      const [hit] = unused.splice(i, 1)
+      return hit
+    }
+    changed = true
+    return srow
+  })
+  const newestServerAt = server.reduce(
+    (max, s) => Math.max(max, s.createdAt || 0),
+    0,
+  )
+  for (const p of unused) {
+    if (p.pending || (p.createdAt || 0) > newestServerAt) {
+      out.push(p)
+    } else {
+      changed = true // a stale local row was dropped in favor of server truth
+    }
+  }
+  if (!changed && out.length === prev.length) {
+    return prev
+  }
+  return out
+}
+
 export interface UseAgentChat {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -112,6 +163,46 @@ export function useAgentChat(
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+  // Mirror of isStreaming so the poll below can skip while a turn is in flight
+  // without re-arming its interval on every streaming transition.
+  const isStreamingRef = useRef(false)
+  useEffect(() => {
+    isStreamingRef.current = isStreaming
+  }, [isStreaming])
+
+  // LIVE UPDATES (threads): other participants — group agents on their own turn
+  // schedule, other members — write into the thread server-side, and the send
+  // round-trip only ever carries THIS device's turn. Poll the thread history while
+  // the screen is mounted and merge new rows in, so an agent's reply appears
+  // without leaving and re-entering the chat. The merge reuses existing message
+  // objects for unchanged rows, so an idle poll is a no-op render-wise (no scroll
+  // jumps), and it skips entirely while a local turn is streaming so optimistic
+  // state is never clobbered mid-flight.
+  useEffect(() => {
+    if (!threadId) return
+    let cancelled = false
+    let inFlight = false
+    const tick = async () => {
+      if (cancelled || inFlight || isStreamingRef.current) return
+      inFlight = true
+      try {
+        const loaded = await fetchThreadMessages(threadId)
+        if (cancelled || isStreamingRef.current) return
+        if (loaded.length > 0) {
+          setMessages(prev => mergeServerMessages(prev, loaded))
+        }
+      } finally {
+        inFlight = false
+      }
+    }
+    const interval = setInterval(() => {
+      void tick()
+    }, THREAD_POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [threadId])
 
   const upsertAssistant = useCallback(
     (id: string, mutate: (m: ChatMessage) => ChatMessage) => {
