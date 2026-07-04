@@ -345,6 +345,43 @@ export class Agent extends BaseAgent {
   }
 }
 
+// Preferences are stored on and served by the user's PDS, not the AppView.
+// The agent-wide `atproto-proxy` header (see WARN below) makes the PDS pipe
+// these calls to the configured AppView, which does not own that data - a
+// missing or partial AppView then breaks reads/writes of account preferences
+// and with them the whole signed-in app. Stripping the header keeps these
+// calls answered locally by the PDS regardless of AppView state.
+const PDS_AUTHORITATIVE_XRPC_METHODS = [
+  'app.bsky.actor.getPreferences',
+  'app.bsky.actor.putPreferences',
+]
+
+function stripProxyHeaderForPdsAuthoritativeCalls(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): [RequestInfo | URL, RequestInit?] {
+  const url =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url
+  const isPdsAuthoritative = PDS_AUTHORITATIVE_XRPC_METHODS.some(nsid =>
+    url.includes(`/xrpc/${nsid}`),
+  )
+  if (!isPdsAuthoritative) {
+    return [input, init]
+  }
+  if (input instanceof Request) {
+    const req = new Request(input, init)
+    req.headers.delete('atproto-proxy')
+    return [req, undefined]
+  }
+  const headers = new Headers(init?.headers)
+  headers.delete('atproto-proxy')
+  return [input, {...init, headers}]
+}
+
 // Not exported. Use factories above to create it.
 // WARN: In the factories above, we _manually set a proxy header_ for the agent after we do whatever it is we are supposed to do.
 // Ideally, we wouldn't be doing this. However, since there is so much logic that requires making calls to the PDS right now, it
@@ -360,7 +397,9 @@ class BskyAppAgent extends BskyAgent {
       async fetch(...args) {
         let success = false
         try {
-          const result = await realFetch(...args)
+          const result = await realFetch(
+            ...stripProxyHeaderForPdsAuthoritativeCalls(...args),
+          )
           success = true
           return result
         } catch (e) {

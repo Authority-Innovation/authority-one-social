@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef} from 'react'
 import {ActivityIndicator, StyleSheet, View} from 'react-native'
 import {withSpring} from 'react-native-reanimated'
+import {useLingui} from '@lingui/react/macro'
 import {useFocusEffect} from '@react-navigation/native'
 
 import {PROD_DEFAULT_FEED} from '#/lib/constants'
@@ -40,6 +41,7 @@ import {
 import {Logo} from '#/view/icons/Logo'
 import {NoFeedsPinned} from '#/screens/Home/NoFeedsPinned'
 import {Button, ButtonText} from '#/components/Button'
+import {Error} from '#/components/Error'
 import * as Layout from '#/components/Layout'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
@@ -48,11 +50,20 @@ import {useDemoMode} from '#/storage/hooks/demo-mode'
 
 type Props = NativeStackScreenProps<HomeTabNavigatorParams, 'Home' | 'Start'>
 export function HomeScreen(props: Props) {
+  const {t: l} = useLingui()
   const {setShowLoggedOut} = useLoggedOutViewControls()
-  const {data: preferences} = usePreferencesQuery()
+  const {
+    data: preferences,
+    isError: isPreferencesError,
+    refetch: refetchPreferences,
+  } = usePreferencesQuery()
   const {currentAccount} = useSession()
-  const {data: pinnedFeedInfos, isLoading: isPinnedFeedsLoading} =
-    usePinnedFeedsInfos()
+  const {
+    data: pinnedFeedInfos,
+    isLoading: isPinnedFeedsLoading,
+    isError: isPinnedFeedsError,
+    refetch: refetchPinnedFeeds,
+  } = usePinnedFeedsInfos()
 
   useEffect(() => {
     if (IS_WEB && !currentAccount) {
@@ -84,6 +95,15 @@ export function HomeScreen(props: Props) {
     setShowLoggedOut,
   ])
 
+  const onRetry = () => {
+    if (isPreferencesError) {
+      void refetchPreferences()
+    }
+    if (isPinnedFeedsError) {
+      void refetchPinnedFeeds()
+    }
+  }
+
   if (preferences && pinnedFeedInfos && !isPinnedFeedsLoading) {
     return (
       <Layout.Screen testID="HomeScreen" noInsetTop={IS_LIQUID_GLASS}>
@@ -94,6 +114,20 @@ export function HomeScreen(props: Props) {
             pinnedFeedInfos={pinnedFeedInfos}
           />
         </HomeHeaderModeProvider>
+      </Layout.Screen>
+    )
+  } else if (isPreferencesError || isPinnedFeedsError) {
+    // Without this branch a failed preferences or pinned-feeds query left
+    // Home on the loading spinner forever (no data ever arrives, the queries
+    // settle into error state, and nothing re-renders past the gate above).
+    return (
+      <Layout.Screen testID="HomeScreenError">
+        <Error
+          title={l`Couldn’t load your feeds`}
+          message={l`There was a problem loading your account data. Check your connection and try again.`}
+          onRetry={onRetry}
+          hideBackButton
+        />
       </Layout.Screen>
     )
   } else {

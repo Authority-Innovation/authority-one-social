@@ -57,6 +57,10 @@ jobs:
           EXPO_PUBLIC_APPVIEW_URL: https://appview.authority-one.com
           EXPO_PUBLIC_APPVIEW_DID: did:web:appview.authority-one.com
           EXPO_PUBLIC_BLUESKY_PROXY_DID: did:web:appview.authority-one.com
+          # Self-hosted pilot: no age assurance gate, and skip Bluesky's
+          # app-config worker (it rejects foreign origins via CORS).
+          EXPO_PUBLIC_DISABLE_AGE_ASSURANCE: "1"
+          EXPO_PUBLIC_APP_CONFIG_URL: ""
         run: pnpm build-web-cf
 
       - name: Deploy to Cloudflare Pages
