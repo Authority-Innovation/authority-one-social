@@ -25,6 +25,7 @@ import {
   computeAgeAssuranceFlags,
   getAgeAssuranceRegionConfigWithFallback,
 } from '#/ageAssurance/util'
+import {DISABLE_AGE_ASSURANCE} from '#/env'
 import {type Geolocation, useGeolocation} from '#/geolocation'
 import {device} from '#/storage'
 
@@ -55,6 +56,19 @@ function computeAgeAssuranceState({
       status: AgeAssuranceStatus.Unknown,
       access: AgeAssuranceAccess.Safe,
     }
+
+  /**
+   * Deployment-level opt-out (EXPO_PUBLIC_DISABLE_AGE_ASSURANCE). Grants full
+   * access so the NoAccessScreen gate never renders. Every consumer of AA
+   * state (shell gate, flags, moderation pref overrides) flows through this
+   * function, so this is the single switch for the whole feature.
+   */
+  if (DISABLE_AGE_ASSURANCE) {
+    return {
+      status: AgeAssuranceStatus.Unknown,
+      access: AgeAssuranceAccess.Full,
+    }
+  }
 
   /**
    * This can happen if the prefetch fails (such as due to network issues).

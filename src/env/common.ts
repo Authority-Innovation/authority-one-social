@@ -85,6 +85,17 @@ export const CHAT_PROXY_DID: Did =
   process.env.EXPO_PUBLIC_CHAT_PROXY_DID || 'did:web:api.bsky.chat'
 
 /**
+ * Disables the age assurance access gate: signed-in users always get full
+ * access and never see the birthdate/verification interstitial. Intended for
+ * self-hosted deployments whose AppView serves no region config and whose
+ * accounts are provisioned out-of-band. Unset (the default) keeps upstream
+ * Bluesky behavior.
+ */
+export const DISABLE_AGE_ASSURANCE: boolean =
+  process.env.EXPO_PUBLIC_DISABLE_AGE_ASSURANCE === '1' ||
+  process.env.EXPO_PUBLIC_DISABLE_AGE_ASSURANCE === 'true'
+
+/**
  * Metrics API host
  */
 // Authority One spike: metrics disabled (no events sent to bsky.app)
@@ -147,9 +158,17 @@ export const LIVE_EVENTS_URL = IS_DEV
 /**
  * URLs for the app-config web worker. Can be a
  * locally running server, see `env.example` for more.
+ *
+ * EXPO_PUBLIC_APP_CONFIG_URL overrides in any build: point it at a
+ * self-hosted config worker, or set it to an empty string to disable the
+ * fetch entirely (self-hosted deployments cannot use Bluesky's worker, which
+ * rejects foreign origins via CORS).
  */
 export const APP_CONFIG_DEV_URL = process.env.APP_CONFIG_DEV_URL
 export const APP_CONFIG_PROD_URL = `https://app-config.workers.bsky.app`
-export const APP_CONFIG_URL = IS_DEV
-  ? (APP_CONFIG_DEV_URL ?? APP_CONFIG_PROD_URL)
-  : APP_CONFIG_PROD_URL
+export const APP_CONFIG_URL =
+  process.env.EXPO_PUBLIC_APP_CONFIG_URL !== undefined
+    ? process.env.EXPO_PUBLIC_APP_CONFIG_URL
+    : IS_DEV
+      ? (APP_CONFIG_DEV_URL ?? APP_CONFIG_PROD_URL)
+      : APP_CONFIG_PROD_URL

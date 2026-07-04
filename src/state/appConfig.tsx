@@ -29,6 +29,10 @@ export const DEFAULT_APP_CONFIG_RESPONSE: AppConfigResponse = {
 let fetchAppConfigPromise: Promise<AppConfigResponse> | undefined
 
 async function fetchAppConfig(): Promise<AppConfigResponse | null> {
+  // An empty APP_CONFIG_URL means the deployment has no app-config worker
+  // (e.g. self-hosted). Resolve to null so consumers use the defaults and
+  // the query does not enter its failed-fetch retry loop.
+  if (!APP_CONFIG_URL) return null
   try {
     if (!fetchAppConfigPromise) {
       fetchAppConfigPromise = (async () => {
