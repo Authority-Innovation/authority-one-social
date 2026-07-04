@@ -34,6 +34,7 @@ import {useAgeAssurance} from '#/ageAssurance'
 import {NoAccessScreen} from '#/ageAssurance/components/NoAccessScreen'
 import {RedirectOverlay} from '#/ageAssurance/components/RedirectOverlay'
 import {PassiveAnalytics} from '#/analytics/PassiveAnalytics'
+import {OwnerAgentAutoFollow} from '#/features/ownerAgentAutoFollow'
 import {FlatNavigator, RoutesContainer} from '#/Navigation'
 import {Composer} from './Composer'
 import {DrawerContent} from './Drawer'
@@ -182,6 +183,7 @@ export function Shell() {
       )}
 
       <PassiveAnalytics />
+      <OwnerAgentAutoFollow />
     </View>
   )
 }

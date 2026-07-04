@@ -47,6 +47,15 @@ export const AGENTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents`
 export const AGENTS_PAUSE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/pause`
 
 /**
+ * Agent PDS profile editor. POST {agent, displayName?, description?, avatarUrl?,
+ * bannerUrl?} — merge semantics per field: string=set, null/""=clear, absent=keep;
+ * at least one field required. Image urls must be HOSTED https urls (from
+ * /app/media/upload or /app/media/generate). Nothing writes to the PDS until this
+ * call.
+ */
+export const AGENTS_PROFILE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/profile`
+
+/**
  * Chat image upload endpoint (owner-scoped). The app POSTs the RAW image bytes with an
  * image `Content-Type` header; the runtime hosts them in R2 (the same `putRawImage` path
  * the inbound SMS/MMS media uses) and returns the public URL, which the app then sends
@@ -55,6 +64,14 @@ export const AGENTS_PAUSE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/pause
  * (it does NOT parse multipart/form-data). See MEDIA-IN-CHAT-SCOPE.md.
  */
 export const CHAT_IMAGE_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/media/upload`
+
+/**
+ * Server-side AI image generation. POST {prompt, references?:[url]} -> {url,
+ * contentType} — the runtime generates and HOSTS the image, returning a public url
+ * usable anywhere a hosted image url is accepted (e.g. the agent profile editor).
+ * 400 missing prompt; 503 when no provider is configured.
+ */
+export const MEDIA_GENERATE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/media/generate`
 
 /**
  * History read-back endpoint. GET returns the last ~50 turns of the owner's rolling
@@ -85,6 +102,9 @@ export const PERSONAS_UPDATE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas/
 export const PERSONAS_DELETE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas/delete`
 export const PERSONAS_ACTIVE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/personas/active`
 export const VOICES_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/voices`
+/** DELETE /app/voices/:id — remove a custom voice from the library. */
+export const voiceDeleteUrl = (id: string) =>
+  `${VOICES_ENDPOINT}/${encodeURIComponent(id)}`
 
 /**
  * Social-autonomy config endpoint (owner-scoped, agent-scoped like the persona

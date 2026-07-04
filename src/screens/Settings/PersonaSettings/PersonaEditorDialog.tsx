@@ -4,13 +4,18 @@ import {Image} from 'expo-image'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {
+  defaultVoiceSelection,
   fetchPersonaDetail,
+  isValidElevenLabsVoiceId,
   type KnowledgeBaseEntry,
   normalizeKeywords,
   type Persona,
   type PersonaVoice,
   type ReferenceImage,
+  resolveVoiceSelection,
   uploadChatImage,
+  type VoicePickOption,
+  voicePickOptions,
 } from '#/lib/agent-runtime'
 import {openPicker} from '#/lib/media/picker'
 import {
@@ -18,6 +23,12 @@ import {
   useCreatePersonaMutation,
   useUpdatePersonaMutation,
 } from '#/state/queries/personas'
+import {
+  useAddVoiceMutation,
+  useDeleteVoiceMutation,
+  useVoiceRegistryQuery,
+  VoiceWriteError,
+} from '#/state/queries/voices'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
@@ -168,9 +179,280 @@ export function PersonaEditorDialog({
   )
 }
 
-function defaultVoiceIndex(voices: PersonaVoice[]): number {
-  const def = voices.findIndex(v => v.default)
-  return def >= 0 ? def : voices.length > 0 ? 0 : -1
+/** Map the voice-library 400/409/422 codes to actionable copy. */
+function friendlyVoiceError(err: unknown): string {
+  const code = err instanceof VoiceWriteError ? err.code : undefined
+  switch (code) {
+    case 'label-required':
+      return 'Give the voice a label.'
+    case 'label-too-long':
+      return 'That label is too long.'
+    case 'voice-id-required':
+    case 'bad-voice-id':
+      return 'Enter a valid ElevenLabs voice id (8–64 letters and numbers).'
+    case 'voice-exists':
+      return 'That voice is already in your library.'
+    case 'library-full':
+      return 'Your voice library is full (50 voices). Remove one first.'
+    case 'voice-not-found':
+      return 'ElevenLabs doesn’t recognize that voice id.'
+    default:
+      return err instanceof Error ? err.message : 'Could not add the voice.'
+  }
+}
+
+/**
+ * The Voice section: registry-backed picker (builtins + the owner's custom
+ * library) with inline management — paste an ElevenLabs voice id to add, two-tap
+ * remove on custom voices. Management appears only when the registry is live
+ * (`manageable`); the legacy fallback list renders exactly like before.
+ */
+function VoicePicker({
+  options,
+  selectedKey,
+  onSelect,
+  manageable,
+  onDeleted,
+}: {
+  options: VoicePickOption[]
+  selectedKey: string | undefined
+  onSelect: (key: string) => void
+  manageable: boolean
+  onDeleted: (key: string) => void
+}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const addVoice = useAddVoiceMutation()
+  const delVoice = useDeleteVoiceMutation()
+  const [adding, setAdding] = useState(false)
+  const [newLabel, setNewLabel] = useState('')
+  const [newVoiceId, setNewVoiceId] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const [armedDeleteId, setArmedDeleteId] = useState<string | null>(null)
+
+  const onAdd = () => {
+    const label = newLabel.trim()
+    const elId = newVoiceId.trim()
+    if (!label) {
+      setAddError(l`Give the voice a label.`)
+      return
+    }
+    if (!isValidElevenLabsVoiceId(elId)) {
+      setAddError(
+        l`Enter a valid ElevenLabs voice id (8–64 letters and numbers).`,
+      )
+      return
+    }
+    setAddError(null)
+    addVoice.mutate(
+      {label, elevenLabsVoiceId: elId},
+      {
+        onSuccess: res => {
+          setAdding(false)
+          setNewLabel('')
+          setNewVoiceId('')
+          if (res.entry) onSelect(`voice:${res.entry.id}`)
+          Toast.show(l`Voice added.`, {type: 'success'})
+        },
+        onError: err => setAddError(friendlyVoiceError(err)),
+      },
+    )
+  }
+
+  const onDelete = (opt: VoicePickOption) => {
+    if (!opt.customId) return
+    // Two-tap confirm: first tap arms the row, second removes.
+    if (armedDeleteId !== opt.customId) {
+      setArmedDeleteId(opt.customId)
+      return
+    }
+    setArmedDeleteId(null)
+    delVoice.mutate(
+      {id: opt.customId},
+      {
+        onSuccess: () => {
+          onDeleted(opt.key)
+          Toast.show(
+            l`Voice removed. Personas that used it fall back to the default voice.`,
+            {type: 'success'},
+          )
+        },
+        onError: err =>
+          Toast.show(
+            err instanceof Error ? err.message : l`Could not remove the voice.`,
+            {type: 'error'},
+          ),
+      },
+    )
+  }
+
+  return (
+    <View style={[a.gap_xs]}>
+      <TextField.LabelText>
+        <Trans>Voice</Trans>
+      </TextField.LabelText>
+      {options.length === 0 ? (
+        <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
+          <Trans>No voices available yet.</Trans>
+        </Text>
+      ) : (
+        <View style={[a.gap_2xs]}>
+          {options.map(opt => {
+            const selected = opt.key === selectedKey
+            const armed = !!opt.customId && armedDeleteId === opt.customId
+            return (
+              <View
+                key={opt.key}
+                style={[
+                  a.flex_row,
+                  a.align_center,
+                  a.rounded_sm,
+                  a.border,
+                  selected
+                    ? {borderColor: t.palette.primary_500}
+                    : t.atoms.border_contrast_low,
+                ]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use voice ${opt.label}`}
+                  accessibilityHint="Selects this voice for the persona"
+                  accessibilityState={{selected}}
+                  onPress={() => onSelect(opt.key)}
+                  style={[
+                    a.flex_1,
+                    a.flex_row,
+                    a.align_center,
+                    a.justify_between,
+                    a.px_md,
+                    a.py_sm,
+                  ]}>
+                  <View style={[a.flex_row, a.align_center, a.gap_sm]}>
+                    <Text style={[a.text_md, t.atoms.text]}>
+                      {opt.label}
+                      {opt.default ? ' ·' : ''}
+                    </Text>
+                    {opt.kind === 'custom' ? (
+                      <Text style={[a.text_xs, t.atoms.text_contrast_low]}>
+                        <Trans>Custom</Trans>
+                      </Text>
+                    ) : null}
+                  </View>
+                  {selected ? (
+                    <CheckIcon size="sm" fill={t.palette.primary_500} />
+                  ) : null}
+                </Pressable>
+                {manageable && opt.customId ? (
+                  <Button
+                    label={
+                      armed
+                        ? l`Confirm removing voice ${opt.label}`
+                        : l`Remove voice ${opt.label}`
+                    }
+                    size="tiny"
+                    variant="ghost"
+                    color="negative"
+                    disabled={delVoice.isPending}
+                    onPress={() => onDelete(opt)}
+                    style={[a.mx_xs]}>
+                    {armed ? (
+                      <ButtonText>
+                        <Trans>Remove?</Trans>
+                      </ButtonText>
+                    ) : (
+                      <ButtonIcon icon={TrashIcon} />
+                    )}
+                  </Button>
+                ) : null}
+              </View>
+            )
+          })}
+        </View>
+      )}
+
+      {manageable ? (
+        adding ? (
+          <View style={[a.gap_xs, a.pt_xs]}>
+            <TextField.Root>
+              <TextField.Input
+                label={l`Voice label`}
+                placeholder={l`Label (e.g. “Narrator”)`}
+                defaultValue={newLabel}
+                onChangeText={setNewLabel}
+              />
+            </TextField.Root>
+            <TextField.Root>
+              <TextField.Input
+                label={l`ElevenLabs voice id`}
+                placeholder={l`ElevenLabs voice id`}
+                defaultValue={newVoiceId}
+                onChangeText={setNewVoiceId}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </TextField.Root>
+            {addError ? (
+              <Text style={[a.text_xs, {color: t.palette.negative_500}]}>
+                {addError}
+              </Text>
+            ) : null}
+            <View style={[a.flex_row, a.gap_sm]}>
+              <Button
+                label={l`Add this voice`}
+                size="small"
+                variant="solid"
+                color="primary"
+                disabled={addVoice.isPending}
+                onPress={onAdd}>
+                <ButtonText>
+                  <Trans>Add voice</Trans>
+                </ButtonText>
+              </Button>
+              <Button
+                label={l`Cancel adding a voice`}
+                size="small"
+                variant="ghost"
+                color="secondary"
+                onPress={() => {
+                  setAdding(false)
+                  setAddError(null)
+                }}>
+                <ButtonText>
+                  <Trans>Cancel</Trans>
+                </ButtonText>
+              </Button>
+            </View>
+          </View>
+        ) : (
+          <Button
+            label={l`Add a voice from ElevenLabs`}
+            size="small"
+            variant="ghost"
+            color="secondary"
+            onPress={() => setAdding(true)}
+            style={[a.self_start]}>
+            <ButtonIcon icon={PlusIcon} />
+            <ButtonText>
+              <Trans>Add voice</Trans>
+            </ButtonText>
+          </Button>
+        )
+      ) : null}
+    </View>
+  )
+}
+
+/** Legacy flat voices (from GET /app/personas) as picker options — the fallback
+ *  when the registry isn't reachable. Keyed by INDEX because several named slots
+ *  can share one voiceId. Writes the raw ElevenLabs id, exactly as before. */
+function legacyPickOptions(voices: PersonaVoice[]): VoicePickOption[] {
+  return voices.map((v, i) => ({
+    value: v.voiceId,
+    key: `legacy:${i}`,
+    label: v.name,
+    voiceId: v.voiceId,
+    kind: 'legacy' as const,
+    ...(v.default ? {default: true} : {}),
+  }))
 }
 
 function EditorInner({
@@ -195,8 +477,21 @@ function EditorInner({
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [name, setName] = useState(persona?.name ?? '')
-  const [voiceIndex, setVoiceIndex] = useState<number>(
-    defaultVoiceIndex(voices),
+  // VOICE REGISTRY (builtins + custom library). Falls back to the legacy flat list
+  // when the registry isn't available, preserving the old picker exactly.
+  const registry = useVoiceRegistryQuery()
+  const registryOptions = registry.data ? voicePickOptions(registry.data) : []
+  const registryLive = registryOptions.length > 0
+  const voiceOptions = registryLive
+    ? registryOptions
+    : legacyPickOptions(voices)
+  // Selection: an explicit user pick wins; otherwise resolve the persona's STORED
+  // voiceId (raw ElevenLabs id, builtin:<key>, or voice:<id>) against the options;
+  // otherwise the default. Derived (not effect-synced) so registry/detail load
+  // order can't clobber a selection.
+  const [pickedVoiceKey, setPickedVoiceKey] = useState<string | null>(null)
+  const [loadedVoiceId, setLoadedVoiceId] = useState<string | undefined>(
+    persona?.voiceId,
   )
   const [personality, setPersonality] = useState('')
   const [kbSummary, setKbSummary] = useState('')
@@ -222,8 +517,7 @@ function EditorInner({
         setEntries(d.knowledgeBase.entries.map(toDraft))
         setRefImages(loadRefDrafts(d.referenceImages))
         setFiction(fictionDraftFrom(d.fiction))
-        const vi = voices.findIndex(v => v.voiceId === d.voiceId)
-        if (vi >= 0) setVoiceIndex(vi)
+        setLoadedVoiceId(d.voiceId)
       } else if (res.signedOut) {
         setLoadError('Sign in to edit this persona.')
       } else {
@@ -237,7 +531,14 @@ function EditorInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per persona; voices read via closure
   }, [persona?.id])
 
-  const voiceId = voiceIndex >= 0 ? voices[voiceIndex]?.voiceId : undefined
+  const selectedVoiceKey =
+    pickedVoiceKey ??
+    resolveVoiceSelection(voiceOptions, loadedVoiceId) ??
+    defaultVoiceSelection(voiceOptions)
+  const selectedVoiceOption = voiceOptions.find(o => o.key === selectedVoiceKey)
+  // Save value: the matched option's write-form (builtin:/voice:/raw). A stored id
+  // the registry doesn't know keeps its raw value untouched on save.
+  const voiceId = selectedVoiceOption?.value ?? loadedVoiceId
   const trimmedName = name.trim()
   const canSave =
     trimmedName.length > 0 && !loading && !create.isPending && !update.isPending
@@ -426,53 +727,17 @@ function EditorInner({
             </TextField.Root>
           </View>
 
-          <View style={[a.gap_xs]}>
-            <TextField.LabelText>
-              <Trans>Voice</Trans>
-            </TextField.LabelText>
-            {voices.length === 0 ? (
-              <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-                <Trans>No voices available yet.</Trans>
-              </Text>
-            ) : (
-              <View style={[a.gap_2xs]}>
-                {voices.map((v, index) => {
-                  // Select by slot INDEX, not voiceId: several named slots can share one
-                  // voiceId; keying on voiceId would highlight all + collide React keys.
-                  const selected = index === voiceIndex
-                  return (
-                    <Pressable
-                      key={`${index}:${v.voiceId}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Use voice ${v.name}`}
-                      accessibilityHint="Selects this voice for the persona"
-                      accessibilityState={{selected}}
-                      onPress={() => setVoiceIndex(index)}
-                      style={[
-                        a.flex_row,
-                        a.align_center,
-                        a.justify_between,
-                        a.rounded_sm,
-                        a.px_md,
-                        a.py_sm,
-                        a.border,
-                        selected
-                          ? {borderColor: t.palette.primary_500}
-                          : t.atoms.border_contrast_low,
-                      ]}>
-                      <Text style={[a.text_md, t.atoms.text]}>
-                        {v.name}
-                        {v.default ? ' ·' : ''}
-                      </Text>
-                      {selected ? (
-                        <CheckIcon size="sm" fill={t.palette.primary_500} />
-                      ) : null}
-                    </Pressable>
-                  )
-                })}
-              </View>
-            )}
-          </View>
+          <VoicePicker
+            options={voiceOptions}
+            selectedKey={selectedVoiceKey}
+            onSelect={setPickedVoiceKey}
+            manageable={registryLive}
+            onDeleted={deletedKey => {
+              // The removed voice can no longer be the selection; personas still
+              // pointing at it fall back to the default voice server-side.
+              if (selectedVoiceKey === deletedKey) setPickedVoiceKey(null)
+            }}
+          />
 
           <View style={[a.gap_xs]}>
             <TextField.LabelText>

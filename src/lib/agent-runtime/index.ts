@@ -81,6 +81,15 @@ export {
   normalizeNearbyPlace,
   pickNearestNamed,
 } from './poiClient'
+export {
+  AGENT_BIO_MAX_GRAPHEMES,
+  AGENT_DISPLAY_NAME_MAX_GRAPHEMES,
+  type AgentProfileInput,
+  type AgentProfileWriteResult,
+  generateHostedImage,
+  type GenerateImageResult,
+  updateAgentProfile,
+} from './profileClient'
 export {fetchSceneTags, type SceneImage} from './sceneClient'
 export {
   applyAutoSocialPatch,
@@ -134,3 +143,20 @@ export {
 } from './threadsClient'
 export {bytesToBase64, fetchBobAudioBase64} from './tts'
 export * from './types'
+export {
+  addLibraryVoice,
+  type BuiltinVoice,
+  type CustomVoice,
+  defaultVoiceSelection,
+  fetchVoiceRegistry,
+  isValidElevenLabsVoiceId,
+  normalizeVoiceRegistry,
+  removeLibraryVoice,
+  resolveVoiceSelection,
+  voiceDisplayLabel,
+  type VoicePickOption,
+  voicePickOptions,
+  type VoiceRegistry,
+  type VoiceRegistryResult,
+  type VoiceWriteResult,
+} from './voicesClient'
