@@ -72,6 +72,12 @@ export interface ChatMessage {
    * thread's resolved agent name.
    */
   senderName?: string
+  /**
+   * Identity string of who sent this turn (a DID or handle), when the runtime stamps
+   * one on group rows. Lets the UI recognize the CURRENT USER's own turns regardless
+   * of what display name the runtime stored for them, and label them "You".
+   */
+  senderId?: string
   createdAt: number
 }
 

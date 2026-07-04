@@ -8,8 +8,10 @@ import {
   View,
 } from 'react-native'
 import {Image} from 'expo-image'
+import {useNavigation} from '@react-navigation/native'
 
 import {
+  type ChatMessage,
   DEFAULT_AGENT,
   pickActiveVoiceId,
   pickAgentHeaderName,
@@ -21,8 +23,10 @@ import {openPicker} from '#/lib/media/picker'
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
+  type NavigationProp,
 } from '#/lib/routes/types'
 import {usePersonasQuery} from '#/state/queries/personas'
+import {useThreadMembersQuery} from '#/state/queries/threads'
 import {useSession} from '#/state/session'
 import {atoms as a, useBreakpoints, useTheme} from '#/alf'
 import {Button, ButtonIcon} from '#/components/Button'
@@ -54,7 +58,8 @@ export function AgentChatScreen({route}: Props) {
   // SINGLE-LOGIN: the agent channel authenticates with the user's atproto/PDS
   // session (their DID) — the same login that's required to be in the app — so we
   // gate on that session, not a separate Authority One (Supabase) account.
-  const {hasSession} = useSession()
+  const {hasSession, currentAccount} = useSession()
+  const navigation = useNavigation<NavigationProp>()
   // Lift the composer above the native bottom tab bar (and mobile-web bottom
   // bar). Returns 0 on desktop web, so the web centered layout is unaffected.
   const bottomBarOffset = useBottomBarOffset(8)
@@ -78,6 +83,36 @@ export function AgentChatScreen({route}: Props) {
   const agentName = pickAgentHeaderName(personas?.activeName, profileName)
   // Voice-mode voice follows the active persona's voiceId (else the runtime default).
   const personaVoiceId = pickActiveVoiceId(personas?.activeVoiceId)
+
+  // GROUP HEADER PARTICIPANTS: who's in this chat, at a glance. Agent names first
+  // (that's what varies per group); a people-only group falls back to a member count.
+  // Tapping the row opens the existing Manage-group screen. Group threads only.
+  const membersQuery = useThreadMembersQuery(threadId ?? '')
+  const participants = membersQuery.data?.members ?? []
+  const participantAgentNames = participants
+    .filter(m => m.isAgent || m.kind === 'agent')
+    .map(m => m.name ?? m.handle ?? m.id)
+  const participantsLabel = threadId
+    ? participantAgentNames.length > 0
+      ? participantAgentNames.slice(0, 3).join(', ') +
+        (participantAgentNames.length > 3
+          ? ` +${participantAgentNames.length - 3}`
+          : '')
+      : participants.length > 0
+        ? `${participants.length} member${participants.length === 1 ? '' : 's'}`
+        : null
+    : null
+
+  // The CURRENT USER's identity strings, lowercased, so a hydrated group row stamped
+  // with the user's own senderId is labeled "You" — never whatever junk display
+  // name/handle the runtime may have stored for the owner (see fix: "@ok.").
+  const selfIds = new Set(
+    [currentAccount?.did, currentAccount?.handle]
+      .filter(Boolean)
+      .map(s => s!.toLowerCase()),
+  )
+  const isSelfMessage = (m: ChatMessage) =>
+    !!m.senderId && selfIds.has(m.senderId.toLowerCase())
 
   // Constrain the conversation to a readable, centered column on web/wide
   // screens; on narrow windows / native it falls back to full width.
@@ -277,13 +312,32 @@ export function AgentChatScreen({route}: Props) {
           <Layout.Header.TitleText style={headerTitleStyle}>
             {threadTitle ?? `Talk to ${agentName}`}
           </Layout.Header.TitleText>
-          {!showMic ? (
-            <Layout.Header.SubtitleText>
-              Voice unavailable on this device
-            </Layout.Header.SubtitleText>
-          ) : voiceModeOn && voiceStatusLabel ? (
+          {voiceModeOn && voiceStatusLabel ? (
             <Layout.Header.SubtitleText>
               {voiceStatusLabel}
+            </Layout.Header.SubtitleText>
+          ) : participantsLabel ? (
+            // Compact participant indicator for group chats — the agents in this
+            // session at a glance. Tapping opens the existing Manage-group screen.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View group members"
+              accessibilityHint="Opens the manage group screen"
+              onPress={() =>
+                threadId
+                  ? navigation.navigate('GroupManage', {
+                      threadId,
+                      title: threadTitle ?? '',
+                    })
+                  : undefined
+              }>
+              <Layout.Header.SubtitleText>
+                {participantsLabel}
+              </Layout.Header.SubtitleText>
+            </Pressable>
+          ) : !showMic ? (
+            <Layout.Header.SubtitleText>
+              Voice unavailable on this device
             </Layout.Header.SubtitleText>
           ) : null}
         </Layout.Header.Content>
@@ -346,13 +400,20 @@ export function AgentChatScreen({route}: Props) {
                 key={m.id}
                 message={m}
                 // Group threads attribute every message; 1:1 chat shows no per-message
-                // name. The owner's own turns are "You"; an agent turn uses the runtime-
-                // supplied sender name, falling back to the thread's agent name.
+                // name. The user's own turns are "You" (matched by role OR by the row's
+                // stamped senderId, so a hydrated own-turn never shows the runtime's
+                // stored owner label). A settled agent turn uses the runtime-supplied
+                // sender name, falling back to the thread's agent name. A PENDING
+                // placeholder gets NO name until the runtime says who is replying —
+                // attributing it to the default persona claimed agents were "typing"
+                // when they weren't going to reply.
                 senderName={
                   threadId
-                    ? m.role === 'user'
+                    ? m.role === 'user' || isSelfMessage(m)
                       ? 'You'
-                      : (m.senderName ?? agentName)
+                      : m.pending && !m.senderName
+                        ? undefined
+                        : (m.senderName ?? agentName)
                     : undefined
                 }
                 decideDisabled={isStreaming}

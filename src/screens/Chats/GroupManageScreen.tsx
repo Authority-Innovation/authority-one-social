@@ -147,6 +147,7 @@ export function GroupManageScreen({route}: Props) {
                       key={`${m.kind}:${m.id}`}
                       member={m}
                       isSelf={isSelf}
+                      selfHandle={currentAccount?.handle}
                       onRemove={
                         isCreator && !memberIsCreator
                           ? () => onRemove(m)
@@ -304,11 +305,16 @@ function isDid(s?: string): boolean {
 function MemberRow({
   member,
   isSelf,
+  selfHandle,
   onRemove,
   removing,
 }: {
   member: ThreadMember
   isSelf?: boolean
+  /** The current account's real handle, shown on the self row instead of whatever
+   *  identity string the runtime stored for the owner (which can be junk, e.g. "ok."
+   *  from a legacy config write — the session is the source of truth for SELF). */
+  selfHandle?: string
   onRemove?: () => void
   removing?: boolean
 }) {
@@ -320,9 +326,11 @@ function MemberRow({
   // the display name / handle; and a generic fallback for a bare-DID member the runtime
   // didn't resolve a name for (see the runtime note in the handover).
   const handleLabel =
-    member.handle && !isDid(member.handle)
-      ? sanitizeHandle(member.handle, '@')
-      : undefined
+    isSelf && selfHandle
+      ? sanitizeHandle(selfHandle, '@')
+      : member.handle && !isDid(member.handle)
+        ? sanitizeHandle(member.handle, '@')
+        : undefined
   const idLabel = !isDid(member.id) ? member.id : undefined
   const title = isSelf
     ? l`You`

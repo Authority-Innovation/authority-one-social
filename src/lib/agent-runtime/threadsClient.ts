@@ -316,12 +316,14 @@ function toThreadMessage(raw: unknown): ChatMessage | null {
   if (role === 'assistant' && (silent || (!text && mediaUrls.length === 0))) {
     return null
   }
+  const senderId = str(r.senderId)
   return {
     id: msgId(role),
     role,
     text,
     channel: typeof r.channel === 'string' ? r.channel : 'app',
     ...(senderName ? {senderName} : {}),
+    ...(senderId ? {senderId} : {}),
     mediaUrls,
     createdAt: Number.isFinite(at) ? at : Date.now(),
   }
