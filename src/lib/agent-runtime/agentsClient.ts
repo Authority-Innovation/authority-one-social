@@ -13,6 +13,8 @@ import {AGENTS_ENDPOINT, AGENTS_PAUSE_ENDPOINT} from './config'
 export interface OwnerAgent {
   /** The agent's PDS handle (e.g. ada.pds.authority-one.com) — the id used to add it. */
   handle: string
+  /** The agent's PDS DID, when the runtime row carries it. */
+  did?: string
   /** Display name from the runtime; the UI can refine it from the atproto profile. */
   displayName?: string
   /** Avatar URL when the runtime resolves one; usually null (the UI enriches it). */
@@ -90,6 +92,7 @@ export function normalizeOwnerAgents(json: unknown): OwnerAgent[] {
     const active = typeof r.active === 'boolean' ? r.active : undefined
     out.push({
       handle,
+      did: str(r.did),
       displayName: str(r.displayName) ?? str(r.name),
       avatar: str(r.avatar),
       number: str(r.number),

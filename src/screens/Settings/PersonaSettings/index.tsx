@@ -3,7 +3,11 @@ import {ActivityIndicator, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
-import {type Persona} from '#/lib/agent-runtime'
+import {
+  type Persona,
+  voiceDisplayLabel,
+  voicePickOptions,
+} from '#/lib/agent-runtime'
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
@@ -17,6 +21,7 @@ import {
   usePersonasQuery,
   useSetActivePersonaMutation,
 } from '#/state/queries/personas'
+import {useVoiceRegistryQuery} from '#/state/queries/voices'
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
@@ -30,6 +35,7 @@ import * as Layout from '#/components/Layout'
 import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
+import {AgentProfileDialog} from './AgentProfileDialog'
 import {PersonaEditorDialog} from './PersonaEditorDialog'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'PersonaSettings'>
@@ -53,12 +59,19 @@ export function PersonaSettingsScreen({route}: Props) {
   const setActive = useSetActivePersonaMutation(agent)
   const del = useDeletePersonaMutation(agent)
   const editorControl = Dialog.useDialogControl()
+  const profileControl = Dialog.useDialogControl()
   const deletePrompt = Prompt.usePromptControl()
   const [editing, setEditing] = useState<Persona | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Persona | null>(null)
 
   const personas = data?.personas ?? []
   const voices = data?.voices ?? []
+  // Voice REGISTRY (builtins + custom library). Personas may store the new
+  // `builtin:`/`voice:` forms, which the legacy flat list can't label.
+  const voiceRegistry = useVoiceRegistryQuery()
+  const registryOptions = voiceRegistry.data
+    ? voicePickOptions(voiceRegistry.data)
+    : []
   const activeId = data?.activePersonaId
   const canDelete = personas.length > 1
   const agentRow = agent
@@ -107,6 +120,20 @@ export function PersonaSettingsScreen({route}: Props) {
               number={agentRow?.number}
             />
           ) : null}
+          {agent && !notYourAgent ? (
+            // Profile editor needs an explicit agent target (handle/DID), so it's
+            // only offered on the scoped editor opened from My Agents.
+            <SettingsList.PressableItem
+              label={l`Agent profile`}
+              accessibilityHint={l`Edit this agent's public profile`}
+              onPress={() => profileControl.open()}>
+              <SettingsList.ItemIcon icon={PencilIcon} />
+              <SettingsList.ItemText>
+                <Trans>Profile</Trans>
+              </SettingsList.ItemText>
+              <SettingsList.Chevron />
+            </SettingsList.PressableItem>
+          ) : null}
           {!notYourAgent ? (
             <>
               <SettingsList.PressableItem
@@ -144,7 +171,9 @@ export function PersonaSettingsScreen({route}: Props) {
                 persona={p}
                 active={p.id === activeId}
                 voiceName={
-                  voices.find(v => v.voiceId === p.voiceId)?.name ?? p.voiceId
+                  voiceDisplayLabel(registryOptions, p.voiceId) ??
+                  voices.find(v => v.voiceId === p.voiceId)?.name ??
+                  p.voiceId
                 }
                 switching={setActive.isPending}
                 onSetActive={() =>
@@ -199,6 +228,10 @@ export function PersonaSettingsScreen({route}: Props) {
         voices={voices}
         agent={agent}
       />
+
+      {agent ? (
+        <AgentProfileDialog control={profileControl} agent={agent} />
+      ) : null}
 
       <Prompt.Basic
         control={deletePrompt}
