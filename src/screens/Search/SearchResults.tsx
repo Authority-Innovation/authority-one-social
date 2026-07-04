@@ -1,6 +1,6 @@
 import {memo, useCallback, useMemo, useState} from 'react'
 import {ActivityIndicator, View} from 'react-native'
-import {type AppBskyFeedDefs} from '@atproto/api'
+import {type AppBskyFeedDefs, XRPCError} from '@atproto/api'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {urls} from '#/lib/constants'
@@ -55,6 +55,7 @@ let SearchResults = ({
         component: (
           <SearchScreenPostResults
             query={queryWithParams}
+            rawQuery={query}
             sort="top"
             active={activeTab === 0}
           />
@@ -123,15 +124,18 @@ function EmptyState({
   messageText,
   error,
   children,
+  header,
 }: {
   messageText: React.ReactNode
   error?: string
   children?: React.ReactNode
+  header?: React.ReactNode
 }) {
   const t = useTheme()
 
   return (
     <Layout.Content>
+      {header}
       <View style={[a.p_xl]}>
         <View style={[t.atoms.bg_contrast_25, a.rounded_sm, a.p_lg]}>
           <Text style={[a.text_md]}>{messageText}</Text>
@@ -212,12 +216,25 @@ type SearchResultSlice =
       key: string
     }
 
+/**
+ * Post search is optional infrastructure for self-hosted AppViews. When the
+ * backing service does not implement app.bsky.feed.searchPosts it returns
+ * 501 MethodNotImplemented; treat that as "no post results" rather than an
+ * error so the tab still renders its other content (e.g. matching people).
+ */
+function isMethodNotImplemented(error: unknown) {
+  return error instanceof XRPCError && error.error === 'MethodNotImplemented'
+}
+
 let SearchScreenPostResults = ({
   query,
+  rawQuery,
   sort,
   active,
 }: {
   query: string
+  /** Query without structured params, used for the people cluster on Top. */
+  rawQuery?: string
   sort?: 'top' | 'latest'
   active: boolean
 }): React.ReactNode => {
@@ -241,6 +258,20 @@ let SearchScreenPostResults = ({
     isFetchingNextPage,
     hasNextPage,
   } = useSearchPostsQuery({query: augmentedQuery, sort, enabled: active})
+
+  // The Top tab surfaces a small cluster of matching people above the post
+  // results, so a name search lands on relevant profiles even when post
+  // search returns nothing (or is unimplemented on the AppView).
+  const isTop = sort === 'top'
+  const {data: actorResults} = useActorSearch({
+    query: rawQuery || '',
+    enabled: active && isTop && !!rawQuery && hasSession,
+    limit: 5,
+  })
+  const topPeople = useMemo(
+    () => actorResults?.pages[0]?.actors ?? [],
+    [actorResults],
+  )
 
   const t = useTheme()
   const onPullToRefresh = useCallback(async () => {
@@ -308,6 +339,30 @@ let SearchScreenPostResults = ({
     requestSwitchToAccount({requestedAccount: 'new'})
   }
 
+  const peopleSection =
+    isTop && topPeople.length > 0 ? (
+      <View style={[a.border_b, t.atoms.border_contrast_low, a.pb_sm]}>
+        <Text
+          style={[
+            a.px_lg,
+            a.pt_lg,
+            a.pb_xs,
+            a.text_md,
+            a.font_bold,
+            t.atoms.text_contrast_medium,
+          ]}>
+          <Trans>People</Trans>
+        </Text>
+        {topPeople.map((profile, index) => (
+          <SearchScreenProfileButton
+            key={profile.did}
+            position={index}
+            profile={profile}
+          />
+        ))}
+      </View>
+    ) : null
+
   if (!hasSession) {
     return (
       <SearchError title={l`Search is currently unavailable when logged out`}>
@@ -334,17 +389,33 @@ let SearchScreenPostResults = ({
     )
   }
 
-  return error ? (
-    <EmptyState
-      messageText={l`We’re sorry, but your search could not be completed. Please try again in a few minutes.`}
-      error={cleanError(error)}
-    />
-  ) : (
+  if (error) {
+    // An AppView without post search is an expected deployment state, not a
+    // user-facing failure: fall through to the regular no-results treatment
+    // (keeping the people cluster, when present) instead of an error box.
+    const unsupported = isMethodNotImplemented(error)
+    return (
+      <EmptyState
+        header={peopleSection}
+        messageText={
+          unsupported ? (
+            <NoResultsText query={query} />
+          ) : (
+            l`We’re sorry, but your search could not be completed. Please try again in a few minutes.`
+          )
+        }
+        error={unsupported ? undefined : cleanError(error)}
+      />
+    )
+  }
+
+  return (
     <>
       {isFetched ? (
         <>
           {posts.length ? (
             <List
+              ListHeaderComponent={peopleSection}
               data={items}
               renderItem={({
                 item,
@@ -381,7 +452,10 @@ let SearchScreenPostResults = ({
               }
             />
           ) : (
-            <EmptyState messageText={<NoResultsText query={query} />} />
+            <EmptyState
+              header={peopleSection}
+              messageText={<NoResultsText query={query} />}
+            />
           )}
         </>
       ) : (
