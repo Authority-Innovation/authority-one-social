@@ -11,7 +11,6 @@ import {shareText, shareUrl} from '#/lib/sharing'
 import {toShareUrl} from '#/lib/strings/url-helpers'
 import {useProfileShadow} from '#/state/cache/profile-shadow'
 import {useSession} from '#/state/session'
-import {useBreakpoints} from '#/alf'
 import {useDialogControl} from '#/components/Dialog'
 import {EmbedDialog} from '#/components/dialogs/Embed'
 import {SendViaChatDialog} from '#/components/dms/dialogs/ShareViaChatDialog'
@@ -22,7 +21,6 @@ import {PaperPlane_Stroke2_Corner0_Rounded as Send} from '#/components/icons/Pap
 import * as Menu from '#/components/Menu'
 import {useAgeAssurance} from '#/ageAssurance'
 import {useAnalytics} from '#/analytics'
-import {IS_WEB} from '#/env'
 import {useDevMode} from '#/storage/hooks/dev-mode'
 import {type ShareMenuItemsProps} from './ShareMenuItems.types'
 
@@ -34,7 +32,6 @@ let ShareMenuItems = ({
 }: ShareMenuItemsProps): React.ReactNode => {
   const ax = useAnalytics()
   const {hasSession} = useSession()
-  const {gtMobile} = useBreakpoints()
   const {_} = useLingui()
   const navigation = useNavigation<NavigationProp>()
   const embedPostControl = useDialogControl()
@@ -72,7 +69,11 @@ let ShareMenuItems = ({
     })
   }
 
-  const canEmbed = IS_WEB && gtMobile && !hideInPWI
+  // Embed is disabled: the dialog emits embed.bsky.app markup (EMBED_SCRIPT),
+  // which is Bluesky-branded and cannot resolve posts on our network. Re-enable
+  // when we host our own embed service:
+  //   const canEmbed = IS_WEB && gtMobile && !hideInPWI
+  const canEmbed = false
 
   const onShareATURI = () => {
     shareText(postUri)

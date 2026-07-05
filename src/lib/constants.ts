@@ -18,6 +18,12 @@ export const PUBLIC_BSKY_SERVICE =
 export const AUTHORITY_ONE_SERVICE =
   process.env.EXPO_PUBLIC_PDS_URL || 'https://pds.authority-one.com'
 export const DEFAULT_SERVICE = AUTHORITY_ONE_SERVICE
+// Authority One: public web-app origin. Every user-visible share/permalink URL
+// (share sheet, copy link, invites, QR codes) is built on this host so links
+// unfurl with our branding instead of bsky.app. Override per-env via
+// EXPO_PUBLIC_WEB_APP_URL. No trailing slash.
+export const PUBLIC_APP_HOST: string =
+  process.env.EXPO_PUBLIC_WEB_APP_URL || 'https://app.authority-one.com'
 
 // Agent runtime (Cloudflare Worker): conversational chat agent + approval-gated actions.
 // Override per-env with EXPO_PUBLIC_AGENT_RUNTIME_URL (see src/lib/agent-runtime/config.ts).
@@ -50,7 +56,9 @@ export const HELP_DESK_URL = AUTHORITY_ONE_SUPPORT_URL
 export const CHAT_SERVICE = 'https://api.bsky.chat'
 export const EMBED_SERVICE = 'https://embed.bsky.app'
 export const EMBED_SCRIPT = `${EMBED_SERVICE}/static/embed.js`
-export const BSKY_DOWNLOAD_URL = 'https://bsky.app/download'
+// Was: https://bsky.app/download — repointed to our web app. There is no
+// dedicated /download landing page yet, so this resolves to the web app root.
+export const BSKY_DOWNLOAD_URL = PUBLIC_APP_HOST
 export const STARTER_PACK_MAX_SIZE = 150
 export const CARD_ASPECT_RATIO = 1200 / 630
 
@@ -252,10 +260,11 @@ export const EMOJI_REACTION_LIMIT = 5
 export const urls = {
   website: {
     blog: {
-      findFriendsAnnouncement:
-        'https://bsky.social/about/blog/12-16-2025-find-friends',
-      initialVerificationAnnouncement: `https://bsky.social/about/blog/04-21-2025-verification`,
-      searchTipsAndTricks: 'https://bsky.social/about/blog/05-31-2024-search',
+      // Were Bluesky blog posts (bsky.social/about/blog/...) — repointed at
+      // our own support page until we have equivalent docs.
+      findFriendsAnnouncement: AUTHORITY_ONE_SUPPORT_URL,
+      initialVerificationAnnouncement: AUTHORITY_ONE_SUPPORT_URL,
+      searchTipsAndTricks: AUTHORITY_ONE_SUPPORT_URL,
     },
     support: {
       // TODO(legal): no find-friends-specific policy yet — falls back to the

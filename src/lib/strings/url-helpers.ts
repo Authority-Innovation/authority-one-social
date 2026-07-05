@@ -2,13 +2,22 @@ import {AtUri} from '@atproto/api'
 import {parse} from 'psl'
 import TLDs from 'tlds'
 
-import {BSKY_SERVICE} from '#/lib/constants'
+import {BSKY_SERVICE, PUBLIC_APP_HOST} from '#/lib/constants'
 import {isInvalidHandle} from '#/lib/strings/handles'
 import {startUriToStarterPackUri} from '#/lib/strings/starter-pack'
 import {logger} from '#/logger'
 
+// PUBLIC_APP_HOST (re-exported from #/lib/constants) is the canonical public
+// web host for THIS app. Share links, permalinks, and composer/DM embeds are
+// all built against it so previews unfurl with One branding instead of
+// bsky.app.
+export {PUBLIC_APP_HOST}
+// Upstream host, still recognized as "internal" (see isBskyAppUrl) so links
+// shared before the rebrand keep resolving in-app.
 export const BSKY_APP_HOST = 'https://bsky.app'
 const BSKY_TRUSTED_HOSTS = [
+  'app\\.authority-one\\.com',
+  'authority-one\\.com',
   'bsky\\.app',
   'bsky\\.social',
   'blueskyweb\\.xyz',
@@ -80,7 +89,7 @@ export function toShortUrl(url: string): string {
 
 export function toShareUrl(url: string): string {
   if (!url.startsWith('https')) {
-    const urlp = new URL('https://bsky.app')
+    const urlp = new URL(PUBLIC_APP_HOST)
     urlp.pathname = url
     url = urlp.toString()
   }
@@ -88,11 +97,13 @@ export function toShareUrl(url: string): string {
 }
 
 export function toBskyAppUrl(url: string): string {
-  return new URL(url, BSKY_APP_HOST).toString()
+  return new URL(url, PUBLIC_APP_HOST).toString()
 }
 
 export function isBskyAppUrl(url: string): boolean {
-  return url.startsWith('https://bsky.app/')
+  return (
+    url.startsWith(`${PUBLIC_APP_HOST}/`) || url.startsWith(`${BSKY_APP_HOST}/`)
+  )
 }
 
 export function isRelativeUrl(url: string): boolean {
@@ -100,10 +111,7 @@ export function isRelativeUrl(url: string): boolean {
 }
 
 export function isBskyRSSUrl(url: string): boolean {
-  return (
-    (url.startsWith('https://bsky.app/') || isRelativeUrl(url)) &&
-    /\/rss\/?$/.test(url)
-  )
+  return (isBskyAppUrl(url) || isRelativeUrl(url)) && /\/rss\/?$/.test(url)
 }
 
 export function isExternalUrl(url: string): boolean {
@@ -340,23 +348,18 @@ export function splitApexDomain(hostname: string): [string, string] {
 }
 
 export function createBskyAppAbsoluteUrl(path: string): string {
-  const sanitizedPath = path.replace(BSKY_APP_HOST, '').replace(/^\/+/, '')
-  return `${BSKY_APP_HOST.replace(/\/$/, '')}/${sanitizedPath}`
+  const sanitizedPath = path
+    .replace(PUBLIC_APP_HOST, '')
+    .replace(BSKY_APP_HOST, '')
+    .replace(/^\/+/, '')
+  return `${PUBLIC_APP_HOST.replace(/\/$/, '')}/${sanitizedPath}`
 }
 
+// Was Bluesky's referrer-hiding redirect (https://go.bsky.app/redirect?u=…),
+// a user-visible bsky host on every proxied external link. We have no
+// equivalent service, so links open directly.
 export function createProxiedUrl(url: string): string {
-  let u
-  try {
-    u = new URL(url)
-  } catch {
-    return url
-  }
-
-  if (u?.protocol !== 'http:' && u?.protocol !== 'https:') {
-    return url
-  }
-
-  return `https://go.bsky.app/redirect?u=${encodeURIComponent(url)}`
+  return url
 }
 
 export function isShortLink(url: string): boolean {

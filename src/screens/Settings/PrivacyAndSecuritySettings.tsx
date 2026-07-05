@@ -116,20 +116,18 @@ export function PrivacyAndSecuritySettingsScreen({}: Props) {
                 <Admonition.Content>
                   <Admonition.Text>
                     <Trans>
-                      Note: Bluesky is an open and public network. This setting
-                      only limits the visibility of your content on the Bluesky
-                      app and website, and other apps may not respect this
-                      setting. Your content may still be shown to logged-out
-                      users by other apps and websites.
+                      Note: One is an open and public network. This setting only
+                      limits the visibility of your content on the One app and
+                      website, and other apps may not respect this setting. Your
+                      content may still be shown to logged-out users by other
+                      apps and websites.
                     </Trans>
                   </Admonition.Text>
                   <Admonition.Text>
                     <InlineLinkText
-                      label={_(
-                        msg`Learn more about what is public on Bluesky.`,
-                      )}
+                      label={_(msg`Learn more about what is public on One.`)}
                       to={AUTHORITY_ONE_SUPPORT_URL}>
-                      <Trans>Learn more about what is public on Bluesky.</Trans>
+                      <Trans>Learn more about what is public on One.</Trans>
                     </InlineLinkText>
                   </Admonition.Text>
                 </Admonition.Content>

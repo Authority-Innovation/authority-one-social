@@ -1,17 +1,20 @@
 import {Dimensions} from 'react-native'
 
+import {PUBLIC_APP_HOST} from '#/lib/constants'
 import {IS_WEB} from '#/env'
 
 const {height: SCREEN_HEIGHT} = Dimensions.get('window')
 
+// The /iframe/youtube.html wrapper is copied into web-build/ by build-web-cf
+// (source: bskyweb/static/iframe/). Was https://bsky.app.
 const IFRAME_HOST = IS_WEB
   ? // @ts-ignore only for web
     window.location.host === 'localhost:8100'
     ? 'http://localhost:8100'
-    : 'https://bsky.app'
+    : PUBLIC_APP_HOST
   : __DEV__ && !process.env.JEST_WORKER_ID
     ? 'http://localhost:8100'
-    : 'https://bsky.app'
+    : PUBLIC_APP_HOST
 
 export const embedPlayerSources = [
   'youtube',

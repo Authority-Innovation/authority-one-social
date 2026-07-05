@@ -53,7 +53,7 @@ export function Content({state}: {state: PolicyUpdateState}) {
     },
     blog: {
       overridePresentation: false,
-      to: `https://bsky.social/about/blog/08-14-2025-updated-terms-and-policies`,
+      to: AUTHORITY_ONE_SUPPORT_URL,
       label: _(msg`Our blog post`),
     },
   }
@@ -168,7 +168,7 @@ export function Content({state}: {state: PolicyUpdateState}) {
           <Button
             label={_(msg`Continue`)}
             accessibilityHint={_(
-              msg`Tap to acknowledge that you understand and agree to these updates and continue using Bluesky`,
+              msg`Tap to acknowledge that you understand and agree to these updates and continue using One`,
             )}
             color="primary"
             size="large"

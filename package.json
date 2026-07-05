@@ -48,7 +48,7 @@
     "use-build-number": "./scripts/useBuildNumberEnv.sh",
     "use-build-number-with-bump": "./scripts/useBuildNumberEnvWithBump.sh",
     "build-web": "expo export:web && node ./scripts/post-web-build.js",
-    "build-web-cf": "WEB_PUBLIC_PATH=/ expo export:web && cp cloudflare/_redirects cloudflare/_headers web-build/",
+    "build-web-cf": "WEB_PUBLIC_PATH=/ expo export:web && cp cloudflare/_redirects cloudflare/_headers cloudflare/social-card.png cloudflare/apple-touch-icon.png web-build/ && mkdir -p web-build/iframe && cp bskyweb/static/iframe/* web-build/iframe/",
     "build-all": "pnpm intl:build && pnpm use-build-number-with-bump eas build --platform all",
     "build-ios": "pnpm use-build-number-with-bump eas build -p ios",
     "build-android": "pnpm use-build-number-with-bump eas build -p android",

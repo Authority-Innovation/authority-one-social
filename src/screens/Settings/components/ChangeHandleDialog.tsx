@@ -16,7 +16,7 @@ import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
 
-import {HITSLOP_10, urls} from '#/lib/constants'
+import {AUTHORITY_ONE_SUPPORT_URL, HITSLOP_10, urls} from '#/lib/constants'
 import {cleanError} from '#/lib/strings/errors'
 import {
   createFullHandle,
@@ -281,7 +281,7 @@ function ProvidedHandlePage({
                     context: `english-only-resource`,
                   }),
                 )}
-                to="https://bsky.social/about/blog/4-28-2023-domain-handle-tutorial"
+                to={AUTHORITY_ONE_SUPPORT_URL}
                 style={[a.font_semi_bold]}
                 disableMismatchWarning>
                 Learn more here.

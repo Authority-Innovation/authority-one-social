@@ -3,6 +3,7 @@ import {ChatBskyGroupDefs} from '@atproto/api'
 import {useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
+import {PUBLIC_APP_HOST} from '#/lib/constants'
 import {type NavigationProp} from '#/lib/routes/types'
 import {
   type ChatInvitePreview,
@@ -95,7 +96,7 @@ export function Root({
         color: 'primary',
         disabled: false,
         onPress: () => {
-          void setStringAsync(`https://bsky.app/chat/${preview.code}`)
+          void setStringAsync(`${PUBLIC_APP_HOST}/chat/${preview.code}`)
           Toast.show(l`Copied to clipboard`, {type: 'success'})
         },
       }

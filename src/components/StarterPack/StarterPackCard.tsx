@@ -99,7 +99,7 @@ export function Card({
       ) : null}
       {!!joinedAllTimeCount && joinedAllTimeCount >= 50 && (
         <Text style={[a.font_semi_bold, t.atoms.text_contrast_medium]}>
-          <Trans comment="Number of users (always at least 50) who have joined Bluesky using a specific starter pack">
+          <Trans comment="Number of users (always at least 50) who have joined One using a specific starter pack">
             <Plural value={joinedAllTimeCount} other="# users have" /> joined!
           </Trans>
         </Text>

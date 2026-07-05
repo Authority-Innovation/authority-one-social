@@ -869,7 +869,13 @@ const FlatNavigator = ({
 const LINKING = {
   // TODO figure out what we are going to use
   // note: `bluesky://` is what is used in app.config.js
-  prefixes: ['bsky://', 'bluesky://', 'https://bsky.app'],
+  // `https://bsky.app` kept so pre-rebrand share links still deep-link.
+  prefixes: [
+    'bsky://',
+    'bluesky://',
+    'https://app.authority-one.com',
+    'https://bsky.app',
+  ],
 
   getPathFromState(state: State) {
     // find the current node in the navigation tree

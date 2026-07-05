@@ -8,6 +8,7 @@ import {
 } from '@atproto/api'
 import {Plural, Trans, useLingui} from '@lingui/react/macro'
 
+import {PUBLIC_APP_HOST} from '#/lib/constants'
 import {useOpenComposer} from '#/lib/hooks/useOpenComposer'
 import {createSanitizedDisplayName} from '#/lib/moderation/create-sanitized-display-name'
 import {shareUrl} from '#/lib/sharing'
@@ -317,8 +318,8 @@ export function InviteLinkDialog({
       const linkEnabled = joinLink?.enabledStatus === 'enabled'
       const linkDisabled = joinLink?.enabledStatus === 'disabled'
       const joinLinkURI = joinLink?.code
-        ? `https://bsky.app/chat/${joinLink.code}`
-        : 'https://bsky.app/'
+        ? `${PUBLIC_APP_HOST}/chat/${joinLink.code}`
+        : `${PUBLIC_APP_HOST}/`
       const createdAt = joinLink ? new Date(joinLink.createdAt) : null
       const currentOption =
         whoCanJoinOptions.find(

@@ -76,7 +76,7 @@ export function FindContactsAnnouncement() {
               source={require('../../../../assets/images/find_friends_illustration.webp')}
               style={[a.w_full, {aspectRatio: 1278 / 661}]}
               alt={_(
-                msg`An illustration depicting user avatars flowing from a contact book into the Bluesky app`,
+                msg`An illustration depicting user avatars flowing from a contact book into the app`,
               )}
               useAppleWebpCodec
             />
@@ -106,8 +106,8 @@ export function FindContactsAnnouncement() {
                 {maxWidth: 340},
               ]}>
               <Trans>
-                Bluesky is more fun with friends! Import your contacts to see
-                who’s already here.
+                One is more fun with friends! Import your contacts to see who’s
+                already here.
               </Trans>
             </Text>
           </View>
