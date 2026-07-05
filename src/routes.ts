@@ -60,6 +60,7 @@ export const router = new Router<AllNavigatableRoutes>({
     '/settings/social-autonomy/:agent',
   ],
   MyAgents: '/settings/agents',
+  AgentHub: '/agents/:agent',
   ChatList: '/chats',
   NewGroup: '/chats/new-group',
   NewAgent: '/chats/new-agent',

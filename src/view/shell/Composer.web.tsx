@@ -72,6 +72,7 @@ function Inner({state}: {state: ComposerOpts}) {
           <ComposePost
             cancelRef={ref}
             replyTo={state.replyTo}
+            postAs={state.postAs}
             quote={state.quote}
             onPost={state.onPost}
             onPostSuccess={state.onPostSuccess}

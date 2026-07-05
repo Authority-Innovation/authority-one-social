@@ -44,8 +44,23 @@ export type ComposerLogContext =
   | 'Deeplink'
   | 'Other'
 
+/**
+ * "Post as agent" mode: the owner speaks THROUGH one of their agents' identities.
+ * Submit forks to the ownership-scoped runtime endpoint (POST /app/agents/posts)
+ * instead of the session's own repo — verbatim, no LLM. The human session is
+ * untouched; this is delegation, not sign-in-as.
+ */
+export interface ComposerOptsPostAs {
+  did: string
+  handle: string
+  displayName?: string
+  avatar?: string
+}
+
 export interface ComposerOpts {
   replyTo?: ComposerOptsPostRef
+  /** When set, publish AS this owned agent via the runtime (never the session). */
+  postAs?: ComposerOptsPostAs
   onPost?: (postUri: string | undefined) => void
   onPostSuccess?: (data: OnPostSuccessData) => void
   quote?: AppBskyFeedDefs.PostView

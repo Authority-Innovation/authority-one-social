@@ -2,7 +2,7 @@ import {fetch as expoFetch} from 'expo/fetch'
 
 import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
-import {CHAT_ENDPOINT, DEFAULT_AGENT} from './config'
+import {CHAT_ENDPOINT} from './config'
 import {
   type ApprovalAction,
   type ChatTurnResult,
@@ -57,23 +57,28 @@ function toApprovalAction(p: PendingAction): ApprovalAction {
 }
 
 /** Normalize a `done`/JSON body into a ChatTurnResult with safe defaults. */
-function toTurnResult(data: any): ChatTurnResult {
+function toTurnResult(data: unknown): ChatTurnResult {
+  const d = (data ?? {}) as Record<string, unknown>
   // A deliberate no-op turn: the runtime tags it `status:'silent'` or a bare
   // `silent:true`. It carries no reply text; the UI must render no bubble.
-  const silent = data?.status === 'silent' || data?.silent === true
+  const silent = d.status === 'silent' || d.silent === true
   // The runtime sends the reply under `message` (authoritative) and now also `text`;
   // prefer `message`, fall back to `text`, so a reply is never dropped as blank.
   const message =
-    typeof data?.message === 'string' && data.message
-      ? data.message
-      : typeof data?.text === 'string'
-        ? data.text
+    typeof d.message === 'string' && d.message
+      ? d.message
+      : typeof d.text === 'string'
+        ? d.text
         : ''
   return {
     message,
-    status: silent ? 'silent' : (data?.status ?? 'answered'),
-    pending: Array.isArray(data?.pending) ? data.pending : [],
-    mediaUrls: Array.isArray(data?.mediaUrls) ? data.mediaUrls : [],
+    status: silent
+      ? 'silent'
+      : typeof d.status === 'string'
+        ? (d.status as ChatTurnResult['status'])
+        : 'answered',
+    pending: Array.isArray(d.pending) ? (d.pending as PendingAction[]) : [],
+    mediaUrls: Array.isArray(d.mediaUrls) ? (d.mediaUrls as string[]) : [],
     ...(silent ? {silent: true} : {}),
   }
 }
@@ -152,7 +157,12 @@ export function streamChat(
         body: JSON.stringify({
           text: req.text,
           history: req.history ?? [],
-          agent: req.agent ?? DEFAULT_AGENT,
+          // E6 agent selector: send `agent` ONLY when the caller picked one (hub
+          // roster / route param). Absent = the runtime routes to the owner's
+          // primary agent — do NOT default to a hardcoded handle here, or every
+          // owner whose primary agent isn't that handle would be misrouted (or
+          // 403'd by the ownership gate) once the selector is live server-side.
+          ...(req.agent ? {agent: req.agent} : {}),
           // Attach hosted image URLs only when present, so text-only turns keep
           // their exact prior wire shape. The runtime's /app/chat reads
           // `imageUrls` (+ a single `imageUrl`), matching threadsClient — NOT
@@ -256,23 +266,29 @@ async function consumeSSE(
       settle()
       return
     }
-    let data: any
+    let data: unknown
     try {
       data = JSON.parse(payload)
     } catch {
       return // ignore keep-alives / non-JSON comments
     }
+    const frameData = (data ?? {}) as Record<string, unknown>
     switch (eventName) {
       case 'chunk':
       case 'text': // tolerate the legacy name too
-        if (typeof data?.delta === 'string') handlers.onTextDelta(data.delta)
+        if (typeof frameData.delta === 'string')
+          handlers.onTextDelta(frameData.delta)
         break
       case 'done':
         settle(toTurnResult(data))
         break
       case 'error':
         handlers.onError(
-          data?.message ?? data?.error ?? 'Agent runtime error.',
+          typeof frameData.message === 'string'
+            ? frameData.message
+            : typeof frameData.error === 'string'
+              ? frameData.error
+              : 'Agent runtime error.',
         )
         settled = true // an error is terminal; don't also fire onDone
         break

@@ -47,6 +47,17 @@ export const AGENTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents`
 export const AGENTS_PAUSE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/pause`
 
 /**
+ * Owner-initiated agent post management (direct-manipulation plane — the runtime
+ * writes to the agent's PDS after its owner-scoped gate; the agent's LLM is never
+ * involved). POST /app/agents/posts {agent, text, facets?, imageUrls?(<=4),
+ * replyTo?, langs?} -> {ok, uri, cid, agent}. POST /app/agents/posts/delete
+ * {agent, uri} -> {ok, uri, agent}. Errors: 403 {code:'not-your-agent'},
+ * 400 {code:'bad-uri'|'repo-mismatch'|'too-long'|'bad-image'|'image-too-large'}.
+ */
+export const AGENTS_POSTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/posts`
+export const AGENTS_POSTS_DELETE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/posts/delete`
+
+/**
  * Agent PDS profile editor. POST {agent, displayName?, description?, avatarUrl?,
  * bannerUrl?} — merge semantics per field: string=set, null/""=clear, absent=keep;
  * at least one field required. Image urls must be HOSTED https urls (from

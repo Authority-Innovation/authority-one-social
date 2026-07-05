@@ -150,7 +150,9 @@ export function useAgentChat(
       if (threadId) {
         return fetchThreadMessages(threadId)
       }
-      const res = await fetchHistory()
+      // E6 agent selector: scope the read to THIS agent's 1:1 thread when the
+      // caller picked one; absent -> the owner's primary agent (back-compat).
+      const res = await fetchHistory({agent})
       return {messages: res.messages, ok: !res.error && !res.signedOut}
     }
     const hydrate = async (attempt: number) => {
@@ -173,8 +175,9 @@ export function useAgentChat(
       cancelled = true
       if (retryTimer) clearTimeout(retryTimer)
     }
-    // Re-hydrate if the thread changes; the empty-list guard makes a re-run safe.
-  }, [threadId])
+    // Re-hydrate if the thread OR selected agent changes; the empty-list guard
+    // makes a re-run safe.
+  }, [threadId, agent])
   // Mirror of messages for building the history payload without stale closures.
   // Written in an effect (not during render) so we never mutate a ref mid-render;
   // `send` only reads it from event handlers, which always run post-commit.

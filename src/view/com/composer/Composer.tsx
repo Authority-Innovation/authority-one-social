@@ -53,19 +53,21 @@ import {
   AtUri,
   type BskyAgent,
   ChatBskyGroupDefs,
-  type RichText,
+  RichText,
 } from '@atproto/api'
 import {plural} from '@lingui/core/macro'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 import {useQueries, useQueryClient} from '@tanstack/react-query'
 
+import {postAsAgent, uploadChatImage} from '#/lib/agent-runtime'
 import * as apilib from '#/lib/api/index'
 import {EmbeddingDisabledError} from '#/lib/api/resolve'
 import {useAppState} from '#/lib/appState'
 import {retry} from '#/lib/async/retry'
 import {until} from '#/lib/async/until'
 import {
+  IMAGE_SIZE_CONFIG_POSTS,
   MAX_DRAFT_GRAPHEME_LENGTH,
   MAX_GRAPHEME_LENGTH,
   SUPPORTED_MIME_TYPES,
@@ -77,12 +79,14 @@ import {mimeToExt} from '#/lib/media/video/util'
 import {useCallOnce} from '#/lib/once'
 import {type NavigationProp} from '#/lib/routes/types'
 import {cleanError} from '#/lib/strings/errors'
+import {shortenLinks, stripInvalidMentions} from '#/lib/strings/rich-text-manip'
 import {colors} from '#/lib/styles'
 import {logger} from '#/logger'
 import {useDialogStateControlContext} from '#/state/dialogs'
 import {emitPostCreated} from '#/state/events'
 import {
   type ComposerImage,
+  compressImage,
   createComposerImage,
   pasteImage,
 } from '#/state/gallery'
@@ -252,6 +256,7 @@ function useAddImagesWithCap(
 type Props = ComposerOpts
 export const ComposePost = ({
   replyTo,
+  postAs,
   onPost,
   onPostSuccess,
   quote: initQuote,
@@ -969,6 +974,90 @@ export const ComposePost = ({
     setError('')
     setIsPublishing(true)
 
+    // POST-AS-AGENT: the owner speaks through the agent's identity, verbatim.
+    // The record is written by the ownership-scoped runtime endpoint (POST
+    // /app/agents/posts) — never the session repo (the human doesn't hold the
+    // agent's credentials) and never the agent's LLM. MVP scope: one post,
+    // text + up to 4 images (uploaded to the runtime's media host first);
+    // link cards/quotes/video fall back to a clear error.
+    if (postAs) {
+      try {
+        if (filteredThread.posts.length > 1) {
+          throw new Error(
+            l`Threads aren't supported when posting as your agent yet.`,
+          )
+        }
+        const draft = filteredThread.posts[0]
+        if (draft.embed.quote) {
+          throw new Error(
+            l`Quote posts aren't supported when posting as your agent yet.`,
+          )
+        }
+        const media = draft.embed.media
+        if (media && media.type !== 'images') {
+          throw new Error(
+            l`Only images (up to 4) are supported when posting as your agent.`,
+          )
+        }
+
+        setPublishingStage(l`Processing...`)
+        let rt = new RichText(
+          {text: draft.richtext.text.replace(/^(\s*\n)+/, '').trimEnd()},
+          {cleanNewlines: true},
+        )
+        await rt.detectFacets(agent)
+        rt = shortenLinks(rt)
+        rt = stripInvalidMentions(rt)
+
+        const imageUrls: string[] = []
+        if (media?.type === 'images') {
+          for (const img of media.images) {
+            setPublishingStage(l`Uploading images...`)
+            const {path, mime} = await compressImage(
+              img,
+              IMAGE_SIZE_CONFIG_POSTS,
+            )
+            const hosted = await uploadChatImage({uri: path, mime})
+            if (!hosted) {
+              throw new Error(l`Could not upload an image. Please try again.`)
+            }
+            imageUrls.push(hosted)
+          }
+        }
+
+        setPublishingStage(l`Posting...`)
+        const agentName = postAs.displayName ?? postAs.handle
+        const res = await postAsAgent({
+          agent: postAs.handle,
+          text: rt.text,
+          facets: rt.facets,
+          imageUrls,
+          langs: currentLanguages.slice(0, 3),
+        })
+        if (!res.ok) {
+          throw new Error(
+            res.code === 'not-your-agent'
+              ? l`That agent isn't linked to your account.`
+              : res.code === 'too-long'
+                ? l`That post is too long.`
+                : (res.error ??
+                  l`The agent runtime could not publish the post.`),
+          )
+        }
+        setIsPublishing(false)
+        onPost?.(res.uri)
+        onClose()
+        setTimeout(() => {
+          Toast.show(l`Posted as ${agentName}`, {type: 'success'})
+        }, 500)
+      } catch (e) {
+        logger.error(e as Error, {message: 'Composer: post-as-agent failed'})
+        setError(cleanError((e as Error).message))
+        setIsPublishing(false)
+      }
+      return
+    }
+
     let postUri: string | undefined
     let postSuccessData: OnPostSuccessData
     try {
@@ -1164,6 +1253,7 @@ export const ComposePost = ({
     canPost,
     isPublishing,
     currentLanguages,
+    postAs,
     onClose,
     onPost,
     onPostSuccess,
@@ -1378,6 +1468,32 @@ export const ComposePost = ({
             keyboardShouldPersistTaps="always"
             onContentSizeChange={onScrollViewContentSizeChange}
             onLayout={onScrollViewLayout}>
+            {postAs ? (
+              <View style={[a.flex_row, a.px_lg, a.pt_md]}>
+                <View
+                  style={[
+                    a.flex_row,
+                    a.align_center,
+                    a.gap_xs,
+                    a.rounded_full,
+                    a.px_md,
+                    a.py_xs,
+                    t.atoms.bg_contrast_25,
+                  ]}>
+                  <UserAvatar avatar={postAs.avatar} size={20} type="user" />
+                  <Text
+                    style={[
+                      a.text_sm,
+                      a.font_bold,
+                      t.atoms.text_contrast_medium,
+                    ]}>
+                    <Trans>
+                      Posting as {postAs.displayName ?? postAs.handle}
+                    </Trans>
+                  </Text>
+                </View>
+              </View>
+            ) : undefined}
             {replyTo ? <ComposerReplyTo replyTo={replyTo} /> : undefined}
             {thread.posts.map((post, index) => (
               <Fragment key={post.id + (composerState.draftId ?? '')}>

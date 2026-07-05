@@ -74,6 +74,7 @@ import {TermsOfServiceScreen} from '#/view/screens/TermsOfService'
 import {BottomBar} from '#/view/shell/bottom-bar/BottomBar'
 import {createNativeStackNavigatorWithAuth} from '#/view/shell/createNativeStackNavigatorWithAuth'
 import {AgentChatScreen} from '#/screens/AgentChat'
+import {AgentHubScreen} from '#/screens/AgentHub'
 import {BookmarksScreen} from '#/screens/Bookmarks'
 import {ChatListScreen} from '#/screens/Chats/ChatListScreen'
 import {GroupManageScreen} from '#/screens/Chats/GroupManageScreen'
@@ -182,6 +183,11 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="AgentChat"
         getComponent={() => AgentChatScreen}
         options={{title: title(msg`Talk to your agent`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="AgentHub"
+        getComponent={() => AgentHubScreen}
+        options={{title: title(msg`Your agent`), requireAuth: true}}
       />
       <Stack.Screen
         name="ChatList"

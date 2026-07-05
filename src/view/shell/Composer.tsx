@@ -40,6 +40,7 @@ export function Composer() {
       accessibilityViewIsModal>
       <ComposePost
         replyTo={state.replyTo}
+        postAs={state.postAs}
         onPost={state.onPost}
         onPostSuccess={state.onPostSuccess}
         quote={state.quote}

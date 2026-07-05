@@ -14,14 +14,20 @@ jest.mock('../config', () => ({
   DEFAULT_AGENT: 'ada',
 }))
 
-import {setSupabaseTokenProvider} from '../authToken'
+// SINGLE-LOGIN: setSupabaseTokenProvider is a no-op, so mock the token reader
+// itself (same pattern as agentsClient.test.ts).
+jest.mock('../authToken', () => ({getSupabaseAccessToken: jest.fn()}))
+
+import {getSupabaseAccessToken} from '../authToken'
 import {
   SIGNED_OUT_MESSAGE,
-  type StreamHandlers,
   streamChat,
+  type StreamHandlers,
   TOKEN_REJECTED_MESSAGE,
 } from '../chatClient'
 import {type ApprovalAction, type ChatTurnResult} from '../types'
+
+const mockToken = jest.mocked(getSupabaseAccessToken)
 
 /** A Response whose body streams `text` as UTF-8 bytes (SSE path). */
 function sseResponse(text: string) {
@@ -46,7 +52,7 @@ function jsonResponse(obj: unknown) {
     status: 200,
     ok: true,
     headers: {get: () => 'application/json'},
-    json: async () => obj,
+    json: () => Promise.resolve(obj),
   }
 }
 
@@ -60,7 +66,7 @@ function runStreamingTurn(): Promise<{
   actions: ApprovalAction[]
   result?: ChatTurnResult
 }> {
-  setSupabaseTokenProvider(() => Promise.resolve('TOKEN_ABC'))
+  mockToken.mockResolvedValue('TOKEN_ABC')
   return new Promise(resolve => {
     let acc = ''
     const deltas: string[] = []
@@ -84,10 +90,10 @@ function runStreamingTurn(): Promise<{
 }
 
 /** Drive a single turn to completion and report how it settled. */
-function runTurn(token: string | null): Promise<
-  {kind: 'error'; message: string} | {kind: 'done'}
-> {
-  setSupabaseTokenProvider(() => Promise.resolve(token))
+function runTurn(
+  token: string | null,
+): Promise<{kind: 'error'; message: string} | {kind: 'done'}> {
+  mockToken.mockResolvedValue(token)
   return new Promise(resolve => {
     streamChat(
       {text: 'hi', agent: 'ada'},
@@ -107,7 +113,11 @@ describe('streamChat auth/bearer wiring', () => {
 
   it('attaches the Supabase access token as `Authorization: Bearer`', async () => {
     // body:null short-circuits stream consumption; we only assert the request.
-    mockExpoFetch.mockResolvedValue({status: 200, ok: true, body: null} as never)
+    mockExpoFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      body: null,
+    } as never)
 
     await runTurn('TOKEN_ABC')
 
@@ -118,6 +128,38 @@ describe('streamChat auth/bearer wiring', () => {
     )
   })
 
+  it('sends `agent` only when the caller picked one (E6 selector back-compat)', async () => {
+    mockExpoFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      body: null,
+    } as never)
+    mockToken.mockResolvedValue('TOKEN_ABC')
+
+    // Explicit selection rides the body.
+    await new Promise(resolve => {
+      streamChat(
+        {text: 'hi', agent: 'bull.pds.test'},
+        {onTextDelta: () => {}, onDone: resolve, onError: resolve},
+      )
+    })
+    let [, init] = mockExpoFetch.mock.calls[0] as [string, RequestInit]
+    let body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.agent).toBe('bull.pds.test')
+
+    // No selection -> the field is ABSENT, so the runtime routes to the owner's
+    // primary agent instead of a hardcoded default handle.
+    await new Promise(resolve => {
+      streamChat(
+        {text: 'hi'},
+        {onTextDelta: () => {}, onDone: resolve, onError: resolve},
+      )
+    })
+    ;[, init] = mockExpoFetch.mock.calls[1] as [string, RequestInit]
+    body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect('agent' in body).toBe(false)
+  })
+
   it('does not call the runtime when signed out, and asks the user to sign in', async () => {
     const result = await runTurn(null)
 
@@ -126,7 +168,11 @@ describe('streamChat auth/bearer wiring', () => {
   })
 
   it('reports a token rejection (not the old "not wired" text) on 401', async () => {
-    mockExpoFetch.mockResolvedValue({status: 401, ok: false, body: null} as never)
+    mockExpoFetch.mockResolvedValue({
+      status: 401,
+      ok: false,
+      body: null,
+    } as never)
 
     const result = await runTurn('TOKEN_ABC')
 

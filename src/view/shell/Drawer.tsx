@@ -27,6 +27,7 @@ import {sanitizeHandle} from '#/lib/strings/handles'
 import {colors} from '#/lib/styles'
 import {emitSoftReset} from '#/state/events'
 import {useKawaiiMode} from '#/state/preferences/kawaii'
+import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {useUnreadNotifications} from '#/state/queries/notifications/unread'
 import {useProfileQuery} from '#/state/queries/profile'
 import {type SessionAccount, useSession} from '#/state/session'
@@ -286,11 +287,6 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     setDrawerOpen(false)
   }, [navigation, setDrawerOpen, ax])
 
-  const onPressAgentChat = useCallback(() => {
-    navigation.navigate('AgentChat', {})
-    setDrawerOpen(false)
-  }, [navigation, setDrawerOpen])
-
   const onPressChats = useCallback(() => {
     navigation.navigate('ChatList')
     setDrawerOpen(false)
@@ -369,9 +365,9 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
 
         {hasSession ? (
           <>
-            {/* Authority One agent — promoted to the top so it's the first,
-                obvious entry point (was previously buried mid-list). */}
-            <AgentChatMenuItem onPress={onPressAgentChat} />
+            {/* Authority One agents — promoted to the top so they're the first,
+                obvious entry points (one item per owned agent -> its hub). */}
+            <YourAgentsMenuItems />
             <ChatsMenuItem onPress={onPressChats} />
             <ForYouMenuItem onPress={onPressForYou} />
             <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
@@ -395,9 +391,9 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
           </>
         ) : (
           <>
-            {/* The agent rides the atproto/PDS session, so expose it alongside the
-                core items even before a full social session is loaded. */}
-            <AgentChatMenuItem onPress={onPressAgentChat} />
+            {/* The agents ride the atproto/PDS session, so expose the entry point
+                alongside the core items even before a full session is loaded. */}
+            <YourAgentsMenuItems />
             <ChatsMenuItem onPress={onPressChats} />
             <ForYouMenuItem onPress={onPressForYou} />
             <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
@@ -639,20 +635,51 @@ let ListsMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
 }
 ListsMenuItem = memo(ListsMenuItem)
 
-let AgentChatMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
+/**
+ * YOUR AGENTS roster in the drawer — one item per owned agent, mirroring the
+ * ChatList roster; tapping opens that agent's AgentHub. Replaces the singular
+ * "Talk to your agent" misdirect. Falls back to a single "Your Agents" item
+ * (-> ChatList, which explains/creates) when the roster is empty or unavailable.
+ */
+let YourAgentsMenuItems = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
   const t = useTheme()
+  const navigation = useNavigation<NavigationProp>()
+  const setDrawerOpen = useSetDrawerOpen()
+  const {data} = useOwnerAgentsQuery()
+  const agents = data?.agents ?? []
 
-  // Custom (non-Bluesky) item: use a plain literal so it never depends on the
-  // compiled Lingui catalog (which would otherwise render as a raw message ID).
+  // Custom (non-Bluesky) items: plain literals / runtime names so they never
+  // depend on the compiled Lingui catalog (which would otherwise render as a
+  // raw message ID).
+  if (agents.length === 0) {
+    return (
+      <MenuItem
+        icon={<MicIcon style={[t.atoms.text]} width={iconWidth} />}
+        label="Your Agents"
+        onPress={() => {
+          navigation.navigate('ChatList')
+          setDrawerOpen(false)
+        }}
+      />
+    )
+  }
   return (
-    <MenuItem
-      icon={<MicIcon style={[t.atoms.text]} width={iconWidth} />}
-      label="Talk to your agent"
-      onPress={onPress}
-    />
+    <>
+      {agents.map(agent => (
+        <MenuItem
+          key={agent.handle}
+          icon={<MicIcon style={[t.atoms.text]} width={iconWidth} />}
+          label={agent.displayName || agent.handle}
+          onPress={() => {
+            navigation.navigate('AgentHub', {agent: agent.handle})
+            setDrawerOpen(false)
+          }}
+        />
+      ))}
+    </>
   )
 }
-AgentChatMenuItem = memo(AgentChatMenuItem)
+YourAgentsMenuItems = memo(YourAgentsMenuItems)
 
 let ChatsMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
   const t = useTheme()

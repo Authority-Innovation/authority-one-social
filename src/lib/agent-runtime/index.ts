@@ -1,4 +1,11 @@
 export {
+  type AgentPostDeleteResult,
+  type AgentPostErrorCode,
+  deleteAgentPost,
+  postAsAgent,
+  type PostAsAgentResult,
+} from './agentPostsClient'
+export {
   type CreateAgentErrorKind,
   type CreateAgentResult,
   type CreatedAgent,

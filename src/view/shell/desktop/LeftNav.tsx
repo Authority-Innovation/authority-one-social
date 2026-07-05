@@ -16,6 +16,7 @@ import {
 import {sanitizeDisplayName} from '#/lib/strings/display-names'
 import {isInvalidHandle, sanitizeHandle} from '#/lib/strings/handles'
 import {emitSoftReset} from '#/state/events'
+import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {useFetchHandle} from '#/state/queries/handle'
 import {useUnreadMessageCount} from '#/state/queries/messages/list-conversations'
 import {useUnreadNotifications} from '#/state/queries/notifications/unread'
@@ -385,6 +386,35 @@ function SwitchMenuItem({
   )
 }
 
+/**
+ * YOUR AGENTS roster in the desktop left nav — one item per owned agent
+ * (label = runtime display name / handle; plain strings, never the Lingui
+ * catalog), each linking to that agent's AgentHub. Replaces the singular
+ * "Talk to your agent" misdirect. Renders nothing when the roster is empty
+ * or unavailable — the Chats item directly below leads to the roster screen.
+ */
+function YourAgentsNavItems({minimal}: {minimal: boolean}) {
+  const {data} = useOwnerAgentsQuery()
+  const agents = data?.agents ?? []
+  if (agents.length === 0) return null
+  return (
+    <>
+      {agents.map(agent => (
+        <NavItem
+          key={agent.handle}
+          label={agent.displayName || agent.handle}
+          href={`/agents/${agent.handle}`}
+          minimal={minimal}
+          icons={{
+            inactive: MicrophoneIcon,
+            active: MicrophoneIcon,
+          }}
+        />
+      ))}
+    </>
+  )
+}
+
 interface NavItemProps {
   count?: string
   hasNew?: boolean
@@ -675,15 +705,7 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
               drawer). Labels are plain literals - these are non-Bluesky strings
               that are not in the compiled Lingui catalog, so wrapping them would
               render as raw message IDs. */}
-          <NavItem
-            label="Talk to your agent"
-            href="/agent"
-            minimal={leftNavMinimal}
-            icons={{
-              inactive: MicrophoneIcon,
-              active: MicrophoneIcon,
-            }}
-          />
+          <YourAgentsNavItems minimal={leftNavMinimal} />
           <NavItem
             label="Chats"
             href="/chats"

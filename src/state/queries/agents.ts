@@ -1,3 +1,4 @@
+import {useMemo} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {
@@ -29,6 +30,42 @@ export function useOwnerAgentsQuery() {
     },
     staleTime: STALE.MINUTES.ONE,
   })
+}
+
+/**
+ * The DIDs of the agents this owner runs, for ownership checks on rendered posts
+ * (owner "•••" controls, hub management tabs). Backed by the cached owner-agents
+ * query, so checking a post costs a Set lookup, not a request. Empty set while
+ * loading / signed out / unreachable — surfaces simply don't show owner controls,
+ * which is the correct fail-closed degradation.
+ */
+export function useOwnedAgentDids(): Set<string> {
+  const {data} = useOwnerAgentsQuery()
+  const agents = data?.agents
+  return useMemo(
+    () =>
+      new Set(
+        (agents ?? [])
+          .map(a => a.did)
+          .filter((did): did is string => Boolean(did)),
+      ),
+    [agents],
+  )
+}
+
+/**
+ * Resolve the owned agent whose PDS identity matches `ref` (DID or handle,
+ * case-insensitive), or undefined when the viewer doesn't own it (or the roster
+ * hasn't loaded). Used to map a rendered post's author DID back to the runtime
+ * agent ref the management endpoints take, and as the AgentHub deep-link guard.
+ */
+export function useOwnedAgent(ref: string | undefined): OwnerAgent | undefined {
+  const {data} = useOwnerAgentsQuery()
+  if (!ref) return undefined
+  const needle = ref.toLowerCase()
+  return data?.agents.find(
+    a => a.did?.toLowerCase() === needle || a.handle.toLowerCase() === needle,
+  )
 }
 
 /**

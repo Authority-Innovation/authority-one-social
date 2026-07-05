@@ -25,6 +25,7 @@ import {
   type CommonNavigatorParams,
   type NavigationProp,
 } from '#/lib/routes/types'
+import {sanitizeHandle} from '#/lib/strings/handles'
 import {richTextToString} from '#/lib/strings/rich-text-helpers'
 import {toShareUrl} from '#/lib/strings/url-helpers'
 import {useTranslate} from '#/lib/translation'
@@ -38,6 +39,11 @@ import {
   useHiddenPostsApi,
   useLanguagePrefs,
 } from '#/state/preferences'
+import {
+  AgentPostActionError,
+  useAgentPostDeleteMutation,
+} from '#/state/queries/agent-posts'
+import {useOwnedAgent} from '#/state/queries/agents'
 import {usePinnedPostMutation} from '#/state/queries/pinned-post'
 import {
   usePostDeleteMutation,
@@ -129,6 +135,7 @@ let PostMenuItems = ({
   const ax = useAnalytics()
   const langPrefs = useLanguagePrefs()
   const {mutateAsync: deletePostMutate} = usePostDeleteMutation()
+  const {mutateAsync: deleteAgentPostMutate} = useAgentPostDeleteMutation()
   const {mutateAsync: pinPostMutate, isPending: isPinPending} =
     usePinnedPostMutation()
   const requireSignIn = useRequireAuth()
@@ -145,6 +152,7 @@ let PostMenuItems = ({
   const blockPromptControl = useDialogControl()
   const reportDialogControl = useReportDialogControl()
   const deletePromptControl = useDialogControl()
+  const agentDeletePromptControl = useDialogControl()
   const hidePromptControl = useDialogControl()
   const postInteractionSettingsDialogControl = useDialogControl()
   const quotePostDetachConfirmControl = useDialogControl()
@@ -171,6 +179,12 @@ let PostMenuItems = ({
   )
   const isPostHidden = hiddenPosts && hiddenPosts.includes(postUri)
   const isAuthor = postAuthor.did === currentAccount?.did
+  // OWNER-ON-AGENT-POST: the direct-manipulation plane. When this post's author
+  // is one of the viewer's agents (cached GET /app/agents roster), the menu adds
+  // owner controls whose mutations hit the ownership-scoped runtime endpoints —
+  // never the local session (the human doesn't hold the agent's credentials)
+  // and never the agent's LLM.
+  const ownedAgentAuthor = useOwnedAgent(isAuthor ? undefined : postAuthor.did)
   const isRootPostAuthor = new AtUri(rootUri).host === currentAccount?.did
   const threadgateHiddenReplies = useMergedThreadgateHiddenReplies({
     threadgateRecord,
@@ -220,6 +234,27 @@ let PostMenuItems = ({
         Toast.show(l`Failed to delete post, please try again`, {
           type: 'error',
         })
+      },
+    )
+  }
+
+  // Delete a post authored by one of the viewer's agents: deterministic runtime
+  // call (ownership-gated server-side), then the same optimistic shadow removal
+  // as deleting your own post. The firehose round-trip makes it durable.
+  const onDeleteAgentPost = () => {
+    if (!ownedAgentAuthor) return
+    deleteAgentPostMutate({agent: ownedAgentAuthor.handle, uri: postUri}).then(
+      () => {
+        Toast.show(l({message: 'Post deleted', context: 'toast'}))
+      },
+      e => {
+        logger.error('Failed to delete agent post', {message: e})
+        Toast.show(
+          e instanceof AgentPostActionError && e.code === 'not-your-agent'
+            ? l`That agent isn’t linked to your account.`
+            : l`Failed to delete post, please try again`,
+          {type: 'error'},
+        )
       },
     )
   }
@@ -498,6 +533,12 @@ let PostMenuItems = ({
 
   const onPressHideTranslation = () => clearTranslation()
 
+  const ownedAgentName = ownedAgentAuthor
+    ? ownedAgentAuthor.displayName ||
+      postAuthor.displayName ||
+      ownedAgentAuthor.handle
+    : ''
+
   const isDiscoverDebugUser =
     IS_INTERNAL ||
     DISCOVER_DEBUG_DIDS[currentAccount?.did || ''] ||
@@ -523,6 +564,25 @@ let PostMenuItems = ({
                   icon={isPinPending ? Loader : PinIcon}
                   position="right"
                 />
+              </Menu.Item>
+            </Menu.Group>
+            <Menu.Divider />
+          </>
+        )}
+
+        {/* OWNER SECTION: this post belongs to one of the viewer's agents.
+            Direct-manipulation controls — deterministic runtime endpoints. */}
+        {ownedAgentAuthor && (
+          <>
+            <Menu.Group>
+              <Menu.Item
+                testID="postDropdownDeleteAgentPostBtn"
+                label={l`Delete ${ownedAgentName}’s post`}
+                onPress={() => agentDeletePromptControl.open()}>
+                <Menu.ItemText>
+                  {l`Delete ${ownedAgentName}’s post`}
+                </Menu.ItemText>
+                <Menu.ItemIcon icon={Trash} position="right" />
               </Menu.Item>
             </Menu.Group>
             <Menu.Divider />
@@ -812,6 +872,16 @@ let PostMenuItems = ({
         confirmButtonCta={l`Delete`}
         confirmButtonColor="negative"
       />
+      {ownedAgentAuthor && (
+        <Prompt.Basic
+          control={agentDeletePromptControl}
+          title={l`Delete this post from ${sanitizeHandle(postAuthor.handle, '@')}?`}
+          description={l`This removes it from the network.`}
+          onConfirm={onDeleteAgentPost}
+          confirmButtonCta={l`Delete`}
+          confirmButtonColor="negative"
+        />
+      )}
       <Prompt.Basic
         control={hidePromptControl}
         title={isReply ? l`Hide this reply?` : l`Hide this post?`}

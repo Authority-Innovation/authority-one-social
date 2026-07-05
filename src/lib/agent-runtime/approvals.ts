@@ -1,6 +1,6 @@
 import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
-import {AGENT_RUNTIME_BASE_URL, DEFAULT_AGENT} from './config'
+import {AGENT_RUNTIME_BASE_URL} from './config'
 import {type ApprovalDecision} from './types'
 
 /**
@@ -35,7 +35,11 @@ export async function postApprovalDecision(args: {
       body: JSON.stringify({
         id: args.actionId,
         decision: args.decision,
-        agent: args.agent ?? DEFAULT_AGENT,
+        // E6 agent selector: include `agent` only when the caller scoped the chat
+        // to a specific agent. Absent = the runtime resolves the owner's primary
+        // agent — never default a hardcoded handle (it would misroute/403 owners
+        // whose primary agent differs once the selector is live).
+        ...(args.agent ? {agent: args.agent} : {}),
       }),
     })
     return res.ok

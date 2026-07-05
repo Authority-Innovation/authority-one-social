@@ -57,16 +57,45 @@ export function AgentChatScreen({route}: Props) {
   // Navigating between chats reuses this mounted screen with new params (the route
   // name is the same), which used to leak one thread's messages into another and
   // block re-hydration (the hydrate-on-mount guard only seeds an EMPTY list). Keying
-  // the inner screen by thread makes every chat switch a clean mount.
+  // the inner screen by thread (or 1:1 agent — each owned agent is its own thread
+  // now) makes every chat switch a clean mount.
   return (
     <AgentChatScreenInner
-      key={route.params?.threadId ?? 'default'}
-      route={route}
+      key={route.params?.threadId ?? route.params?.agent ?? 'default'}
+      agent={route.params?.agent}
+      threadId={route.params?.threadId}
+      threadTitle={route.params?.threadTitle}
+      sharedPhotoUri={route.params?.sharedPhotoUri}
+      sharedPhotoMime={route.params?.sharedPhotoMime}
     />
   )
 }
 
-function AgentChatScreenInner({route}: {route: Props['route']}) {
+/**
+ * The 1:1 chat surface without the screen chrome (no Layout.Screen, no header),
+ * for embedding as the AgentHub's Chat tab. Same machine, same transport — only
+ * the shell differs. Voice status + the spoken-replies toggle render as a slim
+ * inline row instead of the header.
+ */
+export function AgentChatEmbedded({agent}: {agent: string}) {
+  return <AgentChatScreenInner key={agent} agent={agent} embedded />
+}
+
+function AgentChatScreenInner({
+  agent: agentParam,
+  threadId,
+  threadTitle,
+  sharedPhotoUri,
+  sharedPhotoMime,
+  embedded = false,
+}: {
+  agent?: string
+  threadId?: string
+  threadTitle?: string
+  sharedPhotoUri?: string
+  sharedPhotoMime?: string
+  embedded?: boolean
+}) {
   const t = useTheme()
   const {gtMobile} = useBreakpoints()
   // SINGLE-LOGIN: the agent channel authenticates with the user's atproto/PDS
@@ -83,20 +112,28 @@ function AgentChatScreenInner({route}: {route: Props['route']}) {
   // or the composer floats above the keyboard by exactly that gap. Use the
   // "will" events so the padding change rides the keyboard animation.
   const [isKeyboardVisible] = useIsKeyboardVisible({iosUseWillEvents: true})
-  const agent = route.params?.agent ?? DEFAULT_AGENT
-  // Multi-chat: when opened for a specific thread (group/agent), drive that thread.
-  // Absent -> the default single Talk-to-Bob channel (back-compat).
-  const threadId = route.params?.threadId
-  const threadTitle = route.params?.threadTitle
+  // The SELECTED agent (E6 selector). Kept undefined when the caller didn't pick
+  // one so the transport omits it and the runtime routes to the owner's primary
+  // agent — a hardcoded default here would misroute owners once the server-side
+  // selector lands. DEFAULT_AGENT survives only as the display-name fallback.
+  const agent = agentParam
   // Active persona (name + voice) from the runtime. Degrades to undefined when
   // signed out / unreachable, so the name falls back to the atproto profile.
   const {data: personas} = usePersonasQuery()
   // Dynamic agent display name (header / empty-state / placeholders): the active
   // persona's name wins; otherwise the atproto profile displayName, then the handle.
-  const profileName = useAgentDisplayName(agent)
-  const agentName = pickAgentHeaderName(personas?.activeName, profileName)
+  const profileName = useAgentDisplayName(agent ?? DEFAULT_AGENT)
+  // The runtime's ACTIVE persona belongs to the owner's primary agent — apply its
+  // name/voice only for the default (unselected) chat. A selected agent shows its
+  // own profile identity instead.
+  const agentName = pickAgentHeaderName(
+    agent ? undefined : personas?.activeName,
+    profileName,
+  )
   // Voice-mode voice follows the active persona's voiceId (else the runtime default).
-  const personaVoiceId = pickActiveVoiceId(personas?.activeVoiceId)
+  const personaVoiceId = pickActiveVoiceId(
+    agent ? undefined : personas?.activeVoiceId,
+  )
 
   // GROUP HEADER PARTICIPANTS: who's in this chat, at a glance. Agent names first
   // (that's what varies per group); a people-only group falls back to a member count.
@@ -202,8 +239,6 @@ function AgentChatScreenInner({route}: {route: Props['route']}) {
 
   // Explicit per-photo share: when navigated here with a shared photo (from Photo
   // Context), pre-attach it so the owner reviews + sends it through the normal flow.
-  const sharedPhotoUri = route.params?.sharedPhotoUri
-  const sharedPhotoMime = route.params?.sharedPhotoMime
   useEffect(() => {
     if (sharedPhotoUri) {
       // attachLocalImage flips the attachment into an "uploading" preview then awaits
@@ -304,6 +339,16 @@ function AgentChatScreenInner({route}: {route: Props['route']}) {
   // to sign into. This guard is effectively unreachable (the app requires a
   // session), but keep a quiet fallback instead of a dead composer just in case.
   if (!hasSession) {
+    if (embedded) {
+      return (
+        <View style={[a.flex_1, a.align_center, a.justify_center, a.px_xl]}>
+          <Text
+            style={[a.text_md, t.atoms.text_contrast_medium, a.text_center]}>
+            Sign in to chat with {agentName}.
+          </Text>
+        </View>
+      )
+    }
     return (
       <Layout.Screen>
         <Layout.Header.Outer>
@@ -332,306 +377,337 @@ function AgentChatScreenInner({route}: {route: Props['route']}) {
     )
   }
 
-  return (
-    <Layout.Screen>
-      <Layout.Header.Outer>
-        <Layout.Header.BackButton />
-        <Layout.Header.Content>
-          <Layout.Header.TitleText style={headerTitleStyle}>
-            {threadTitle ?? `Talk to ${agentName}`}
-          </Layout.Header.TitleText>
-          {voiceModeOn && voiceStatusLabel ? (
-            <Layout.Header.SubtitleText>
-              {voiceStatusLabel}
-            </Layout.Header.SubtitleText>
-          ) : participantsLabel ? (
-            // Compact participant indicator for group chats — the agents in this
-            // session at a glance. Tapping opens the existing Manage-group screen.
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="View group members"
-              accessibilityHint="Opens the manage group screen"
-              onPress={() =>
-                threadId
-                  ? navigation.navigate('GroupManage', {
-                      threadId,
-                      title: threadTitle ?? '',
-                    })
-                  : undefined
-              }>
-              <Layout.Header.SubtitleText>
-                {participantsLabel}
-              </Layout.Header.SubtitleText>
-            </Pressable>
-          ) : !showMic ? (
-            <Layout.Header.SubtitleText>
-              Voice unavailable on this device
-            </Layout.Header.SubtitleText>
-          ) : null}
-        </Layout.Header.Content>
-        {/* Toggle auto-speak of replies. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Toggle spoken replies"
-          accessibilityHint=""
-          onPress={() => {
-            if (autoSpeak) voice.stopSpeaking()
-            setAutoSpeak(v => !v)
-          }}
-          style={[a.p_sm, a.rounded_full, !autoSpeak && {opacity: 0.4}]}>
-          <SpeakerIcon size="md" fill={t.atoms.text.color} />
-        </Pressable>
-      </Layout.Header.Outer>
-
-      <KeyboardAvoidingView
-        style={[a.flex_1]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        // MUST be 0: this KAV is rendered below the header, so RN already measures
-        // its frame correctly and the padding it inserts equals the keyboard
-        // overlap. A non-zero offset (the old `insets.top + 44`) opened exactly
-        // that much empty band above the keyboard. See composerOffset.ts.
-        keyboardVerticalOffset={COMPOSER_KEYBOARD_VERTICAL_OFFSET}>
-        <ScrollView
-          ref={scrollRef}
-          style={[a.flex_1]}
-          contentContainerStyle={[
-            a.px_md,
-            a.py_lg,
-            a.gap_sm,
-            {flexGrow: 1},
-            centerColumn,
-          ]}
-          onContentSizeChange={onContentSizeChange}
-          keyboardDismissMode="interactive">
-          {messages.length === 0 && isHydrating ? (
-            // Recent thread is loading — show a quiet loader instead of the empty-state
-            // copy so a returning user doesn't see a flash of "blank chat".
-            <View
-              style={[a.flex_1, a.align_center, a.justify_center, a.pt_5xl]}>
-              <Loader size="lg" />
-            </View>
-          ) : messages.length === 0 ? (
-            <View
-              style={[a.flex_1, a.align_center, a.justify_center, a.pt_5xl]}>
-              <Text
-                style={[
-                  a.text_md,
-                  t.atoms.text_contrast_medium,
-                  a.text_center,
-                ]}>
-                {`Ask ${agentName} anything. Tap the mic to start a hands-free voice chat — talk naturally and interrupt any time.`}
-              </Text>
-            </View>
-          ) : (
-            messages.map(m => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                // Group threads attribute every message; 1:1 chat shows no per-message
-                // name. See groupSenderName: "You" requires the row's stamped senderId
-                // to BE the current account (strict identity match) — role alone never
-                // decides, so another member's turn is always shown under THEIR name.
-                senderName={threadId ? groupSenderName(m) : undefined}
-                decideDisabled={isStreaming}
-                onDecision={(action, decision) => {
-                  void decide(action, decision)
-                }}
-              />
-            ))
-          )}
-        </ScrollView>
-
-        {/* Live partial transcript while listening. */}
-        {micActive ? (
-          <View style={[t.atoms.bg_contrast_25]}>
-            <View style={[a.px_md, a.py_sm, a.w_full, centerColumn]}>
-              <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-                {/* Plain literal (not a Lingui msg): the compiled catalog miss is what
-                    renders this listening-state placeholder as a raw message ID
-                    ("ZVCRHy"), exactly like the idle composer placeholder we fixed. */}
-                {voice.partial ? voice.partial : 'Listening…'}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        {/* Transport failure (dropped connection) — a quiet, tappable retry row,
-            NOT a fake assistant bubble with a raw network string. Tapping replays
-            the failed turn. Real server/agent errors still render as a message. */}
-        {transportError ? (
+  const header = (
+    <Layout.Header.Outer>
+      <Layout.Header.BackButton />
+      <Layout.Header.Content>
+        <Layout.Header.TitleText style={headerTitleStyle}>
+          {threadTitle ?? `Talk to ${agentName}`}
+        </Layout.Header.TitleText>
+        {voiceModeOn && voiceStatusLabel ? (
+          <Layout.Header.SubtitleText>
+            {voiceStatusLabel}
+          </Layout.Header.SubtitleText>
+        ) : participantsLabel ? (
+          // Compact participant indicator for group chats — the agents in this
+          // session at a glance. Tapping opens the existing Manage-group screen.
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Couldn't reach ${agentName} — tap to retry`}
-            accessibilityHint="Resends your last message"
-            onPress={retry}
-            style={[a.w_full, centerColumn]}>
-            <View
-              style={[
-                a.flex_row,
-                a.align_center,
-                a.justify_center,
-                a.gap_xs,
-                a.px_md,
-                a.py_sm,
-              ]}>
-              <Text
-                style={[
-                  a.text_sm,
-                  t.atoms.text_contrast_medium,
-                  a.text_center,
-                ]}>
-                {`Couldn't reach ${agentName} — tap to retry`}
-              </Text>
-            </View>
+            accessibilityLabel="View group members"
+            accessibilityHint="Opens the manage group screen"
+            onPress={() =>
+              threadId
+                ? navigation.navigate('GroupManage', {
+                    threadId,
+                    title: threadTitle ?? '',
+                  })
+                : undefined
+            }>
+            <Layout.Header.SubtitleText>
+              {participantsLabel}
+            </Layout.Header.SubtitleText>
           </Pressable>
+        ) : !showMic ? (
+          <Layout.Header.SubtitleText>
+            Voice unavailable on this device
+          </Layout.Header.SubtitleText>
         ) : null}
+      </Layout.Header.Content>
+      {/* Toggle auto-speak of replies. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Toggle spoken replies"
+        accessibilityHint=""
+        onPress={() => {
+          if (autoSpeak) voice.stopSpeaking()
+          setAutoSpeak(v => !v)
+        }}
+        style={[a.p_sm, a.rounded_full, !autoSpeak && {opacity: 0.4}]}>
+        <SpeakerIcon size="md" fill={t.atoms.text.color} />
+      </Pressable>
+    </Layout.Header.Outer>
+  )
 
-        {/* Composer — pinned to bottom, aligned to the centered column. */}
-        <View style={[a.border_t, t.atoms.border_contrast_low]}>
-          {/* Pending image attachment preview — thumbnail with an upload spinner /
-              failure state and a remove button. Sits above the input row. */}
-          {attachment ? (
-            <View style={[a.px_md, a.pt_sm, a.w_full, centerColumn]}>
-              <View style={[a.flex_row, a.align_center, a.gap_sm]}>
-                <View>
-                  <Image
-                    source={{uri: attachment.previewUri}}
-                    style={[a.rounded_sm, {width: 56, height: 56}]}
-                    contentFit="cover"
-                    accessibilityIgnoresInvertColors
-                    alt="Attached image preview"
-                  />
-                  {attachment.uploading ? (
-                    <View
-                      style={[
-                        a.absolute,
-                        a.inset_0,
-                        a.align_center,
-                        a.justify_center,
-                        a.rounded_sm,
-                        {backgroundColor: 'rgba(0,0,0,0.35)'},
-                      ]}>
-                      <Loader size="sm" />
-                    </View>
-                  ) : null}
-                </View>
-                <Text
-                  style={[a.flex_1, a.text_sm, t.atoms.text_contrast_medium]}>
-                  {attachment.uploading
-                    ? 'Uploading image…'
-                    : attachment.failed
-                      ? 'Upload failed — remove and try again'
-                      : 'Image ready to send'}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove attached image"
-                  accessibilityHint=""
-                  onPress={removeAttachment}
-                  style={[a.p_sm, a.rounded_full]}>
-                  <CloseIcon
-                    size="sm"
-                    fill={t.atoms.text_contrast_medium.color}
-                  />
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
+  const chatBody = (
+    <KeyboardAvoidingView
+      style={[a.flex_1]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      // MUST be 0: this KAV is rendered below the header, so RN already measures
+      // its frame correctly and the padding it inserts equals the keyboard
+      // overlap. A non-zero offset (the old `insets.top + 44`) opened exactly
+      // that much empty band above the keyboard. See composerOffset.ts.
+      keyboardVerticalOffset={COMPOSER_KEYBOARD_VERTICAL_OFFSET}>
+      <ScrollView
+        ref={scrollRef}
+        style={[a.flex_1]}
+        contentContainerStyle={[
+          a.px_md,
+          a.py_lg,
+          a.gap_sm,
+          {flexGrow: 1},
+          centerColumn,
+        ]}
+        onContentSizeChange={onContentSizeChange}
+        keyboardDismissMode="interactive">
+        {messages.length === 0 && isHydrating ? (
+          // Recent thread is loading — show a quiet loader instead of the empty-state
+          // copy so a returning user doesn't see a flash of "blank chat".
+          <View style={[a.flex_1, a.align_center, a.justify_center, a.pt_5xl]}>
+            <Loader size="lg" />
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={[a.flex_1, a.align_center, a.justify_center, a.pt_5xl]}>
+            <Text
+              style={[a.text_md, t.atoms.text_contrast_medium, a.text_center]}>
+              {`Ask ${agentName} anything. Tap the mic to start a hands-free voice chat — talk naturally and interrupt any time.`}
+            </Text>
+          </View>
+        ) : (
+          messages.map(m => (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              // Group threads attribute every message; 1:1 chat shows no per-message
+              // name. See groupSenderName: "You" requires the row's stamped senderId
+              // to BE the current account (strict identity match) — role alone never
+              // decides, so another member's turn is always shown under THEIR name.
+              senderName={threadId ? groupSenderName(m) : undefined}
+              decideDisabled={isStreaming}
+              onDecision={(action, decision) => {
+                void decide(action, decision)
+              }}
+            />
+          ))
+        )}
+      </ScrollView>
+
+      {/* Live partial transcript while listening. */}
+      {micActive ? (
+        <View style={[t.atoms.bg_contrast_25]}>
+          <View style={[a.px_md, a.py_sm, a.w_full, centerColumn]}>
+            <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
+              {/* Plain literal (not a Lingui msg): the compiled catalog miss is what
+                  renders this listening-state placeholder as a raw message ID
+                  ("ZVCRHy"), exactly like the idle composer placeholder we fixed. */}
+              {voice.partial ? voice.partial : 'Listening…'}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Transport failure (dropped connection) — a quiet, tappable retry row,
+          NOT a fake assistant bubble with a raw network string. Tapping replays
+          the failed turn. Real server/agent errors still render as a message. */}
+      {transportError ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Couldn't reach ${agentName} — tap to retry`}
+          accessibilityHint="Resends your last message"
+          onPress={retry}
+          style={[a.w_full, centerColumn]}>
           <View
             style={[
               a.flex_row,
               a.align_center,
-              a.gap_sm,
+              a.justify_center,
+              a.gap_xs,
               a.px_md,
               a.py_sm,
-              a.w_full,
-              centerColumn,
-              {
-                paddingBottom: composerBottomOffset(
-                  bottomBarOffset,
-                  isKeyboardVisible,
-                ),
-              },
             ]}>
-            {showMic ? (
-              // Single ON/OFF control for continuous, hands-free voice chat. ON =
-              // a live "call" with Bob (listen → reply → listen, with barge-in);
-              // OFF = back to text. One toggle, not a per-message button.
-              <Button
-                label={voiceModeOn ? 'End voice chat' : 'Start voice chat'}
-                size="large"
-                shape="round"
-                variant="solid"
-                color={voiceModeOn ? 'negative' : 'secondary'}
-                onPress={toggleVoiceMode}>
-                <ButtonIcon icon={MicIcon} />
-              </Button>
-            ) : null}
+            <Text
+              style={[a.text_sm, t.atoms.text_contrast_medium, a.text_center]}>
+              {`Couldn't reach ${agentName} — tap to retry`}
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
 
-            {/* Attach an image. Disabled in voice mode, while a turn streams, or when an
-              attachment is already pending (one image per message). */}
+      {/* Composer — pinned to bottom, aligned to the centered column. */}
+      <View style={[a.border_t, t.atoms.border_contrast_low]}>
+        {/* Pending image attachment preview — thumbnail with an upload spinner /
+            failure state and a remove button. Sits above the input row. */}
+        {attachment ? (
+          <View style={[a.px_md, a.pt_sm, a.w_full, centerColumn]}>
+            <View style={[a.flex_row, a.align_center, a.gap_sm]}>
+              <View>
+                <Image
+                  source={{uri: attachment.previewUri}}
+                  style={[a.rounded_sm, {width: 56, height: 56}]}
+                  contentFit="cover"
+                  accessibilityIgnoresInvertColors
+                  alt="Attached image preview"
+                />
+                {attachment.uploading ? (
+                  <View
+                    style={[
+                      a.absolute,
+                      a.inset_0,
+                      a.align_center,
+                      a.justify_center,
+                      a.rounded_sm,
+                      {backgroundColor: 'rgba(0,0,0,0.35)'},
+                    ]}>
+                    <Loader size="sm" />
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[a.flex_1, a.text_sm, t.atoms.text_contrast_medium]}>
+                {attachment.uploading
+                  ? 'Uploading image…'
+                  : attachment.failed
+                    ? 'Upload failed — remove and try again'
+                    : 'Image ready to send'}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Remove attached image"
+                accessibilityHint=""
+                onPress={removeAttachment}
+                style={[a.p_sm, a.rounded_full]}>
+                <CloseIcon
+                  size="sm"
+                  fill={t.atoms.text_contrast_medium.color}
+                />
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+        <View
+          style={[
+            a.flex_row,
+            a.align_center,
+            a.gap_sm,
+            a.px_md,
+            a.py_sm,
+            a.w_full,
+            centerColumn,
+            {
+              paddingBottom: composerBottomOffset(
+                bottomBarOffset,
+                isKeyboardVisible,
+              ),
+            },
+          ]}>
+          {showMic ? (
+            // Single ON/OFF control for continuous, hands-free voice chat. ON =
+            // a live "call" with Bob (listen → reply → listen, with barge-in);
+            // OFF = back to text. One toggle, not a per-message button.
             <Button
-              label="Attach image"
+              label={voiceModeOn ? 'End voice chat' : 'Start voice chat'}
+              size="large"
+              shape="round"
+              variant="solid"
+              color={voiceModeOn ? 'negative' : 'secondary'}
+              onPress={toggleVoiceMode}>
+              <ButtonIcon icon={MicIcon} />
+            </Button>
+          ) : null}
+
+          {/* Attach an image. Disabled in voice mode, while a turn streams, or when an
+            attachment is already pending (one image per message). */}
+          <Button
+            label="Attach image"
+            size="large"
+            shape="round"
+            variant="solid"
+            color="secondary"
+            disabled={voiceModeOn || isStreaming || attachment !== null}
+            onPress={() => {
+              void onAttach()
+            }}>
+            <ButtonIcon icon={ImageIcon} />
+          </Button>
+
+          <TextInput
+            accessibilityLabel="Text input field"
+            accessibilityHint="Type a message to send to the agent"
+            value={input}
+            onChangeText={setInput}
+            // Plain literal (not a Lingui msg): the compiled catalog miss is what
+            // renders the placeholder as a raw message ID ("l9RW8S").
+            placeholder={`Message ${agentName}…`}
+            placeholderTextColor={t.atoms.text_contrast_low.color}
+            multiline
+            style={[
+              a.flex_1,
+              a.px_md,
+              a.py_sm,
+              a.rounded_full,
+              a.text_md,
+              t.atoms.bg_contrast_25,
+              t.atoms.text,
+              {maxHeight: 120},
+            ]}
+            onSubmitEditing={() => doSend(input)}
+            editable={!voiceModeOn}
+          />
+
+          {isStreaming ? (
+            <Button
+              label="Stop"
               size="large"
               shape="round"
               variant="solid"
               color="secondary"
-              disabled={voiceModeOn || isStreaming || attachment !== null}
-              onPress={() => {
-                void onAttach()
-              }}>
-              <ButtonIcon icon={ImageIcon} />
+              onPress={abort}>
+              <ButtonIcon icon={SpeakerIcon} />
             </Button>
-
-            <TextInput
-              accessibilityLabel="Text input field"
-              accessibilityHint="Type a message to send to the agent"
-              value={input}
-              onChangeText={setInput}
-              // Plain literal (not a Lingui msg): the compiled catalog miss is what
-              // renders the placeholder as a raw message ID ("l9RW8S").
-              placeholder={`Message ${agentName}…`}
-              placeholderTextColor={t.atoms.text_contrast_low.color}
-              multiline
-              style={[
-                a.flex_1,
-                a.px_md,
-                a.py_sm,
-                a.rounded_full,
-                a.text_md,
-                t.atoms.bg_contrast_25,
-                t.atoms.text,
-                {maxHeight: 120},
-              ]}
-              onSubmitEditing={() => doSend(input)}
-              editable={!voiceModeOn}
-            />
-
-            {isStreaming ? (
-              <Button
-                label="Stop"
-                size="large"
-                shape="round"
-                variant="solid"
-                color="secondary"
-                onPress={abort}>
-                <ButtonIcon icon={SpeakerIcon} />
-              </Button>
-            ) : (
-              <Button
-                label="Send"
-                size="large"
-                shape="round"
-                variant="solid"
-                color="primary"
-                disabled={!canSend(input, attachment, isStreaming)}
-                onPress={() => doSend(input)}>
-                <ButtonIcon icon={SendIcon} />
-              </Button>
-            )}
-          </View>
+          ) : (
+            <Button
+              label="Send"
+              size="large"
+              shape="round"
+              variant="solid"
+              color="primary"
+              disabled={!canSend(input, attachment, isStreaming)}
+              onPress={() => doSend(input)}>
+              <ButtonIcon icon={SendIcon} />
+            </Button>
+          )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
+    </KeyboardAvoidingView>
+  )
+
+  // EMBEDDED (AgentHub Chat tab): no screen chrome — the hub owns the header.
+  // Voice status + the spoken-replies toggle move into a slim inline row.
+  if (embedded) {
+    return (
+      <View style={[a.flex_1]}>
+        <View
+          style={[
+            a.flex_row,
+            a.align_center,
+            a.justify_end,
+            a.gap_sm,
+            a.px_md,
+          ]}>
+          {voiceModeOn && voiceStatusLabel ? (
+            <Text style={[a.flex_1, a.text_sm, t.atoms.text_contrast_medium]}>
+              {voiceStatusLabel}
+            </Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Toggle spoken replies"
+            accessibilityHint=""
+            onPress={() => {
+              if (autoSpeak) voice.stopSpeaking()
+              setAutoSpeak(v => !v)
+            }}
+            style={[a.p_xs, a.rounded_full, !autoSpeak && {opacity: 0.4}]}>
+            <SpeakerIcon size="sm" fill={t.atoms.text.color} />
+          </Pressable>
+        </View>
+        {chatBody}
+      </View>
+    )
+  }
+
+  return (
+    <Layout.Screen>
+      {header}
+      {chatBody}
     </Layout.Screen>
   )
 }

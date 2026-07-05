@@ -8,8 +8,14 @@ jest.mock('../config', () => ({
   HISTORY_ENDPOINT: 'https://runtime.test/app/history',
 }))
 
-import {setSupabaseTokenProvider} from '../authToken'
+// SINGLE-LOGIN: setSupabaseTokenProvider is a no-op, so mock the token reader
+// itself (same pattern as agentsClient.test.ts).
+jest.mock('../authToken', () => ({getSupabaseAccessToken: jest.fn()}))
+
+import {getSupabaseAccessToken} from '../authToken'
 import {fetchHistory} from '../historyClient'
+
+const mockToken = jest.mocked(getSupabaseAccessToken)
 
 // Mock the global fetch the history client uses (plain fetch, not expo/fetch).
 const mockFetch = jest.fn()
@@ -17,13 +23,13 @@ const mockFetch = jest.fn()
 global.fetch = mockFetch
 
 function okJson(obj: unknown) {
-  return {status: 200, ok: true, json: async () => obj}
+  return {status: 200, ok: true, json: () => Promise.resolve(obj)}
 }
 
 describe('fetchHistory', () => {
   beforeEach(() => {
     mockFetch.mockReset()
-    setSupabaseTokenProvider(() => Promise.resolve('TOKEN_ABC'))
+    mockToken.mockResolvedValue('TOKEN_ABC')
   })
 
   it('attaches the Supabase bearer and GETs the history endpoint', async () => {
@@ -35,16 +41,45 @@ describe('fetchHistory', () => {
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://runtime.test/app/history')
     expect(init.method).toBe('GET')
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer TOKEN_ABC')
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      'Bearer TOKEN_ABC',
+    )
+  })
+
+  it('scopes the read with ?agent= when a specific agent is requested (E6 selector)', async () => {
+    mockFetch.mockResolvedValue(okJson({history: []}) as never)
+
+    await fetchHistory({agent: 'bull.pds.test'})
+
+    const [url] = mockFetch.mock.calls[0] as [string]
+    expect(url).toBe('https://runtime.test/app/history?agent=bull.pds.test')
   })
 
   it('maps wire entries to ChatMessage (agent→assistant) carrying channel + mediaUrls', async () => {
     mockFetch.mockResolvedValue(
       okJson({
         history: [
-          {role: 'user', text: 'from my phone', channel: 'sms', mediaUrls: [], at: '2026-06-22T00:00:00.000Z'},
-          {role: 'agent', text: 'here you go', channel: 'app', mediaUrls: ['https://r2/p.png'], at: '2026-06-22T00:01:00.000Z'},
-          {role: 'agent', text: 'voice reply', channel: 'voice', mediaUrls: [], at: null},
+          {
+            role: 'user',
+            text: 'from my phone',
+            channel: 'sms',
+            mediaUrls: [],
+            at: '2026-06-22T00:00:00.000Z',
+          },
+          {
+            role: 'agent',
+            text: 'here you go',
+            channel: 'app',
+            mediaUrls: ['https://r2/p.png'],
+            at: '2026-06-22T00:01:00.000Z',
+          },
+          {
+            role: 'agent',
+            text: 'voice reply',
+            channel: 'voice',
+            mediaUrls: [],
+            at: null,
+          },
         ],
       }) as never,
     )
@@ -66,7 +101,7 @@ describe('fetchHistory', () => {
   })
 
   it('signed out → returns empty + signedOut, never calls the runtime', async () => {
-    setSupabaseTokenProvider(() => Promise.resolve(null))
+    mockToken.mockResolvedValue(null)
 
     const result = await fetchHistory()
 

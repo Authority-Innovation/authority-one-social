@@ -76,6 +76,9 @@ export type CommonNavigatorParams = {
   SocialAutonomySettings: {agent?: string} | undefined
   // Authority One: list of ALL the owner's agents (number, live state, persona entry).
   MyAgents: undefined
+  // Authority One: per-agent hub — 1:1 chat + owner management (posts, profile,
+  // settings) for ONE owned agent. `agent` = the agent's full handle (or DID).
+  AgentHub: {agent: string}
   // Authority One: Context Engine (Phase 1, location-only) opt-in + log.
   ContextEngineSettings: undefined
   ContextLog: undefined

@@ -2,17 +2,20 @@ import {ActivityIndicator, Pressable, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
-import {type Thread} from '#/lib/agent-runtime'
+import {type OwnerAgent, type Thread} from '#/lib/agent-runtime'
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
   type NavigationProp,
 } from '#/lib/routes/types'
+import {sanitizeHandle} from '#/lib/strings/handles'
+import {useOwnerAgentsQuery} from '#/state/queries/agents'
+import {useProfilesQuery} from '#/state/queries/profile'
 import {useGroupOpMutation, useThreadsQuery} from '#/state/queries/threads'
+import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {ChevronRight_Stroke2_Corner0_Rounded as ChevronIcon} from '#/components/icons/Chevron'
-import {Microphone_Stroke2_Corner0_Rounded as MicIcon} from '#/components/icons/Microphone'
 import {PersonGroup_Stroke2_Corner2_Rounded as GroupIcon} from '#/components/icons/Person'
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
 import * as Layout from '#/components/Layout'
@@ -21,9 +24,12 @@ import {Text} from '#/components/Typography'
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'ChatList'>
 
 /**
- * Chat list — the front door to multi-chat. Always shows the default "Talk to Bob"
- * single chat (back-compat), plus any group threads from the live runtime. Degrades to
- * just Talk-to-Bob when /app/threads is unreachable, signed out, or empty.
+ * Chat list — the front door to multi-chat. Leads with the YOUR AGENTS roster
+ * (one row per owned agent from GET /app/agents; tap -> that agent's AgentHub),
+ * then any group threads from the live runtime. The old static "Talk to Bob" row
+ * (and the create-a-group-of-one workaround it steered people toward) is retired;
+ * each owned agent now has a real 1:1 entry. Degrades to an empty roster note
+ * when the runtime is unreachable.
  */
 export function ChatListScreen({}: Props) {
   const t = useTheme()
@@ -72,31 +78,8 @@ export function ChatListScreen({}: Props) {
 
       <Layout.Content>
         <View style={[a.p_lg, a.gap_md]}>
-          {/* Default Talk-to-Bob (existing single chat, no threadId). */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Talk to Bob"
-            accessibilityHint="Opens your one-on-one chat"
-            onPress={() => navigation.navigate('AgentChat', {})}
-            style={[
-              a.flex_row,
-              a.align_center,
-              a.gap_md,
-              a.rounded_md,
-              a.p_md,
-              t.atoms.bg_contrast_25,
-            ]}>
-            <MicIcon size="lg" fill={t.atoms.text.color} />
-            <View style={[a.flex_1]}>
-              <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
-                <Trans>Talk to Bob</Trans>
-              </Text>
-              <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-                <Trans>Your one-on-one agent chat</Trans>
-              </Text>
-            </View>
-            <ChevronIcon size="sm" fill={t.atoms.text_contrast_low.color} />
-          </Pressable>
+          {/* YOUR AGENTS roster — one row per owned agent, tap -> AgentHub. */}
+          <YourAgentsSection />
 
           {isLoading ? (
             <View style={[a.py_lg, a.align_center]}>
@@ -156,6 +139,168 @@ export function ChatListScreen({}: Props) {
       </Layout.Content>
     </Layout.Screen>
   )
+}
+
+/**
+ * The YOUR AGENTS roster: every agent this owner runs (GET /app/agents), with
+ * avatar (enriched from the atproto profile), display name, @handle and a
+ * live/paused badge. Tapping a row opens that agent's AgentHub (Chat tab first).
+ * Degrades to a quiet note when the runtime is unreachable / signed out, and to
+ * a create-your-first-agent entry when the roster is genuinely empty.
+ */
+function YourAgentsSection() {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const navigation = useNavigation<NavigationProp>()
+  const {data, isLoading} = useOwnerAgentsQuery()
+  const agents = data?.agents ?? []
+  // Avatars/display names come from the agents' atproto profiles — the runtime
+  // rows usually carry neither. One batched read; rows fall back gracefully.
+  const {data: profiles} = useProfilesQuery({
+    handles: agents.map(agent => agent.did ?? agent.handle),
+  })
+
+  return (
+    <View style={[a.gap_sm]}>
+      <View style={[a.flex_row, a.align_center]}>
+        <Text
+          style={[
+            a.flex_1,
+            a.text_sm,
+            a.font_bold,
+            t.atoms.text_contrast_medium,
+          ]}>
+          <Trans>Your agents</Trans>
+        </Text>
+        <Button
+          label={l`Create a new agent`}
+          size="tiny"
+          variant="ghost"
+          color="secondary"
+          onPress={() => navigation.navigate('NewAgent')}>
+          <ButtonIcon icon={PlusIcon} />
+          <ButtonText>
+            <Trans>New agent</Trans>
+          </ButtonText>
+        </Button>
+      </View>
+
+      {isLoading ? (
+        <View style={[a.py_md, a.align_center]}>
+          <ActivityIndicator />
+        </View>
+      ) : agents.length === 0 ? (
+        <Text style={[a.text_sm, t.atoms.text_contrast_low]}>
+          {data?.signedOut || data === undefined ? (
+            <Trans>Your agents are unavailable right now.</Trans>
+          ) : (
+            <Trans>No agents yet. Create one to start chatting.</Trans>
+          )}
+        </Text>
+      ) : (
+        agents.map(agent => (
+          <AgentRosterRow
+            key={agent.handle}
+            agent={agent}
+            profile={profiles?.profiles.find(
+              p =>
+                p.did === agent.did ||
+                p.handle.toLowerCase() === agent.handle.toLowerCase(),
+            )}
+            onPress={() =>
+              navigation.navigate('AgentHub', {agent: agent.handle})
+            }
+          />
+        ))
+      )}
+    </View>
+  )
+}
+
+function AgentRosterRow({
+  agent,
+  profile,
+  onPress,
+}: {
+  agent: OwnerAgent
+  profile?: {avatar?: string; displayName?: string}
+  onPress: () => void
+}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const title = profile?.displayName || agent.displayName || agent.handle
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={l`Open ${title}`}
+      accessibilityHint={l`Opens this agent's chat and management hub`}
+      onPress={onPress}
+      style={[
+        a.flex_row,
+        a.align_center,
+        a.gap_md,
+        a.rounded_md,
+        a.p_md,
+        t.atoms.bg_contrast_25,
+      ]}>
+      <UserAvatar
+        avatar={profile?.avatar ?? agent.avatar}
+        size={40}
+        type="user"
+      />
+      <View style={[a.flex_1]}>
+        <View style={[a.flex_row, a.align_center, a.gap_sm]}>
+          <Text
+            emoji
+            style={[a.text_md, a.font_bold, t.atoms.text]}
+            numberOfLines={1}>
+            {title}
+          </Text>
+          <AgentStatusBadge agent={agent} />
+        </View>
+        <Text
+          style={[a.text_xs, t.atoms.text_contrast_medium]}
+          numberOfLines={1}>
+          {sanitizeHandle(agent.handle, '@')}
+        </Text>
+      </View>
+      <ChevronIcon size="sm" fill={t.atoms.text_contrast_low.color} />
+    </Pressable>
+  )
+}
+
+/** Live (green) / Paused (muted) pill. Nothing when the runtime row isn't enriched. */
+function AgentStatusBadge({agent}: {agent: OwnerAgent}) {
+  const t = useTheme()
+  if (agent.paused === true) {
+    return (
+      <View
+        style={[
+          a.rounded_full,
+          a.px_sm,
+          {paddingVertical: 2, backgroundColor: t.palette.contrast_100},
+        ]}>
+        <Text style={[a.text_xs, a.font_bold, {color: t.palette.contrast_600}]}>
+          <Trans>Paused</Trans>
+        </Text>
+      </View>
+    )
+  }
+  if (agent.live === true) {
+    return (
+      <View
+        style={[
+          a.rounded_full,
+          a.px_sm,
+          {paddingVertical: 2, backgroundColor: t.palette.positive_50},
+        ]}>
+        <Text style={[a.text_xs, a.font_bold, {color: t.palette.positive_700}]}>
+          <Trans>Live</Trans>
+        </Text>
+      </View>
+    )
+  }
+  return null
 }
 
 function ThreadRow({
