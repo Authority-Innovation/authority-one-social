@@ -101,7 +101,7 @@ function AgentHubInner({agentRef}: {agentRef: string}) {
   const displayName = profile?.displayName || agent.displayName || agent.handle
   const ownerLabel = currentAccount?.handle
     ? sanitizeHandle(currentAccount.handle, '@')
-    : l`you`
+    : 'you'
 
   return (
     <HubShell title={displayName}>
@@ -140,9 +140,10 @@ function AgentHubInner({agentRef}: {agentRef: string}) {
             t.atoms.bg_contrast_25,
           ]}>
           <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-            <Trans>
-              Managing {displayName} — you are still {ownerLabel}
-            </Trans>
+            {/* Plain literal: interpolated custom strings render their raw ICU
+                placeholders under the uncompiled catalog (the "Managing
+                {displayName}" bug Elliott hit live). */}
+            {`Managing ${displayName} — you are still ${ownerLabel}`}
           </Text>
         </View>
       </View>
@@ -185,7 +186,12 @@ function HubShell({
         </Layout.Header.Content>
         <Layout.Header.Slot />
       </Layout.Header.Outer>
-      {children}
+      {/* Layout.Screen does NOT constrain width — on desktop web the side navs
+          are position:fixed and screens are expected to self-center via
+          Layout.Center/Content (Header.Outer does its own). Without this the
+          hub header/tabs/content span the full window and paint under both
+          navs. flex_1 so the Chat tab's composer can pin to the bottom. */}
+      <Layout.Center style={[a.flex_1]}>{children}</Layout.Center>
     </Layout.Screen>
   )
 }
@@ -255,7 +261,6 @@ function HubTabBar({
  */
 function PostsTab({agent, did}: {agent: OwnerAgent; did?: string}) {
   const t = useTheme()
-  const {t: l} = useLingui()
   const {openComposer} = useOpenComposer()
   const name = agent.displayName || agent.handle
 
@@ -272,8 +277,10 @@ function PostsTab({agent, did}: {agent: OwnerAgent; did?: string}) {
   return (
     <View style={[a.flex_1]}>
       <View style={[a.px_lg, a.py_sm, a.flex_row]}>
+        {/* Plain literals: interpolated custom strings break (raw ICU
+            placeholders) under the uncompiled catalog. */}
         <Button
-          label={l`Post as ${name}`}
+          label={`Post as ${name}`}
           size="small"
           variant="solid"
           color="primary"
@@ -289,9 +296,7 @@ function PostsTab({agent, did}: {agent: OwnerAgent; did?: string}) {
             })
           }>
           <ButtonIcon icon={EditIcon} />
-          <ButtonText>
-            <Trans>Post as {name}</Trans>
-          </ButtonText>
+          <ButtonText>{`Post as ${name}`}</ButtonText>
         </Button>
       </View>
       <View style={[a.flex_1]}>
@@ -302,7 +307,7 @@ function PostsTab({agent, did}: {agent: OwnerAgent; did?: string}) {
           renderEmptyState={() => (
             <EmptyState
               icon={EditIcon}
-              message={l`No posts yet. Post as ${name} to get started.`}
+              message={`No posts yet. Post as ${name} to get started.`}
             />
           )}
         />
@@ -327,7 +332,6 @@ function ProfileTab({
   description?: string
 }) {
   const t = useTheme()
-  const {t: l} = useLingui()
   const editControl = Dialog.useDialogControl()
 
   return (
@@ -353,7 +357,7 @@ function ProfileTab({
         </Text>
       )}
       <Button
-        label={l`Edit ${displayName}’s profile`}
+        label={`Edit ${displayName}’s profile`}
         size="large"
         variant="solid"
         color="primary"
@@ -413,7 +417,7 @@ function SettingsTab({
         }
       />
       <Button
-        label={paused ? l`Resume ${displayName}` : l`Pause ${displayName}`}
+        label={paused ? `Resume ${displayName}` : `Pause ${displayName}`}
         size="large"
         variant="solid"
         color="secondary"

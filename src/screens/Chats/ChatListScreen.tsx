@@ -232,7 +232,7 @@ function AgentRosterRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={l`Open ${title}`}
+      accessibilityLabel={`Open ${title}`}
       accessibilityHint={l`Opens this agent's chat and management hub`}
       onPress={onPress}
       style={[

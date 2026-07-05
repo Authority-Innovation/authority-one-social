@@ -1048,7 +1048,7 @@ export const ComposePost = ({
         onPost?.(res.uri)
         onClose()
         setTimeout(() => {
-          Toast.show(l`Posted as ${agentName}`, {type: 'success'})
+          Toast.show(`Posted as ${agentName}`, {type: 'success'})
         }, 500)
       } catch (e) {
         logger.error(e as Error, {message: 'Composer: post-as-agent failed'})
@@ -1487,9 +1487,9 @@ export const ComposePost = ({
                       a.font_bold,
                       t.atoms.text_contrast_medium,
                     ]}>
-                    <Trans>
-                      Posting as {postAs.displayName ?? postAs.handle}
-                    </Trans>
+                    {/* Plain literal: interpolated custom strings render raw
+                        ICU placeholders under the uncompiled catalog. */}
+                    {`Posting as ${postAs.displayName ?? postAs.handle}`}
                   </Text>
                 </View>
               </View>

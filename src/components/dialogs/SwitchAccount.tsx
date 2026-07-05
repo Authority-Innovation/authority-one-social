@@ -83,7 +83,6 @@ export function SwitchAccountDialog({
  */
 function YourAgentsSection({control}: {control: Dialog.DialogControlProps}) {
   const t = useTheme()
-  const {_} = useLingui()
   const navigation = useNavigation<NavigationProp>()
   const {data} = useOwnerAgentsQuery()
   const agents = data?.agents ?? []
@@ -127,7 +126,7 @@ function YourAgentsSection({control}: {control: Dialog.DialogControlProps}) {
                 testID={`manageAgentBtn-${agent.handle}`}
                 style={[a.w_full]}
                 onPress={() => onSelectAgent(agent)}
-                label={_(msg`Manage ${name}`)}>
+                label={`Manage ${name}`}>
                 {({hovered, pressed}) => (
                   <View
                     style={[

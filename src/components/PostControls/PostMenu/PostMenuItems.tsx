@@ -575,12 +575,14 @@ let PostMenuItems = ({
         {ownedAgentAuthor && (
           <>
             <Menu.Group>
+              {/* Plain literal: interpolated custom strings render raw ICU
+                  placeholders under the uncompiled catalog. */}
               <Menu.Item
                 testID="postDropdownDeleteAgentPostBtn"
-                label={l`Delete ${ownedAgentName}’s post`}
+                label={`Delete ${ownedAgentName}’s post`}
                 onPress={() => agentDeletePromptControl.open()}>
                 <Menu.ItemText>
-                  {l`Delete ${ownedAgentName}’s post`}
+                  {`Delete ${ownedAgentName}’s post`}
                 </Menu.ItemText>
                 <Menu.ItemIcon icon={Trash} position="right" />
               </Menu.Item>
@@ -875,7 +877,7 @@ let PostMenuItems = ({
       {ownedAgentAuthor && (
         <Prompt.Basic
           control={agentDeletePromptControl}
-          title={l`Delete this post from ${sanitizeHandle(postAuthor.handle, '@')}?`}
+          title={`Delete this post from ${sanitizeHandle(postAuthor.handle, '@')}?`}
           description={l`This removes it from the network.`}
           onConfirm={onDeleteAgentPost}
           confirmButtonCta={l`Delete`}
