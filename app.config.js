@@ -153,7 +153,10 @@ module.exports = function (_config) {
         // NOTE: App Store Connect reported the last uploaded build as 20 (2026-07-03),
         // so uploads bumped past this file without being committed. Trust ASC's
         // "must be higher than N" error over this value when they disagree.
-        buildNumber: '23',
+        buildNumber: '24',
+        // Signing team for xcodebuild; prebuild --clean drops the Xcode-GUI-set
+        // DEVELOPMENT_TEAM without this.
+        appleTeamId: '4TKU6PS7ZS',
         config: {
           usesNonExemptEncryption: false,
         },
