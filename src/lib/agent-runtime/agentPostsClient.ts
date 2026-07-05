@@ -2,7 +2,11 @@ import {type AppBskyRichtextFacet} from '@atproto/api'
 
 import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
-import {AGENTS_POSTS_DELETE_ENDPOINT, AGENTS_POSTS_ENDPOINT} from './config'
+import {
+  AGENTS_POSTS_DELETE_ENDPOINT,
+  AGENTS_POSTS_EDIT_ENDPOINT,
+  AGENTS_POSTS_ENDPOINT,
+} from './config'
 
 /**
  * Owner-initiated agent post management: the DIRECT-MANIPULATION plane. Both calls
@@ -106,6 +110,54 @@ export async function deleteAgentPost(input: {
     }
   } catch (e) {
     logger.warn('agent-posts: delete failed', {safeMessage: String(e)})
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
+  }
+}
+
+/**
+ * POST /app/agents/posts/edit — replace the text/facets of an existing post
+ * authored by one of the owner's agents (atproto update op: same rkey/uri, new
+ * cid). Embeds are preserved server-side. NOTE the atproto caveat the UI must
+ * surface: likes/reposts/replies reference the pre-edit CID, so editing a post
+ * with engagement can orphan those interactions — prefer delete+repost there.
+ * Never throws.
+ */
+export async function editAgentPost(input: {
+  agent: string
+  uri: string
+  text: string
+  facets?: AppBskyRichtextFacet.Main[]
+}): Promise<PostAsAgentResult> {
+  const headers = await authHeaders().catch(() => null)
+  if (!headers) return {ok: false, signedOut: true}
+  try {
+    const res = await fetch(AGENTS_POSTS_EDIT_ENDPOINT, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        agent: input.agent,
+        uri: input.uri,
+        text: input.text,
+        facets: input.facets?.length ? input.facets : undefined,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok) {
+      return {ok: false, ...mapFailure(res.status, body)}
+    }
+    return {
+      ok: true,
+      signedOut: false,
+      uri: str(body.uri) ?? input.uri,
+      cid: str(body.cid),
+      agent: str(body.agent) ?? input.agent,
+    }
+  } catch (e) {
+    logger.warn('agent-posts: edit failed', {safeMessage: String(e)})
     return {
       ok: false,
       signedOut: false,

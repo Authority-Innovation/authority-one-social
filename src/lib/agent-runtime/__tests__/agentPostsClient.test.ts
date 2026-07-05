@@ -7,13 +7,14 @@ jest.mock('#/logger', () => ({logger: {error: jest.fn(), warn: jest.fn()}}))
 jest.mock('../config', () => ({
   AGENTS_POSTS_ENDPOINT: 'https://runtime.test/app/agents/posts',
   AGENTS_POSTS_DELETE_ENDPOINT: 'https://runtime.test/app/agents/posts/delete',
+  AGENTS_POSTS_EDIT_ENDPOINT: 'https://runtime.test/app/agents/posts/edit',
 }))
 
 // SINGLE-LOGIN: setSupabaseTokenProvider is a no-op, so mock the token reader
 // itself (same pattern as agentsClient.test.ts).
 jest.mock('../authToken', () => ({getSupabaseAccessToken: jest.fn()}))
 
-import {deleteAgentPost, postAsAgent} from '../agentPostsClient'
+import {deleteAgentPost, editAgentPost, postAsAgent} from '../agentPostsClient'
 import {getSupabaseAccessToken} from '../authToken'
 
 const mockToken = jest.mocked(getSupabaseAccessToken)
@@ -164,5 +165,101 @@ describe('postAsAgent', () => {
     expect(res.ok).toBe(false)
     expect(res.signedOut).toBe(false)
     expect(res.code).toBe('too-long')
+  })
+})
+
+describe('editAgentPost', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+    mockToken.mockResolvedValue('TOKEN_ABC')
+  })
+
+  it('POSTs {agent, uri, text, facets} and echoes the new cid at the same uri', async () => {
+    mockFetch.mockResolvedValue(
+      jsonRes(200, {
+        ok: true,
+        uri: 'at://did:plc:bull/app.bsky.feed.post/3k1',
+        cid: 'bafyNEW',
+        agent: 'bull.pds.test',
+      }) as never,
+    )
+
+    const res = await editAgentPost({
+      agent: 'bull.pds.test',
+      uri: 'at://did:plc:bull/app.bsky.feed.post/3k1',
+      text: 'corrected text',
+      facets: [
+        {
+          index: {byteStart: 0, byteEnd: 9},
+          features: [{$type: 'app.bsky.richtext.facet#tag', tag: 'corrected'}],
+        },
+      ],
+    })
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://runtime.test/app/agents/posts/edit')
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      'Bearer TOKEN_ABC',
+    )
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.agent).toBe('bull.pds.test')
+    expect(body.uri).toBe('at://did:plc:bull/app.bsky.feed.post/3k1')
+    expect(body.text).toBe('corrected text')
+    expect(Array.isArray(body.facets)).toBe(true)
+    expect(res.ok).toBe(true)
+    expect(res.uri).toBe('at://did:plc:bull/app.bsky.feed.post/3k1')
+    expect(res.cid).toBe('bafyNEW')
+  })
+
+  it('omits empty facets from the wire body and falls back to the input uri', async () => {
+    mockFetch.mockResolvedValue(jsonRes(200, {ok: true}) as never)
+
+    const res = await editAgentPost({
+      agent: 'a',
+      uri: 'at://x/app.bsky.feed.post/1',
+      text: 't',
+      facets: [],
+    })
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect('facets' in body).toBe(false)
+    expect(res.uri).toBe('at://x/app.bsky.feed.post/1')
+  })
+
+  it('surfaces repo-mismatch / too-long codes as validation errors, not sign-out', async () => {
+    mockFetch.mockResolvedValue(
+      jsonRes(400, {
+        error: 'uri repo != agent',
+        code: 'repo-mismatch',
+      }) as never,
+    )
+
+    const res = await editAgentPost({agent: 'a', uri: 'at://y/p/1', text: 't'})
+
+    expect(res.ok).toBe(false)
+    expect(res.signedOut).toBe(false)
+    expect(res.code).toBe('repo-mismatch')
+  })
+
+  it('surfaces a 403 not-your-agent as an ownership error', async () => {
+    mockFetch.mockResolvedValue(
+      jsonRes(403, {error: 'forbidden', code: 'not-your-agent'}) as never,
+    )
+
+    const res = await editAgentPost({agent: 'a', uri: 'at://y/p/1', text: 't'})
+
+    expect(res.ok).toBe(false)
+    expect(res.signedOut).toBe(false)
+    expect(res.code).toBe('not-your-agent')
+  })
+
+  it('never throws on a network failure', async () => {
+    mockFetch.mockRejectedValue(new Error('boom') as never)
+
+    const res = await editAgentPost({agent: 'a', uri: 'at://y/p/1', text: 't'})
+
+    expect(res.ok).toBe(false)
+    expect(res.error).toBe('boom')
   })
 })

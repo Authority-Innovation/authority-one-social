@@ -56,6 +56,12 @@ export const AGENTS_PAUSE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/pause
  */
 export const AGENTS_POSTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/posts`
 export const AGENTS_POSTS_DELETE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/posts/delete`
+/**
+ * Edit an agent post in place (same rkey/uri, new cid; embeds preserved).
+ * POST {agent, uri, text, facets?} -> {ok, uri, cid, agent}; 403
+ * {code:'not-your-agent'}; 400 {code:'repo-mismatch'|'too-long'}.
+ */
+export const AGENTS_POSTS_EDIT_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/posts/edit`
 
 /**
  * Agent PDS profile editor. POST {agent, displayName?, description?, avatarUrl?,

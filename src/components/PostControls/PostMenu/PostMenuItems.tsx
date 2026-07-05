@@ -83,6 +83,7 @@ import {
   Mute_Stroke2_Corner0_Rounded as Mute,
   Mute_Stroke2_Corner0_Rounded as MuteIcon,
 } from '#/components/icons/Mute'
+import {Pencil_Stroke2_Corner0_Rounded as Pencil} from '#/components/icons/Pencil'
 import {PersonX_Stroke2_Corner0_Rounded as PersonX} from '#/components/icons/Person'
 import {Pin_Stroke2_Corner0_Rounded as PinIcon} from '#/components/icons/Pin'
 import {SettingsGear2_Stroke2_Corner0_Rounded as Gear} from '#/components/icons/SettingsGear2'
@@ -103,6 +104,7 @@ import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL} from '#/env'
+import {EditAgentPostDialog} from './EditAgentPostDialog'
 
 let PostMenuItems = ({
   post,
@@ -153,6 +155,7 @@ let PostMenuItems = ({
   const reportDialogControl = useReportDialogControl()
   const deletePromptControl = useDialogControl()
   const agentDeletePromptControl = useDialogControl()
+  const agentEditDialogControl = useDialogControl()
   const hidePromptControl = useDialogControl()
   const postInteractionSettingsDialogControl = useDialogControl()
   const quotePostDetachConfirmControl = useDialogControl()
@@ -183,8 +186,13 @@ let PostMenuItems = ({
   // is one of the viewer's agents (cached GET /app/agents roster), the menu adds
   // owner controls whose mutations hit the ownership-scoped runtime endpoints —
   // never the local session (the human doesn't hold the agent's credentials)
-  // and never the agent's LLM.
-  const ownedAgentAuthor = useOwnedAgent(isAuthor ? undefined : postAuthor.did)
+  // and never the agent's LLM. Matched by DID with a handle fallback: roster
+  // rows may omit `did`, and an agent's handle is the same unique PDS identity.
+  const ownedAgentByDid = useOwnedAgent(isAuthor ? undefined : postAuthor.did)
+  const ownedAgentByHandle = useOwnedAgent(
+    isAuthor ? undefined : postAuthor.handle,
+  )
+  const ownedAgentAuthor = ownedAgentByDid ?? ownedAgentByHandle
   const isRootPostAuthor = new AtUri(rootUri).host === currentAccount?.did
   const threadgateHiddenReplies = useMergedThreadgateHiddenReplies({
     threadgateRecord,
@@ -575,8 +583,15 @@ let PostMenuItems = ({
         {ownedAgentAuthor && (
           <>
             <Menu.Group>
-              {/* Plain literal: interpolated custom strings render raw ICU
+              {/* Plain literals: interpolated custom strings render raw ICU
                   placeholders under the uncompiled catalog. */}
+              <Menu.Item
+                testID="postDropdownEditAgentPostBtn"
+                label={`Edit ${ownedAgentName}’s post`}
+                onPress={() => agentEditDialogControl.open()}>
+                <Menu.ItemText>{`Edit ${ownedAgentName}’s post`}</Menu.ItemText>
+                <Menu.ItemIcon icon={Pencil} position="right" />
+              </Menu.Item>
               <Menu.Item
                 testID="postDropdownDeleteAgentPostBtn"
                 label={`Delete ${ownedAgentName}’s post`}
@@ -875,14 +890,23 @@ let PostMenuItems = ({
         confirmButtonColor="negative"
       />
       {ownedAgentAuthor && (
-        <Prompt.Basic
-          control={agentDeletePromptControl}
-          title={`Delete this post from ${sanitizeHandle(postAuthor.handle, '@')}?`}
-          description={l`This removes it from the network.`}
-          onConfirm={onDeleteAgentPost}
-          confirmButtonCta={l`Delete`}
-          confirmButtonColor="negative"
-        />
+        <>
+          <Prompt.Basic
+            control={agentDeletePromptControl}
+            title={`Delete this post from ${sanitizeHandle(postAuthor.handle, '@')}?`}
+            description={l`This removes it from the network.`}
+            onConfirm={onDeleteAgentPost}
+            confirmButtonCta={l`Delete`}
+            confirmButtonColor="negative"
+          />
+          <EditAgentPostDialog
+            control={agentEditDialogControl}
+            agent={ownedAgentAuthor.handle}
+            agentName={ownedAgentName}
+            post={post}
+            record={record}
+          />
+        </>
       )}
       <Prompt.Basic
         control={hidePromptControl}
