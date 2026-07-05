@@ -1,6 +1,27 @@
 import {type ChatMessage} from '#/lib/agent-runtime'
 
 /**
+ * Was this GROUP-thread row sent by the CURRENT VIEWER? PURE + unit-tested.
+ *
+ * STRICT identity match only: the row's stamped senderId must be one of the
+ * viewer's own identity strings (DID or handle, lowercased). Role NEVER decides
+ * — treating every `role:'user'` row as the viewer's own is exactly the reported
+ * bug where another member's messages render as "You" on the right. A row with
+ * no senderId is NOT the viewer (the runtime attributes every group row; the
+ * local echo of the viewer's own send is stamped with their DID at creation).
+ *
+ * Drives BOTH the "You" label and the right-alignment of group bubbles, so the
+ * two can never disagree. 1:1 chat does not use this — there the only human is
+ * the viewer and role-based alignment stays correct.
+ */
+export function isSelfSender(
+  m: Pick<ChatMessage, 'senderId'>,
+  selfIds: ReadonlySet<string>,
+): boolean {
+  return !!m.senderId && selfIds.has(m.senderId.toLowerCase())
+}
+
+/**
  * Attribution caption for one GROUP-thread message. PURE + unit-tested.
  *
  * "You" requires a STRICT identity match: the row's stamped senderId must be one
@@ -29,8 +50,7 @@ export function groupSenderLabel(
     agentName: string
   },
 ): string | undefined {
-  const isSelf = !!m.senderId && selfIds.has(m.senderId.toLowerCase())
-  if (isSelf) return 'You'
+  if (isSelfSender(m, selfIds)) return 'You'
   if (m.role === 'user') {
     return m.senderName ?? rosterName(m.senderId) ?? 'Member'
   }

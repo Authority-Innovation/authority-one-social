@@ -26,7 +26,7 @@ import {
   type NavigationProp,
 } from '#/lib/routes/types'
 import {usePersonasQuery} from '#/state/queries/personas'
-import {useThreadMembersQuery} from '#/state/queries/threads'
+import {useThreadMembersQuery, useThreadsQuery} from '#/state/queries/threads'
 import {useSession} from '#/state/session'
 import {atoms as a, useBreakpoints, useTheme} from '#/alf'
 import {Button, ButtonIcon} from '#/components/Button'
@@ -40,7 +40,7 @@ import {Loader} from '#/components/Loader'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {canSend, type ChatAttachment, imagesForSend} from './attachment'
-import {groupSenderLabel} from './attribution'
+import {groupSenderLabel, isSelfSender} from './attribution'
 import {
   COMPOSER_KEYBOARD_VERTICAL_OFFSET,
   composerBottomOffset,
@@ -103,6 +103,19 @@ function AgentChatScreenInner({route}: {route: Props['route']}) {
   // Tapping the row opens the existing Manage-group screen. Group threads only.
   const membersQuery = useThreadMembersQuery(threadId ?? '')
   const participants = membersQuery.data?.members ?? []
+
+  // Is this thread a GROUP (multiple humans/agents) vs a 1:1 agent thread? Group
+  // threads attribute + align every row by SENDER IDENTITY; 1:1 threads keep the
+  // role-based rendering (the only human there is the viewer, and the runtime does
+  // not stamp sender identity on 1:1 rows). Two independent signals so a foreign
+  // group (hosted on another member's agent) still renders as a group while either
+  // query is loading: the thread's own kind from the chat list, and a non-empty
+  // roster (a group always seeds its owner as a member; a 1:1 thread has none).
+  const {data: threadsData} = useThreadsQuery()
+  const isGroup =
+    !!threadId &&
+    (threadsData?.threads.find(th => th.id === threadId)?.kind === 'group' ||
+      participants.length > 0)
   const participantAgentNames = participants
     .filter(m => m.isAgent || m.kind === 'agent')
     .map(m => m.name ?? m.handle ?? m.id)
@@ -427,11 +440,14 @@ function AgentChatScreenInner({route}: {route: Props['route']}) {
               <MessageBubble
                 key={m.id}
                 message={m}
-                // Group threads attribute every message; 1:1 chat shows no per-message
-                // name. See groupSenderName: "You" requires the row's stamped senderId
-                // to BE the current account (strict identity match) — role alone never
-                // decides, so another member's turn is always shown under THEIR name.
-                senderName={threadId ? groupSenderName(m) : undefined}
+                // GROUP threads attribute + align every message by sender identity;
+                // 1:1 chat shows no per-message name and keeps role-based alignment.
+                // "You" AND right-alignment both require the row's stamped senderId
+                // to BE the current account (strict identity match) — role alone
+                // never decides, so another member's turn always renders on the LEFT
+                // under THEIR name, from every viewer's perspective.
+                senderName={isGroup ? groupSenderName(m) : undefined}
+                isSelf={isGroup ? isSelfSender(m, selfIds) : undefined}
                 decideDisabled={isStreaming}
                 onDecision={(action, decision) => {
                   void decide(action, decision)

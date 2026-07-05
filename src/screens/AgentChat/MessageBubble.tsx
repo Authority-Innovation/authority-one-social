@@ -13,7 +13,11 @@ import {channelBadge} from './channelBadge'
 import {CHAT_IMAGE_ALT, lightboxImagesForMedia} from './chatImageLightbox'
 
 /**
- * A single chat bubble. User messages align right (primary), assistant left (contrast).
+ * A single chat bubble. The VIEWER's own messages align right (primary); everyone
+ * else's — other humans AND agents — align left (contrast). In a GROUP thread the
+ * screen passes `isSelf` (a strict sender-identity match), which decides alignment:
+ * another member's `role:'user'` row must NOT render as the viewer's own. In 1:1
+ * chat `isSelf` is undefined and role decides — the only human there is the viewer.
  * Assistant bubbles render streamed text live and any attached approval cards. Both
  * roles render a small channel annotation when the turn originated off the in-app text
  * channel (SMS/WhatsApp/voice/iMessage) and inline image thumbnails for any mediaUrls.
@@ -21,6 +25,7 @@ import {CHAT_IMAGE_ALT, lightboxImagesForMedia} from './chatImageLightbox'
 export function MessageBubble({
   message,
   senderName,
+  isSelf,
   decideDisabled,
   onDecision,
 }: {
@@ -28,12 +33,16 @@ export function MessageBubble({
   /** Sender attribution for GROUP threads (e.g. "Bob", "Stormy", "You"). Undefined in
    *  1:1 chat — no per-message name there (the header already names the one agent). */
   senderName?: string
+  /** GROUP threads: whether this row was sent by the CURRENT VIEWER (strict senderId
+   *  match, see isSelfSender). Undefined in 1:1 chat — role-based alignment is
+   *  correct there. */
+  isSelf?: boolean
   decideDisabled?: boolean
   onDecision: (action: ApprovalAction, decision: 'approve' | 'reject') => void
 }) {
   const t = useTheme()
   const {openLightbox} = useLightboxControls()
-  const isUser = message.role === 'user'
+  const isMine = isSelf ?? message.role === 'user'
   const hasText = message.text.length > 0
   const media = message.mediaUrls ?? []
   const hasActions = (message.actions?.length ?? 0) > 0
@@ -49,7 +58,7 @@ export function MessageBubble({
   }
 
   return (
-    <View style={[a.w_full, isUser ? a.align_end : a.align_start]}>
+    <View style={[a.w_full, isMine ? a.align_end : a.align_start]}>
       {/* Sender attribution — a small name caption above the bubble in group threads, so
           it's clear who's speaking in a multi-participant chat. Plain string (set by the
           screen), so it never depends on the compiled catalog. */}
@@ -85,7 +94,7 @@ export function MessageBubble({
           a.py_sm,
           a.rounded_md,
           {maxWidth: '80%'},
-          isUser
+          isMine
             ? [
                 {backgroundColor: t.palette.primary_500},
                 {borderBottomRightRadius: 4},
@@ -118,7 +127,7 @@ export function MessageBubble({
                   // bubbles: omit an explicit color so plain text inherits the
                   // theme text color (Typography `Text` defaults to it) while
                   // links keep `InlineLinkText`'s terracotta accent (primary_500).
-                  isUser ? {color: t.palette.white} : undefined,
+                  isMine ? {color: t.palette.white} : undefined,
                 ]}
                 interactiveStyle={a.underline}
                 emojiMultiplier={1}

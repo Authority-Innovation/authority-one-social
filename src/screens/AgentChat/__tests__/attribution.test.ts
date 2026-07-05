@@ -1,6 +1,6 @@
 import {describe, expect, it} from '@jest/globals'
 
-import {groupSenderLabel} from '../attribution'
+import {groupSenderLabel, isSelfSender} from '../attribution'
 
 const VIEWER_DID = 'did:plc:viewer123'
 const VIEWER_HANDLE = 'viewer.pds.example.com'
@@ -73,5 +73,42 @@ describe('groupSenderLabel', () => {
         opts,
       ),
     ).toBe('Stormy')
+  })
+})
+
+describe('isSelfSender (drives group bubble alignment AND the "You" label)', () => {
+  it('true only on a strict sender-identity match with the viewer', () => {
+    expect(isSelfSender({senderId: VIEWER_DID}, selfIds)).toBe(true)
+    // handle-form identity, any casing
+    expect(isSelfSender({senderId: VIEWER_HANDLE.toUpperCase()}, selfIds)).toBe(
+      true,
+    )
+  })
+
+  it('false for another member — their rows must align LEFT on this device', () => {
+    // THE reported bug: Brian's role:'user' rows rendered right-aligned as "You"
+    // on Elliott's phone. Identity decides, never role.
+    expect(isSelfSender({senderId: BRIAN_DID}, selfIds)).toBe(false)
+  })
+
+  it('false for agents and for rows with no stamped identity', () => {
+    expect(isSelfSender({senderId: 'stormy.pds.example.com'}, selfIds)).toBe(
+      false,
+    )
+    expect(isSelfSender({}, selfIds)).toBe(false)
+    expect(isSelfSender({senderId: ''}, selfIds)).toBe(false)
+  })
+
+  it('agrees with groupSenderLabel: self is exactly the "You" rows', () => {
+    for (const m of [
+      {role: 'user' as const, senderId: VIEWER_DID},
+      {role: 'user' as const, senderId: BRIAN_DID, senderName: 'Brian'},
+      {role: 'user' as const},
+      {role: 'assistant' as const, senderName: 'Stormy'},
+    ]) {
+      expect(isSelfSender(m, selfIds)).toBe(
+        groupSenderLabel(m, opts) === 'You',
+      )
+    }
   })
 })
