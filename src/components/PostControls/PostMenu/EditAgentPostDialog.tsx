@@ -11,7 +11,7 @@ import {
 import {Trans} from '@lingui/react/macro'
 import {countGraphemes} from 'unicode-segmenter/grapheme'
 
-import {uploadChatImage} from '#/lib/agent-runtime'
+import {type EditPostImage, uploadChatImage} from '#/lib/agent-runtime'
 import {IMAGE_SIZE_CONFIG_2K_1MB, MAX_GRAPHEME_LENGTH} from '#/lib/constants'
 import {compressIfNeeded} from '#/lib/media/manip'
 import {openPicker} from '#/lib/media/picker'
@@ -33,12 +33,17 @@ import {TimesLarge_Stroke2_Corner0_Rounded as CloseIcon} from '#/components/icon
 import {Loader} from '#/components/Loader'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
+import {extractImageBlobCid} from './editAgentPostImages'
 
 /** One image in the edit set: an existing embed image (carries its view for
- *  thumbnails/alt) or a just-uploaded hosted url (renders directly). */
+ *  thumbnails/alt and its blob-ref CID for the wire `keep`) or a just-uploaded
+ *  hosted url (renders directly, sent as `{url}`). */
 type EditImage = {
   url: string
   view?: AppBskyEmbedImages.ViewImage
+  /** Blob-ref $link (CID) of an EXISTING image — what the runtime's `keep`
+   *  takes. Absent = a newly added hosted image. */
+  keepRef?: string
 }
 
 const MAX_EDIT_IMAGES = 4
@@ -115,18 +120,31 @@ function EditAgentPostInner({
     : undefined
   const hasBlockingEmbed = !!post.embed && !existingImagesEmbed
 
+  // Existing images must be sent to the runtime as their blob-ref CIDs
+  // (`keep`), resolved from the post record's embed (view order matches the
+  // record order), with the fullsize url as fallback.
+  const recordImages = AppBskyEmbedImages.isMain(record.embed)
+    ? record.embed.images
+    : undefined
   const [images, setImages] = useState<EditImage[]>(
     () =>
-      existingImagesEmbed?.images.map(img => ({
+      existingImagesEmbed?.images.map((img, i) => ({
         url: img.fullsize,
         view: img,
+        keepRef: extractImageBlobCid(recordImages?.[i]?.image, img.fullsize),
       })) ?? [],
   )
   const [uploadingImage, setUploadingImage] = useState(false)
 
+  // FAIL CLOSED: if any existing image's blob ref can't be resolved we cannot
+  // build a faithful `keep` set — offering edits would silently drop images.
+  const unresolvedKeeps =
+    !!existingImagesEmbed && images.some(img => img.view && !img.keepRef)
+  const imageEditingBlocked = hasBlockingEmbed || unresolvedKeeps
+
   const initialUrls = existingImagesEmbed?.images.map(img => img.fullsize) ?? []
   const imagesChanged =
-    !hasBlockingEmbed &&
+    !imageEditingBlocked &&
     (images.length !== initialUrls.length ||
       images.some((img, i) => img.url !== initialUrls[i]))
 
@@ -189,9 +207,11 @@ function EditAgentPostInner({
       rt = stripInvalidMentions(rt)
 
       // Images ride only when the set actually changed: the FINAL ordered
-      // urls (kept existing + newly hosted; [] clears). The optimistic embed
-      // view reuses kept view objects (alt/CDN thumbs survive) and renders
-      // hosted urls directly for adds until the AppView catches up.
+      // entries — {keep: blobCid} for existing images (alt omitted so the
+      // runtime inherits it), {url} for newly hosted ones; [] clears. The
+      // optimistic embed view reuses kept view objects (alt/CDN thumbs
+      // survive) and renders hosted urls directly for adds until the AppView
+      // catches up.
       let imagePayload = {}
       if (imagesChanged) {
         const optimisticEmbed: $Typed<AppBskyEmbedImages.View> | null =
@@ -204,8 +224,11 @@ function EditAgentPostInner({
                     img.view ?? {thumb: img.url, fullsize: img.url, alt: ''},
                 ),
               }
+        const wireImages: EditPostImage[] = images.map(img =>
+          img.keepRef ? {keep: img.keepRef} : {url: img.url},
+        )
         imagePayload = {
-          imageUrls: images.map(img => img.url),
+          images: wireImages,
           optimisticEmbed,
         }
       }
@@ -291,12 +314,19 @@ function EditAgentPostInner({
             <Trans>Images</Trans>
           </TextField.LabelText>
 
-          {hasBlockingEmbed ? (
+          {imageEditingBlocked ? (
             <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-              <Trans>
-                This post has a video, link or quote attached — images can’t be
-                edited here.
-              </Trans>
+              {hasBlockingEmbed ? (
+                <Trans>
+                  This post has a video, link or quote attached — images can’t
+                  be edited here.
+                </Trans>
+              ) : (
+                <Trans>
+                  This post’s existing images couldn’t be read — image editing
+                  is unavailable right now.
+                </Trans>
+              )}
             </Text>
           ) : (
             <>

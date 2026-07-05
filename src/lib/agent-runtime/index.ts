@@ -3,6 +3,7 @@ export {
   type AgentPostErrorCode,
   deleteAgentPost,
   editAgentPost,
+  type EditPostImage,
   postAsAgent,
   type PostAsAgentResult,
 } from './agentPostsClient'

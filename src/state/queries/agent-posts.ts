@@ -16,6 +16,7 @@ import {
   type AgentPostErrorCode,
   deleteAgentPost,
   editAgentPost,
+  type EditPostImage,
   postAsAgent,
 } from '#/lib/agent-runtime'
 import {updatePostShadow} from '#/state/cache/post-shadow'
@@ -184,10 +185,13 @@ export function useAgentPostEditMutation() {
       uri: string
       text: string
       facets?: AppBskyRichtextFacet.Main[]
-      /** Final image set (see editAgentPost: absent=keep, []=clear, <=4). */
-      imageUrls?: string[]
       /**
-       * The images-embed VIEW to render optimistically when `imageUrls` was
+       * Final ordered image set for the runtime ({keep: blobCid} for existing
+       * images, {url} for newly hosted ones; absent=untouched, []=clear, <=4).
+       */
+      images?: EditPostImage[]
+      /**
+       * The images-embed VIEW to render optimistically when `images` was
        * sent: null clears the embed, a view replaces it. Not sent to the
        * runtime — cache-side only.
        */
@@ -200,7 +204,7 @@ export function useAgentPostEditMutation() {
         uri: input.uri,
         text: input.text,
         facets: input.facets,
-        imageUrls: input.imageUrls,
+        images: input.images,
       })
       if (!res.ok) {
         throw new AgentPostActionError(
@@ -218,7 +222,7 @@ export function useAgentPostEditMutation() {
         facets: variables.facets,
         cid: data.cid,
         // Only touch the cached embed when the image set was actually sent.
-        ...(variables.imageUrls !== undefined
+        ...(variables.images !== undefined
           ? {embed: variables.optimisticEmbed ?? null}
           : {}),
       })

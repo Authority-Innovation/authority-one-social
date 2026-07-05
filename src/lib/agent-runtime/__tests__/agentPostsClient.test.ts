@@ -227,38 +227,43 @@ describe('editAgentPost', () => {
     expect(res.uri).toBe('at://x/app.bsky.feed.post/1')
   })
 
-  it('sends imageUrls verbatim — including [] to CLEAR — and omits it when untouched', async () => {
+  it('sends `images` keep/url entries verbatim — including [] to CLEAR — and omits it when untouched (runtime E3 contract)', async () => {
     mockFetch.mockResolvedValue(jsonRes(200, {ok: true}) as never)
 
     // Field absent -> embed untouched.
     await editAgentPost({agent: 'a', uri: 'at://x/p/1', text: 't'})
     let [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
-    expect('imageUrls' in JSON.parse(init.body as string)).toBe(false)
+    expect('images' in JSON.parse(init.body as string)).toBe(false)
 
     // Explicit [] -> clear images (must NOT be stripped like postAsAgent does).
     await editAgentPost({
       agent: 'a',
       uri: 'at://x/p/1',
       text: 't',
-      imageUrls: [],
+      images: [],
     })
     ;[, init] = mockFetch.mock.calls[1] as [string, RequestInit]
     let body = JSON.parse(init.body as string) as Record<string, unknown>
-    expect(body.imageUrls).toEqual([])
+    expect(body.images).toEqual([])
 
-    // Final ordered set: kept existing urls + newly hosted urls.
+    // Final ordered set: existing images ride as their blob-ref CID (`keep`,
+    // NEVER a CDN url); new images as their hosted url.
     await editAgentPost({
       agent: 'a',
       uri: 'at://x/p/1',
       text: 't',
-      imageUrls: ['https://cdn.test/keep.jpg', 'https://r2.test/new.png'],
+      images: [
+        {keep: 'bafkreiexistingblobcid'},
+        {url: 'https://r2.test/new.png'},
+      ],
     })
     ;[, init] = mockFetch.mock.calls[2] as [string, RequestInit]
     body = JSON.parse(init.body as string) as Record<string, unknown>
-    expect(body.imageUrls).toEqual([
-      'https://cdn.test/keep.jpg',
-      'https://r2.test/new.png',
+    expect(body.images).toEqual([
+      {keep: 'bafkreiexistingblobcid'},
+      {url: 'https://r2.test/new.png'},
     ])
+    expect('imageUrls' in body).toBe(false)
   })
 
   it('surfaces embed-type-conflict when the post has a non-image embed', async () => {
@@ -273,7 +278,7 @@ describe('editAgentPost', () => {
       agent: 'a',
       uri: 'at://y/p/1',
       text: 't',
-      imageUrls: ['https://r2.test/new.png'],
+      images: [{url: 'https://r2.test/new.png'}],
     })
 
     expect(res.ok).toBe(false)
