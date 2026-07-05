@@ -233,7 +233,7 @@ export function GetContacts({
         </Text>
         <Text style={style}>
           <Trans>
-            Bluesky helps friends find each other by creating an encoded digital
+            One helps friends find each other by creating an encoded digital
             fingerprint, called a "hash", and then looking for matching hashes.
           </Trans>
         </Text>
@@ -265,8 +265,8 @@ export function GetContacts({
         ]}>
         <Text style={[a.text_sm, a.pb_xs]}>
           <Trans>
-            I consent to Bluesky using my contacts for mutual friend discovery
-            and to retain hashed data for matching until I opt out.
+            I consent to One using my contacts for mutual friend discovery and
+            to retain hashed data for matching until I opt out.
           </Trans>
         </Text>
         <Button
@@ -311,7 +311,7 @@ class PermissionDeniedError extends Error {
 function showPermissionDeniedAlert() {
   Alert.alert(
     t`You've denied access to your contacts`,
-    t`You'll need to go to the System Settings for Bluesky and give permission if you want to use this feature.`,
+    t`You'll need to go to the System Settings for One and give permission if you want to use this feature.`,
     [
       {
         text: t`OK`,

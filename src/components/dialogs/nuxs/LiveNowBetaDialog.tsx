@@ -180,9 +180,8 @@ export function LiveNowBetaDialog() {
                 },
               ]}>
               <Trans>
-                Streaming on Twitch? Set your live status on Bluesky to add a
-                badge to your avatar. Tapping it takes people straight to your
-                stream.
+                Streaming on Twitch? Set your live status on One to add a badge
+                to your avatar. Tapping it takes people straight to your stream.
               </Trans>
             </Text>
           </View>

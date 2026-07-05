@@ -8,7 +8,7 @@ import {IS_WEB} from '#/env'
 const openPermissionAlert = (perm: string) => {
   Alert.alert(
     'Permission needed',
-    `Bluesky does not have permission to access your ${perm}.`,
+    `One does not have permission to access your ${perm}.`,
     [
       {
         text: 'Cancel',

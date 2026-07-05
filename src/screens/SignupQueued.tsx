@@ -131,7 +131,7 @@ export function SignupQueued() {
             </Text>
             <P style={[t.atoms.text_contrast_medium]}>
               <Trans>
-                There's been a rush of new users to Bluesky! We'll activate your
+                There's been a rush of new users to One! We'll activate your
                 account as soon as we can.
               </Trans>
             </P>

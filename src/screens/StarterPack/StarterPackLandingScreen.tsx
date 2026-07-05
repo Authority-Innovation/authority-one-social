@@ -37,7 +37,7 @@ import * as Prompt from '#/components/Prompt'
 import {RichText} from '#/components/RichText'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
-import {IS_WEB, IS_WEB_MOBILE_ANDROID} from '#/env'
+import {IS_WEB_MOBILE_ANDROID} from '#/env'
 import * as bsky from '#/types/bsky'
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
@@ -207,12 +207,12 @@ function LandingScreenLoaded({
           ) : null}
           <View style={[a.gap_sm]}>
             <Button
-              label={_(msg`Join Bluesky`)}
+              label={_(msg`Join One`)}
               onPress={onJoinPress}
               color="primary"
               size="large">
               <ButtonText style={[a.text_lg]}>
-                <Trans>Join Bluesky</Trans>
+                <Trans>Join One</Trans>
               </ButtonText>
             </Button>
             <View style={[a.flex_row, a.align_center, a.gap_xs]}>
@@ -326,11 +326,11 @@ function LandingScreenLoaded({
       <Prompt.Outer control={androidDialogControl}>
         <Prompt.Content>
           <Prompt.TitleText>
-            <Trans>Download Bluesky</Trans>
+            <Trans>Get the app</Trans>
           </Prompt.TitleText>
           <Prompt.DescriptionText>
             <Trans>
-              The experience is better in the app. Download Bluesky now and
+              The experience is better in the app. Download the One app now and
               we'll pick back up where you left off.
             </Trans>
           </Prompt.DescriptionText>
@@ -359,12 +359,8 @@ function LandingScreenLoaded({
           />
         </Prompt.Actions>
       </Prompt.Outer>
-      {IS_WEB && (
-        <meta
-          name="apple-itunes-app"
-          content="app-id=xyz.blueskyweb.app, app-clip-bundle-id=xyz.blueskyweb.app.AppClip, app-clip-display=card"
-        />
-      )}
+      {/* Removed the apple-itunes-app Smart App Banner meta tag: it pointed
+          at Bluesky's App Store listing / App Clip, which we do not have. */}
     </View>
   )
 }
@@ -401,7 +397,7 @@ export function AppClipOverlay({
               a.text_4xl,
               {lineHeight: 40, color: 'white'},
             ]}>
-            Download Bluesky to get started!
+            Download the One app to get started!
           </Text>
           <Text style={[a.text_lg, {color: 'white'}]}>
             We'll remember the starter pack you chose and use it when you create

@@ -53,7 +53,7 @@ export function ChatDisabled({
           ]}>
           <Trans>
             Our moderators have reviewed reports and decided to disable your
-            access to chats on Bluesky.
+            access to chats on One.
           </Trans>
         </Text>
         <AppealDialog />
@@ -135,7 +135,7 @@ function DialogInner() {
         <Trans>Appeal this decision</Trans>
       </Text>
       <Text style={[a.text_md, a.leading_snug]}>
-        <Trans>This appeal will be sent to Bluesky's moderation service.</Trans>
+        <Trans>This appeal will be sent to our moderation service.</Trans>
       </Text>
       <View style={[a.my_md]}>
         <Dialog.Input

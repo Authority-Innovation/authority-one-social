@@ -151,7 +151,7 @@ export function GroupChatsAnnouncement() {
             source={getHero(t.name)}
             style={[a.w_full, {aspectRatio: 343 / 230}]}
             alt={l({
-              message: `Four message bubbles representing a group chat. First message: "Did you hear the news? Bluesky has group chats now!" Second message: "omg, no way" Third message: "Wow, 50 people in one chat!" Fourth message: "You can send invite links too!"`,
+              message: `Four message bubbles representing a group chat. First message: "Did you hear the news? We have group chats now!" Second message: "omg, no way" Third message: "Wow, 50 people in one chat!" Fourth message: "You can send invite links too!"`,
               comment:
                 'This is alt text for a marketing image which transcribes English text that appears in the image',
             })}
@@ -189,9 +189,7 @@ export function GroupChatsAnnouncement() {
             <Feature
               icon={ChainLinkIcon}
               titleText={<Trans>Add people with a link</Trans>}
-              descriptionText={
-                <Trans>Post it to Bluesky or share anywhere.</Trans>
-              }
+              descriptionText={<Trans>Post it to One or share anywhere.</Trans>}
             />
             <Feature
               icon={GroupIcon}

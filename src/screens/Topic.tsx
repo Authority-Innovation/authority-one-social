@@ -5,7 +5,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {type NativeStackScreenProps} from '@react-navigation/native-stack'
 
-import {HITSLOP_10} from '#/lib/constants'
+import {HITSLOP_10, PUBLIC_APP_HOST} from '#/lib/constants'
 import {useInitialNumToRender} from '#/lib/hooks/useInitialNumToRender'
 import {usePostViewTracking} from '#/lib/hooks/usePostViewTracking'
 import {type CommonNavigatorParams} from '#/lib/routes/types'
@@ -42,7 +42,7 @@ export default function TopicScreen({
   }, [topic])
 
   const onShare = useCallback(() => {
-    const url = new URL('https://bsky.app')
+    const url = new URL(PUBLIC_APP_HOST)
     url.pathname = `/topic/${topic}`
     shareUrl(url.toString())
   }, [topic])

@@ -5,6 +5,7 @@ import {AppBskyDraftDefs, AtUri, RichText} from '@atproto/api'
 import {nanoid} from 'nanoid/non-secure'
 
 import {resolveLink} from '#/lib/api/resolve'
+import {PUBLIC_APP_HOST} from '#/lib/constants'
 import {getDeviceName} from '#/lib/deviceName'
 import {getImageDim} from '#/lib/media/manip'
 import {mimeToExt} from '#/lib/media/video/util'
@@ -603,7 +604,7 @@ export async function draftToComposerPosts(
       if (post.embedRecords && post.embedRecords.length > 0) {
         const record = post.embedRecords[0]
         const urip = new AtUri(record.record.uri)
-        const url = `https://bsky.app/profile/${urip.host}/post/${urip.rkey}`
+        const url = `${PUBLIC_APP_HOST}/profile/${urip.host}/post/${urip.rkey}`
         embed.quote = {type: 'link', uri: url}
       }
 

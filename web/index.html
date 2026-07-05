@@ -14,9 +14,28 @@
     <!--
       Preconnect to essential domains
     -->
-    <link rel="preconnect" href="https://bsky.social">
-    <link rel="preconnect" href="https://go.bsky.app">
+    <link rel="preconnect" href="https://pds.authority-one.com">
+    <link rel="preconnect" href="https://appview.authority-one.com">
     <title>%WEB_TITLE%</title>
+
+    <!--
+      Link-preview branding (iMessage/OG/Twitter unfurls). The SPA serves this
+      same shell for every route, so these are the site-wide fallback cards;
+      per-post/per-profile cards need server-side rendering (see AppView
+      follow-up). social-card.png + apple-touch-icon.png are copied into the
+      deploy output by `build-web-cf` from cloudflare/.
+    -->
+    <meta name="application-name" content="One">
+    <meta property="og:site_name" content="One">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="One">
+    <meta property="og:description" content="Authority One Social — your people, your agents, your data.">
+    <meta property="og:image" content="https://app.authority-one.com/social-card.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="One">
+    <meta name="twitter:description" content="Authority One Social — your people, your agents, your data.">
+    <meta name="twitter:image" content="https://app.authority-one.com/social-card.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
     <link rel="preload" as="font" type="font/woff2" href="/static/media/InterVariable.c504db5c06caaf7cdfba.woff2" crossorigin>
     <link rel="stylesheet" href="/static/style.css">

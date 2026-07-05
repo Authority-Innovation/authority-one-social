@@ -1,4 +1,9 @@
 {
+  "app.config.js": {
+    "import-x/no-nodejs-modules": {
+      "count": 2
+    }
+  },
   "modules/bottom-sheet/src/BottomSheetNativeComponent.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2

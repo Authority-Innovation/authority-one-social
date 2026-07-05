@@ -4,7 +4,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
-import {DM_SERVICE_HEADERS} from '#/lib/constants'
+import {AUTHORITY_ONE_SUPPORT_URL, DM_SERVICE_HEADERS} from '#/lib/constants'
 import {useCleanError} from '#/lib/hooks/useCleanError'
 import {sanitizeHandle} from '#/lib/strings/handles'
 import {logger} from '#/logger'
@@ -216,8 +216,8 @@ function DeleteAccountDialogInner({
                 temporarily deactivate
               </SimpleInlineLinkText>{' '}
               your account instead. Your profile, posts, feeds, and lists will
-              no longer be visible to other Bluesky users. You can reactivate
-              your account at any time by logging in.
+              no longer be visible to other users. You can reactivate your
+              account at any time by logging in.
             </Trans>
           </Admonition>
         </>
@@ -328,13 +328,13 @@ function DeleteAccountDialogInner({
             </Prompt.TitleText>
             <Prompt.DescriptionText>
               <Trans>
-                This will irreversibly delete your Bluesky account{' '}
+                This will irreversibly delete your account{' '}
                 <Span style={[a.font_semi_bold, t.atoms.text]}>
                   {currentHandle}
                 </Span>{' '}
                 and all associated data. Note that this will affect any other{' '}
                 <SimpleInlineLinkText
-                  to="https://bsky.social/about/faq"
+                  to={AUTHORITY_ONE_SUPPORT_URL}
                   label={_(msg`AT Protocol FAQ`)}>
                   AT Protocol
                 </SimpleInlineLinkText>{' '}

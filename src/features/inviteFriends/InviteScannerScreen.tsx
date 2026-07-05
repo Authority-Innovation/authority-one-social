@@ -42,9 +42,10 @@ export function InviteScannerScreen() {
       const url = result.data?.trim()
       if (!url) return
 
-      // Match bsky.app/profile/{handle} URLs (with or without https://).
+      // Match app.authority-one.com/profile/{handle} URLs (with or without
+      // https://). bsky.app is still accepted so pre-rebrand QR codes work.
       const profileMatch = url.match(
-        /^(?:https?:\/\/)?bsky\.app\/profile\/([^/?#]+)/i,
+        /^(?:https?:\/\/)?(?:app\.authority-one\.com|bsky\.app)\/profile\/([^/?#]+)/i,
       )
       if (!profileMatch) {
         ax.metric('invite:scanner:scanned', {result: 'invalidQr'})
@@ -102,7 +103,7 @@ export function InviteScannerScreen() {
               t.atoms.text_contrast_medium,
               {maxWidth: 320},
             ]}>
-            {l`Bluesky needs camera access to scan QR codes from other profiles.`}
+            {l`One needs camera access to scan QR codes from other profiles.`}
           </Text>
           <Button
             label={l`Grant access`}

@@ -65,8 +65,8 @@ export function AppPasswordsScreen({}: Props) {
             <SettingsList.Item>
               <Admonition type="tip" style={[a.flex_1]}>
                 <Trans>
-                  Use app passwords to sign in to other Bluesky clients without
-                  giving full access to your account or password.
+                  Use app passwords to sign in to other clients without giving
+                  full access to your account or password.
                 </Trans>
               </Admonition>
             </SettingsList.Item>

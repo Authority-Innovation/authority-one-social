@@ -74,8 +74,8 @@ function DeactivateAccountDialogInner({
       <Prompt.DescriptionText>
         <Trans>
           Your profile, posts, feeds, and lists will no longer be visible to
-          other Bluesky users. You can reactivate your account at any time by
-          logging in.
+          other users. You can reactivate your account at any time by logging
+          in.
         </Trans>
       </Prompt.DescriptionText>
 

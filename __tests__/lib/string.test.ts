@@ -275,8 +275,8 @@ describe('toShareUrl', () => {
   const inputs = ['https://bsky.app', '/3jk7x4irgv52r', 'item/test/123']
   const outputs = [
     'https://bsky.app',
-    'https://bsky.app/3jk7x4irgv52r',
-    'https://bsky.app/item/test/123',
+    'https://app.authority-one.com/3jk7x4irgv52r',
+    'https://app.authority-one.com/item/test/123',
   ]
 
   it('appends https, when not present', () => {
@@ -463,58 +463,69 @@ describe('parseEmbedPlayerFromUrl', () => {
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=1',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=1',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=1',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=1',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_short',
       source: 'youtubeShorts',
       hideDetails: true,
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
     {
       type: 'youtube_video',
       source: 'youtube',
-      playerUri: 'https://bsky.app/iframe/youtube.html?videoId=videoId&start=0',
+      playerUri:
+        'https://app.authority-one.com/iframe/youtube.html?videoId=videoId&start=0',
     },
 
     undefined,
