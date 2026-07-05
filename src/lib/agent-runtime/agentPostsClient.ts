@@ -119,18 +119,41 @@ export async function deleteAgentPost(input: {
 }
 
 /**
- * POST /app/agents/posts/edit — replace the text/facets of an existing post
- * authored by one of the owner's agents (atproto update op: same rkey/uri, new
- * cid). Embeds are preserved server-side. NOTE the atproto caveat the UI must
- * surface: likes/reposts/replies reference the pre-edit CID, so editing a post
- * with engagement can orphan those interactions — prefer delete+repost there.
- * Never throws.
+ * One entry of the edit endpoint's `images` array (RUNTIME E3 CONTRACT —
+ * authoritative, fully tested runtime-side):
+ * - {keep: '<blob $link>'} — an EXISTING image identified by its blob ref CID
+ *   (from the post record's embed), NEVER a CDN url.
+ * - {url: 'https://…'}     — a NEW image hosted via /app/media/upload.
+ * `alt` is optional on both; omitted on a keep = the runtime inherits the
+ * existing alt text.
+ */
+export type EditPostImage =
+  | {keep: string; alt?: string}
+  | {url: string; alt?: string}
+
+/**
+ * POST /app/agents/posts/edit — replace the text/facets (and optionally the
+ * image set) of an existing post authored by one of the owner's agents
+ * (atproto update op: same rkey/uri, new cid). NOTE the atproto caveat the UI
+ * must surface: likes/reposts/replies reference the pre-edit CID, so editing a
+ * post with engagement can orphan those interactions — prefer delete+repost
+ * there. Never throws.
+ *
+ * `images` semantics differ from postAsAgent's omit-when-empty on purpose:
+ * - undefined (field absent) -> the existing embed is preserved untouched
+ * - []                       -> images are CLEARED
+ * - [entries...]             -> the FINAL ordered set (<=4) of keeps + adds
+ *   (see EditPostImage)
+ * Only send it when the post is text-only or an images post — the runtime
+ * rejects image edits on video/link/quote embeds with code
+ * 'embed-type-conflict'.
  */
 export async function editAgentPost(input: {
   agent: string
   uri: string
   text: string
   facets?: AppBskyRichtextFacet.Main[]
+  images?: EditPostImage[]
 }): Promise<PostAsAgentResult> {
   const headers = await authHeaders().catch(() => null)
   if (!headers) return {ok: false, signedOut: true}
@@ -143,6 +166,9 @@ export async function editAgentPost(input: {
         uri: input.uri,
         text: input.text,
         facets: input.facets?.length ? input.facets : undefined,
+        // Explicit-empty is meaningful here (clear images) — only strip the
+        // field when the caller didn't touch images at all.
+        ...(input.images !== undefined ? {images: input.images} : {}),
       }),
     })
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>

@@ -227,6 +227,65 @@ describe('editAgentPost', () => {
     expect(res.uri).toBe('at://x/app.bsky.feed.post/1')
   })
 
+  it('sends `images` keep/url entries verbatim — including [] to CLEAR — and omits it when untouched (runtime E3 contract)', async () => {
+    mockFetch.mockResolvedValue(jsonRes(200, {ok: true}) as never)
+
+    // Field absent -> embed untouched.
+    await editAgentPost({agent: 'a', uri: 'at://x/p/1', text: 't'})
+    let [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    expect('images' in JSON.parse(init.body as string)).toBe(false)
+
+    // Explicit [] -> clear images (must NOT be stripped like postAsAgent does).
+    await editAgentPost({
+      agent: 'a',
+      uri: 'at://x/p/1',
+      text: 't',
+      images: [],
+    })
+    ;[, init] = mockFetch.mock.calls[1] as [string, RequestInit]
+    let body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.images).toEqual([])
+
+    // Final ordered set: existing images ride as their blob-ref CID (`keep`,
+    // NEVER a CDN url); new images as their hosted url.
+    await editAgentPost({
+      agent: 'a',
+      uri: 'at://x/p/1',
+      text: 't',
+      images: [
+        {keep: 'bafkreiexistingblobcid'},
+        {url: 'https://r2.test/new.png'},
+      ],
+    })
+    ;[, init] = mockFetch.mock.calls[2] as [string, RequestInit]
+    body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.images).toEqual([
+      {keep: 'bafkreiexistingblobcid'},
+      {url: 'https://r2.test/new.png'},
+    ])
+    expect('imageUrls' in body).toBe(false)
+  })
+
+  it('surfaces embed-type-conflict when the post has a non-image embed', async () => {
+    mockFetch.mockResolvedValue(
+      jsonRes(400, {
+        error: 'post has a video embed',
+        code: 'embed-type-conflict',
+      }) as never,
+    )
+
+    const res = await editAgentPost({
+      agent: 'a',
+      uri: 'at://y/p/1',
+      text: 't',
+      images: [{url: 'https://r2.test/new.png'}],
+    })
+
+    expect(res.ok).toBe(false)
+    expect(res.signedOut).toBe(false)
+    expect(res.code).toBe('embed-type-conflict')
+  })
+
   it('surfaces repo-mismatch / too-long codes as validation errors, not sign-out', async () => {
     mockFetch.mockResolvedValue(
       jsonRes(400, {

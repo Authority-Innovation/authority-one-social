@@ -1,4 +1,6 @@
 import {
+  type $Typed,
+  type AppBskyEmbedImages,
   AppBskyFeedDefs,
   AppBskyFeedPost,
   type AppBskyRichtextFacet,
@@ -14,6 +16,7 @@ import {
   type AgentPostErrorCode,
   deleteAgentPost,
   editAgentPost,
+  type EditPostImage,
   postAsAgent,
 } from '#/lib/agent-runtime'
 import {updatePostShadow} from '#/state/cache/post-shadow'
@@ -73,6 +76,14 @@ type PostTextEdit = {
   facets?: AppBskyRichtextFacet.Main[]
   /** The post-edit CID from the runtime; kept when absent (cache stays usable). */
   cid?: string
+  /**
+   * Optimistic images-embed VIEW to render until the AppView catches up:
+   * undefined = embed untouched; null = embed removed; a view = replace.
+   * Built by the edit dialog from kept existing image views + hosted urls
+   * for just-added images (the hosted url renders fine as thumb/fullsize
+   * until the AppView supplies CDN urls).
+   */
+  embed?: $Typed<AppBskyEmbedImages.View> | null
 }
 
 /** A PostView with the edited text/facets (and new cid) applied to its record.
@@ -93,6 +104,9 @@ function editedPostView<T extends AppBskyFeedDefs.PostView>(
     ...post,
     cid: edit.cid ?? post.cid,
     record: {...post.record, text: edit.text, facets: edit.facets},
+    ...(edit.embed !== undefined
+      ? {embed: edit.embed === null ? undefined : edit.embed}
+      : {}),
   }
 }
 
@@ -171,10 +185,27 @@ export function useAgentPostEditMutation() {
       uri: string
       text: string
       facets?: AppBskyRichtextFacet.Main[]
+      /**
+       * Final ordered image set for the runtime ({keep: blobCid} for existing
+       * images, {url} for newly hosted ones; absent=untouched, []=clear, <=4).
+       */
+      images?: EditPostImage[]
+      /**
+       * The images-embed VIEW to render optimistically when `images` was
+       * sent: null clears the embed, a view replaces it. Not sent to the
+       * runtime — cache-side only.
+       */
+      optimisticEmbed?: $Typed<AppBskyEmbedImages.View> | null
     }
   >({
     mutationFn: async input => {
-      const res = await editAgentPost(input)
+      const res = await editAgentPost({
+        agent: input.agent,
+        uri: input.uri,
+        text: input.text,
+        facets: input.facets,
+        images: input.images,
+      })
       if (!res.ok) {
         throw new AgentPostActionError(
           res.signedOut
@@ -190,6 +221,10 @@ export function useAgentPostEditMutation() {
         text: variables.text,
         facets: variables.facets,
         cid: data.cid,
+        // Only touch the cached embed when the image set was actually sent.
+        ...(variables.images !== undefined
+          ? {embed: variables.optimisticEmbed ?? null}
+          : {}),
       })
     },
   })

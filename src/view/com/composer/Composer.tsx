@@ -67,7 +67,7 @@ import {useAppState} from '#/lib/appState'
 import {retry} from '#/lib/async/retry'
 import {until} from '#/lib/async/until'
 import {
-  IMAGE_SIZE_CONFIG_POSTS,
+  IMAGE_SIZE_CONFIG_2K_1MB,
   MAX_DRAFT_GRAPHEME_LENGTH,
   MAX_GRAPHEME_LENGTH,
   SUPPORTED_MIME_TYPES,
@@ -1013,9 +1013,11 @@ export const ComposePost = ({
         if (media?.type === 'images') {
           for (const img of media.images) {
             setPublishingStage(l`Uploading images...`)
+            // 1MB cap: the runtime re-uploads these as PDS blobs and rejects
+            // larger files (same limit/helpers as the profile editor).
             const {path, mime} = await compressImage(
               img,
-              IMAGE_SIZE_CONFIG_POSTS,
+              IMAGE_SIZE_CONFIG_2K_1MB,
             )
             const hosted = await uploadChatImage({uri: path, mime})
             if (!hosted) {
