@@ -37,6 +37,13 @@ export {
   TTS_ENDPOINT,
 } from './config'
 export {
+  AGENT_HANDLE_SUFFIX,
+  isAgentHandle,
+  PUBLIC_CHAT_ENABLED,
+  PUBLIC_CHAT_ENDPOINT,
+  PUBLIC_TTS_ENDPOINT,
+} from './config'
+export {
   deleteContextEvent,
   fetchRecentContext,
   normalizeContextEvents,
@@ -85,6 +92,7 @@ export {
   updatePersona,
 } from './personasClient'
 export {postPhotoContext} from './photoContextClient'
+export {playAgentClipBase64} from './playAgentClip'
 export {
   fetchNearbyPoi,
   normalizeNearbyPlace,
@@ -99,6 +107,13 @@ export {
   type GenerateImageResult,
   updateAgentProfile,
 } from './profileClient'
+export {
+  fetchPublicAgentAudioBase64,
+  publicChat,
+  type PublicChatConversionCard,
+  type PublicChatRemaining,
+  type PublicChatResult,
+} from './publicChatClient'
 export {fetchSceneTags, type SceneImage} from './sceneClient'
 export {
   applyAutoSocialPatch,
@@ -150,23 +165,20 @@ export {
   type ThreadsResult,
   type ThreadWriteResult,
 } from './threadsClient'
-export {
-  AGENT_HANDLE_SUFFIX,
-  isAgentHandle,
-  PUBLIC_CHAT_ENABLED,
-  PUBLIC_CHAT_ENDPOINT,
-  PUBLIC_TTS_ENDPOINT,
-} from './config'
-export {playAgentClipBase64} from './playAgentClip'
-export {
-  fetchPublicAgentAudioBase64,
-  publicChat,
-  type PublicChatConversionCard,
-  type PublicChatRemaining,
-  type PublicChatResult,
-} from './publicChatClient'
 export {bytesToBase64, fetchBobAudioBase64} from './tts'
 export * from './types'
+export {
+  type AgentUsage,
+  fetchOwnerUsage,
+  formatCostUsd,
+  formatTokens,
+  normalizeOwnerUsage,
+  type OwnerUsage,
+  type OwnerUsageResult,
+  type UsageBucket,
+  type UsageSource,
+  type UsageWindow,
+} from './usageClient'
 export {
   addLibraryVoice,
   type BuiltinVoice,

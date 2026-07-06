@@ -101,6 +101,18 @@ export function MyAgentsScreen({}: Props) {
           <SettingsList.Divider />
           <View style={[a.px_lg, a.py_sm]}>
             <Button
+              label={l`View usage`}
+              size="large"
+              variant="outline"
+              color="secondary"
+              onPress={() => navigation.navigate('AgentUsage')}>
+              <ButtonText>
+                <Trans>Usage</Trans>
+              </ButtonText>
+            </Button>
+          </View>
+          <View style={[a.px_lg, a.py_sm]}>
+            <Button
               label={l`Create a new agent`}
               size="large"
               variant="solid"

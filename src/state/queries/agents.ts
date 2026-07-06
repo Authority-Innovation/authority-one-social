@@ -5,9 +5,12 @@ import {
   type CreateAgentResult,
   createOwnerAgent,
   fetchOwnerAgents,
+  fetchOwnerUsage,
   type OwnerAgent,
+  type OwnerUsageResult,
   type PauseAgentResult,
   pauseOwnerAgent,
+  type UsageWindow,
 } from '#/lib/agent-runtime'
 import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
@@ -15,6 +18,22 @@ import {createQueryKey} from '#/state/queries/util'
 const ownerAgentsQueryKeyRoot = 'ownerAgents'
 export const createOwnerAgentsQueryKey = () =>
   createQueryKey(ownerAgentsQueryKeyRoot, {})
+
+const ownerUsageQueryKeyRoot = 'ownerUsage'
+export const createOwnerUsageQueryKey = (window: UsageWindow) =>
+  createQueryKey(ownerUsageQueryKeyRoot, {window})
+
+/**
+ * Per-agent usage rollup for the current owner (GET /app/usage). Read-only;
+ * resolves to a null rollup when signed out / unreachable — never throws.
+ */
+export function useOwnerUsageQuery(window: UsageWindow) {
+  return useQuery<OwnerUsageResult>({
+    queryKey: createOwnerUsageQueryKey(window),
+    queryFn: () => fetchOwnerUsage(window),
+    staleTime: STALE.MINUTES.ONE,
+  })
+}
 
 /**
  * The agents the current owner may CHOOSE to add to a group (GET /app/agents). Resolves

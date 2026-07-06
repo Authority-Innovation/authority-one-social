@@ -111,6 +111,7 @@ import {AboutSettingsScreen} from '#/screens/Settings/AboutSettings'
 import {AccessibilitySettingsScreen} from '#/screens/Settings/AccessibilitySettings'
 import {AccountSettingsScreen} from '#/screens/Settings/AccountSettings'
 import {ActivityPrivacySettingsScreen} from '#/screens/Settings/ActivityPrivacySettings'
+import {AgentUsageScreen} from '#/screens/Settings/AgentUsage'
 import {AppearanceSettingsScreen} from '#/screens/Settings/AppearanceSettings'
 import {AppIconSettingsScreen} from '#/screens/Settings/AppIconSettings'
 import {AppPasswordsScreen} from '#/screens/Settings/AppPasswords'
@@ -466,6 +467,14 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         getComponent={() => MyAgentsScreen}
         options={{
           title: title(msg`My Agents`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="AgentUsage"
+        getComponent={() => AgentUsageScreen}
+        options={{
+          title: title(msg`Agent Usage`),
           requireAuth: true,
         }}
       />

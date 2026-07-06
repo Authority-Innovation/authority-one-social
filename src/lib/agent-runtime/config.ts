@@ -129,8 +129,9 @@ export const PUBLIC_TTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/public/tts`
  * are on — so the button never shows before the runtime surface is live. Default OFF.
  * Set EXPO_PUBLIC_PUBLIC_CHAT_ENABLED=true (Cloudflare Pages env) to reveal it.
  */
-export const PUBLIC_CHAT_ENABLED =
-  /^(1|true|yes|on)$/i.test(String(process.env.EXPO_PUBLIC_PUBLIC_CHAT_ENABLED ?? '').trim())
+export const PUBLIC_CHAT_ENABLED = /^(1|true|yes|on)$/i.test(
+  String(process.env.EXPO_PUBLIC_PUBLIC_CHAT_ENABLED ?? '').trim(),
+)
 
 /**
  * Handle suffix that marks an atproto profile as an AGENT (vs a human) — agents live on the
@@ -138,14 +139,18 @@ export const PUBLIC_CHAT_ENABLED =
  * Overridable per-build via EXPO_PUBLIC_AGENT_HANDLE_SUFFIX. Used to show the public
  * "Talk to <Agent>" button only on agent profiles.
  */
-export const AGENT_HANDLE_SUFFIX = (
-  process.env.EXPO_PUBLIC_AGENT_HANDLE_SUFFIX ?? 'pds.authority-one.com'
+export const AGENT_HANDLE_SUFFIX = String(
+  process.env.EXPO_PUBLIC_AGENT_HANDLE_SUFFIX ?? 'pds.authority-one.com',
 ).toLowerCase()
 
 /** Is this handle an AuthorityOne agent handle (lives on the PDS host)? PURE. */
 export function isAgentHandle(handle?: string | null): boolean {
-  const h = String(handle ?? '').trim().toLowerCase()
-  return !!h && (h === AGENT_HANDLE_SUFFIX || h.endsWith('.' + AGENT_HANDLE_SUFFIX))
+  const h = String(handle ?? '')
+    .trim()
+    .toLowerCase()
+  return (
+    !!h && (h === AGENT_HANDLE_SUFFIX || h.endsWith('.' + AGENT_HANDLE_SUFFIX))
+  )
 }
 
 /**
@@ -174,6 +179,9 @@ export const voiceDeleteUrl = (id: string) =>
  * runtime — this endpoint only shapes what gets drafted.
  */
 export const SOCIAL_AUTONOMY_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/social-autonomy`
+
+/** Owner-facing per-agent usage rollup ("agent burn") — read-only. */
+export const USAGE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/usage`
 
 /**
  * "For You" engagement endpoints (owner-scoped). `signals` ingests batched
