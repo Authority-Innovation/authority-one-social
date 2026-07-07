@@ -1,5 +1,12 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {Platform, Pressable, ScrollView, TextInput, View} from 'react-native'
+import {
+  AppState,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native'
 // KEYBOARD AVOIDANCE: use the keyboard-controller KeyboardAvoidingView, NOT RN's.
 // The app mounts <KeyboardProvider> (App.native.tsx), which intercepts the native
 // keyboard frame — under it, RN's built-in KeyboardAvoidingView does NOT lift the
@@ -330,6 +337,26 @@ function AgentChatScreenInner({
     }
   }, [isKeyboardVisible])
 
+  // RESUME FROM BACKGROUND: when the app returns to the foreground the
+  // KeyboardAvoidingView recalculates its frame (the OS dismissed the keyboard
+  // while backgrounded), and a plain ScrollView snaps its offset to the top on
+  // that parent-height change — so the chat "collapsed up near the top" on
+  // resume. maintainVisibleContentPosition on the list (below) holds position
+  // across the layout change; this belt re-pins to the newest message on the
+  // next frame so the returning user lands on the latest bubble, not the top.
+  // Native-only: web has no background/foreground keyboard cycle.
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const sub = AppState.addEventListener('change', next => {
+      if (next === 'active') {
+        requestAnimationFrame(() =>
+          scrollRef.current?.scrollToEnd({animated: false}),
+        )
+      }
+    })
+    return () => sub.remove()
+  }, [])
+
   const showMic = voice.capabilities.available
   // Show the live partial transcript whenever the mic is actively capturing the
   // user (continuous listening — not while thinking/speaking).
@@ -464,6 +491,13 @@ function AgentChatScreenInner({
           centerColumn,
         ]}
         onContentSizeChange={onContentSizeChange}
+        // Hold the visible content in place when the parent frame changes (keyboard
+        // show/hide, and especially app resume-from-background) instead of snapping
+        // the ScrollView offset to the top. Same fix Messages/PostThread use. Native
+        // only — web ScrollView doesn't support it (and has no soft-keyboard cycle).
+        maintainVisibleContentPosition={
+          Platform.OS === 'web' ? undefined : {minIndexForVisible: 0}
+        }
         keyboardDismissMode="interactive">
         {messages.length === 0 && isHydrating ? (
           // Recent thread is loading — show a quiet loader instead of the empty-state
