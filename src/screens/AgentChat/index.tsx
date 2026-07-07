@@ -1,12 +1,13 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native'
+import {Platform, Pressable, ScrollView, TextInput, View} from 'react-native'
+// KEYBOARD AVOIDANCE: use the keyboard-controller KeyboardAvoidingView, NOT RN's.
+// The app mounts <KeyboardProvider> (App.native.tsx), which intercepts the native
+// keyboard frame — under it, RN's built-in KeyboardAvoidingView does NOT lift the
+// composer (the reported bug: input + send hidden behind the keyboard). The DM
+// chat (MessagesList) already relies on this library for the same reason. Drop-in
+// with the same behavior/keyboardVerticalOffset API but driven by the controller's
+// native keyboard tracking, so it lifts correctly on iOS AND Android.
+import {KeyboardAvoidingView} from 'react-native-keyboard-controller'
 import {Image} from 'expo-image'
 import {useNavigation} from '@react-navigation/native'
 
@@ -319,6 +320,16 @@ function AgentChatScreenInner({
     scrollRef.current?.scrollToEnd({animated: true})
   }, [])
 
+  // When the keyboard OPENS, the content size doesn't change, so the pin-to-newest
+  // above doesn't fire — scroll to the latest message so the newest bubble isn't
+  // hidden behind the (now smaller) visible area above the keyboard. Native-only
+  // by nature: web has no soft keyboard, so isKeyboardVisible stays false there.
+  useEffect(() => {
+    if (isKeyboardVisible) {
+      scrollRef.current?.scrollToEnd({animated: true})
+    }
+  }, [isKeyboardVisible])
+
   const showMic = voice.capabilities.available
   // Show the live partial transcript whenever the mic is actively capturing the
   // user (continuous listening — not while thinking/speaking).
@@ -431,11 +442,16 @@ function AgentChatScreenInner({
   const chatBody = (
     <KeyboardAvoidingView
       style={[a.flex_1]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      // MUST be 0: this KAV is rendered below the header, so RN already measures
-      // its frame correctly and the padding it inserts equals the keyboard
-      // overlap. A non-zero offset (the old `insets.top + 44`) opened exactly
-      // that much empty band above the keyboard. See composerOffset.ts.
+      // keyboard-controller KAV: 'padding' on iOS, 'height' on Android (its
+      // recommended cross-platform pair). It reads the real on-screen frame from
+      // the controller, so the composer lifts flush to the keyboard top on both.
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // Stays 0: the KAV measures its actual frame (below the in-flow header /
+      // inside the hub tab) natively, so the inserted padding already equals the
+      // keyboard overlap. A non-zero offset opens an empty band above the keyboard
+      // (the old `insets.top + 44` bug). Tab-bar clearance when CLOSED comes from
+      // composerBottomOffset (the composer's paddingBottom), not this. See
+      // composerOffset.ts.
       keyboardVerticalOffset={COMPOSER_KEYBOARD_VERTICAL_OFFSET}>
       <ScrollView
         ref={scrollRef}
