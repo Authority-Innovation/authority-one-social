@@ -206,10 +206,13 @@ export const VIDEO_SAVED_FEED = {
   pinned: true,
 }
 
+// Authority One: recommend only the native Following timeline — Bluesky's
+// Discover feedgen points at api.bsky.app's generator, which our AppView
+// cannot serve (no app.bsky.feed.getFeed).
 export const RECOMMENDED_SAVED_FEEDS: Pick<
   AppBskyActorDefs.SavedFeed,
   'type' | 'value' | 'pinned'
->[] = [DISCOVER_SAVED_FEED, TIMELINE_SAVED_FEED]
+>[] = [TIMELINE_SAVED_FEED]
 
 // Authority One — Phase 2 personalized ("For You") feed generator.
 // The at-uri of the app.bsky.feed.generator RECORD published by

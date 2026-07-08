@@ -46,12 +46,10 @@ export function NoFeedsPinned({
       }
     }
 
+    // Authority One: re-pin only the native Following timeline (the discover
+    // skip above still strips any stale Bluesky Discover pin our AppView
+    // can't serve).
     const toSave = [
-      {
-        ...DISCOVER_SAVED_FEED,
-        pinned: true,
-        id: TID.nextStr(),
-      },
       {
         ...TIMELINE_SAVED_FEED,
         pinned: true,

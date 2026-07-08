@@ -14,7 +14,6 @@ import {networkRetry} from '#/lib/async/retry'
 import {
   BLUESKY_PROXY_HEADER,
   BSKY_SERVICE,
-  DISCOVER_SAVED_FEED,
   IS_PROD_SERVICE,
   PUBLIC_BSKY_SERVICE,
   TIMELINE_SAVED_FEED,
@@ -202,11 +201,9 @@ export async function createAgentAndCreateAccount(
         throw e
       }),
       networkRetry(1, () => {
+        // Authority One: pin only the native Following timeline. Bluesky's
+        // Discover feedgen can't be served by our AppView (no getFeed).
         return agent.overwriteSavedFeeds([
-          {
-            ...DISCOVER_SAVED_FEED,
-            id: TID.nextStr(),
-          },
           {
             ...TIMELINE_SAVED_FEED,
             id: TID.nextStr(),

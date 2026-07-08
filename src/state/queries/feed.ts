@@ -493,7 +493,11 @@ export function usePinnedFeedsInfos() {
           }),
       )
 
-      await feedsPromise // Fail the whole query if it fails.
+      // Authority One: don't fail the whole query when feedgen hydration
+      // fails — a stale pin pointing at a generator our AppView can't serve
+      // (e.g. an inherited Bluesky default) would otherwise take down every
+      // Home tab. Unresolvable pins simply drop out of the tab bar below.
+      await feedsPromise.catch(() => {})
       await Promise.allSettled(listsPromises) // Ignore individual failing ones.
 
       // order the feeds/lists in the order they were pinned
