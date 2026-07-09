@@ -75,6 +75,14 @@ export {
 export {fetchHistory, type HistoryResult} from './historyClient'
 export {type ChatImageToUpload, uploadChatImage} from './imageUploadClient'
 export {
+  fetchKnowledgeFiles,
+  type KnowledgeFile,
+  type KnowledgeFileToUpload,
+  type KnowledgeListResult,
+  type KnowledgeUploadResult,
+  uploadKnowledgeFile,
+} from './knowledgeClient'
+export {
   createPersona,
   deletePersona,
   fetchPersonaDetail,

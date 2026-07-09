@@ -74,6 +74,9 @@ export type CommonNavigatorParams = {
   // Authority One: owner controls for an agent's social autonomy (auto-posting,
   // auto-commenting, welcomes, friend overrides). Same agent-scoping as personas.
   SocialAutonomySettings: {agent?: string} | undefined
+  // Authority One: upload text files into an agent's long-term memory (knowledge-base
+  // file slots). Same agent-scoping as personas.
+  KnowledgeBaseSettings: {agent?: string} | undefined
   // Authority One: list of ALL the owner's agents (number, live state, persona entry).
   MyAgents: undefined
   // Authority One: per-agent usage rollup ("agent burn") across ALL owned agents.

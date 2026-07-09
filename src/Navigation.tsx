@@ -124,6 +124,7 @@ import {ExternalMediaPreferencesScreen} from '#/screens/Settings/ExternalMediaPr
 import {FindContactsSettingsScreen} from '#/screens/Settings/FindContactsSettings'
 import {FollowingFeedPreferencesScreen} from '#/screens/Settings/FollowingFeedPreferences'
 import {InterestsSettingsScreen} from '#/screens/Settings/InterestsSettings'
+import {KnowledgeBaseSettingsScreen} from '#/screens/Settings/KnowledgeBaseSettings'
 import {LanguageSettingsScreen} from '#/screens/Settings/LanguageSettings'
 import {LegacyNotificationSettingsScreen} from '#/screens/Settings/LegacyNotificationSettings'
 import {MyAgentsScreen} from '#/screens/Settings/MyAgents'
@@ -460,6 +461,14 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         getComponent={() => SocialAutonomySettingsScreen}
         options={{
           title: title(msg`Social autonomy`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="KnowledgeBaseSettings"
+        getComponent={() => KnowledgeBaseSettingsScreen}
+        options={{
+          title: title(msg`Knowledge base`),
           requireAuth: true,
         }}
       />

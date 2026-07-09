@@ -27,6 +27,7 @@ import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
 import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Check'
+import {PageText_Stroke2_Corner0_Rounded as PageTextIcon} from '#/components/icons/PageText'
 import {PencilLine_Stroke2_Corner0_Rounded as PencilIcon} from '#/components/icons/Pencil'
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
 import {Sparkle_Stroke2_Corner0_Rounded as SparkleIcon} from '#/components/icons/Sparkle'
@@ -148,6 +149,21 @@ export function PersonaSettingsScreen({route}: Props) {
                 <SettingsList.ItemIcon icon={SparkleIcon} />
                 <SettingsList.ItemText>
                   <Trans>Social autonomy</Trans>
+                </SettingsList.ItemText>
+                <SettingsList.Chevron />
+              </SettingsList.PressableItem>
+              <SettingsList.PressableItem
+                label={l`Knowledge base`}
+                accessibilityHint={l`Upload files into this agent's long-term memory`}
+                onPress={() =>
+                  navigation.navigate(
+                    'KnowledgeBaseSettings',
+                    agent ? {agent} : undefined,
+                  )
+                }>
+                <SettingsList.ItemIcon icon={PageTextIcon} />
+                <SettingsList.ItemText>
+                  <Trans>Knowledge base</Trans>
                 </SettingsList.ItemText>
                 <SettingsList.Chevron />
               </SettingsList.PressableItem>
