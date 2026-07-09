@@ -1,7 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it, jest} from '@jest/globals'
 
 import {getSupabaseAccessToken} from '../authToken'
-import {uploadAuthorityVideo} from '../videoUploadClient'
+import {fetchVideoEmbedSource, uploadAuthorityVideo} from '../videoUploadClient'
 
 jest.mock('../authToken', () => ({getSupabaseAccessToken: jest.fn()}))
 
@@ -161,5 +161,125 @@ describe('uploadAuthorityVideo', () => {
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('too-large')
     expect(postXHRs).toHaveLength(0)
+  })
+})
+
+describe('fetchVideoEmbedSource', () => {
+  const realFetch = global.fetch
+  afterEach(() => {
+    global.fetch = realFetch
+    mockToken.mockReset()
+  })
+
+  const b64 = (obj: unknown) =>
+    Buffer.from(JSON.stringify(obj), 'utf-8').toString('base64')
+
+  function fakeRes({
+    ok = true,
+    status = 200,
+    headers = {},
+    bytes = new Uint8Array([1, 2, 3]),
+    jsonBody,
+  }: {
+    ok?: boolean
+    status?: number
+    headers?: Record<string, string>
+    bytes?: Uint8Array
+    jsonBody?: unknown
+  }) {
+    return {
+      ok,
+      status,
+      headers: {get: (k: string) => headers[k.toLowerCase()] ?? null},
+      arrayBuffer: () =>
+        Promise.resolve(
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ),
+        ),
+      json: () => Promise.resolve(jsonBody ?? {}),
+    }
+  }
+
+  it('returns signed-out and never fetches when there is no token', async () => {
+    mockToken.mockResolvedValue(null)
+    const spy = jest.fn()
+    global.fetch = spy as unknown as typeof fetch
+    const res = await fetchVideoEmbedSource('vid_1')
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('signed-out')
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('returns the original bytes + decoded embed metadata (unicode-safe, no blob)', async () => {
+    mockToken.mockResolvedValue('tok')
+    const embed = {
+      $type: 'app.bsky.embed.video',
+      alt: 'café 🎬 déjà',
+      aspectRatio: {width: 1920, height: 1080},
+      onePlayback: {uid: 'u1', playlist: 'https://cf/x.m3u8', thumbnail: null},
+    }
+    global.fetch = jest.fn((url: unknown, init: unknown) => {
+      expect(String(url)).toContain('/app/media/video/vid_1/embed-source')
+      expect((init as {headers: Record<string, string>}).headers.Authorization).toBe('Bearer tok')
+      return Promise.resolve(
+        fakeRes({
+          headers: {
+            'content-type': 'video/mp4',
+            'x-one-video-embed': b64(embed),
+            'x-one-video-stream-state': 'ready',
+          },
+          bytes: new Uint8Array([9, 8, 7]),
+        }),
+      )
+    }) as unknown as typeof fetch
+    const res = await fetchVideoEmbedSource('vid_1')
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.contentType).toBe('video/mp4')
+      expect(res.streamState).toBe('ready')
+      expect(new Uint8Array(res.bytes)).toEqual(new Uint8Array([9, 8, 7]))
+      expect(res.embed.alt).toBe('café 🎬 déjà')
+      expect((res.embed as {video?: unknown}).video).toBeUndefined()
+      expect((res.embed.onePlayback as {uid: string}).uid).toBe('u1')
+    }
+  })
+
+  it('maps a non-OK body to a tagged error (code + message)', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = jest.fn(() =>
+      Promise.resolve(
+        fakeRes({
+          ok: false,
+          status: 409,
+          jsonBody: {error: 'video original is not available yet', code: 'video-missing'},
+        }),
+      ),
+    ) as unknown as typeof fetch
+    const res = await fetchVideoEmbedSource('vid_1')
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.code).toBe('video-missing')
+      expect(res.error).toContain('not available')
+    }
+  })
+
+  it('never throws on a network error', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = jest.fn(() => Promise.reject(new Error('boom')))
+    const res = await fetchVideoEmbedSource('vid_1')
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('network')
+  })
+
+  it('falls back to a bare embed when the metadata header is absent', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = jest.fn(() =>
+      Promise.resolve(fakeRes({headers: {'content-type': 'video/mp4'}})),
+    ) as unknown as typeof fetch
+    const res = await fetchVideoEmbedSource('vid_1')
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.embed.$type).toBe('app.bsky.embed.video')
   })
 })

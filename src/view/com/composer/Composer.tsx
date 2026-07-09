@@ -61,6 +61,7 @@ import {useNavigation} from '@react-navigation/native'
 import {useQueries, useQueryClient} from '@tanstack/react-query'
 
 import {
+  fetchVideoEmbedSource,
   getVideoStatus,
   postAsAgent,
   uploadAuthorityVideo,
@@ -1120,13 +1121,20 @@ export const ComposePost = ({
     setError('')
     setIsPublishing(true)
 
-    // AUTHORITY ONE VIDEO (Option A): a post carrying an uploaded videoId is
-    // published through the runtime (POST /app/agents/posts), which resolves the
-    // id back to the original bytes and builds app.bsky.embed.video server-side.
-    // Works whether or not the owner is explicitly posting-as an agent — with no
-    // `postAs` the runtime writes as the owner's own agent identity. ONE embed per
-    // post: video is mutually exclusive with images/GIF/quote/link (also enforced
-    // in the toolbar, and re-checked server-side as a 409).
+    // AUTHORITY ONE VIDEO: only the runtime can build the Cloudflare-Stream-backed
+    // video embed, so a video post always talks to the runtime. WHO the post is
+    // authored as is decided by `postAs` (set only by the explicit "Post as
+    // <Agent>" flow), exactly like the text/image branches below:
+    //  - postAs set  -> the runtime builds the embed AND writes the record to the
+    //    agent's own repo (POST /app/agents/posts).
+    //  - postAs unset -> the human is composing on their OWN profile, so the record
+    //    is written by their OWN PDS session (apilib.post, agent.assertDid). The
+    //    runtime only returns the embed material (embed-source); the human's session
+    //    uploads the video blob to its own repo and creates the post. This is the
+    //    rule: a post lands under whoever's page the person was on. NEVER default a
+    //    human's video to their agent.
+    // ONE embed per post: video is mutually exclusive with images/GIF/quote/link
+    // (also enforced in the toolbar, and re-checked server-side as a 409).
     if (VIDEO_POSTS_ENABLED && authorityVideo) {
       try {
         if (authorityVideo.status !== 'ready') {
@@ -1148,40 +1156,79 @@ export const ComposePost = ({
           )
         }
 
-        setPublishingStage(l`Processing...`)
-        let rt = new RichText(
-          {text: draft.richtext.text.replace(/^(\s*\n)+/, '').trimEnd()},
-          {cleanNewlines: true},
-        )
-        await rt.detectFacets(agent)
-        rt = shortenLinks(rt)
-        rt = stripInvalidMentions(rt)
-
-        setPublishingStage(l`Posting...`)
-        const res = await postAsAgent({
-          agent: postAs?.handle ?? '',
-          text: rt.text,
-          facets: rt.facets,
-          videoId: authorityVideo.videoId,
-          langs: currentLanguages.slice(0, 3),
-        })
-        if (!res.ok) {
-          throw new Error(
-            res.code === 'not-your-agent'
-              ? l`That agent isn't linked to your account.`
-              : res.code === 'too-long'
-                ? l`That post is too long.`
-                : (res.error ??
-                  l`The runtime could not publish your video post.`),
+        if (postAs) {
+          // EXPLICIT post-as-agent: verbatim through the ownership-scoped runtime
+          // endpoint, which writes to the agent's repo (unchanged behavior).
+          setPublishingStage(l`Processing...`)
+          let rt = new RichText(
+            {text: draft.richtext.text.replace(/^(\s*\n)+/, '').trimEnd()},
+            {cleanNewlines: true},
           )
+          await rt.detectFacets(agent)
+          rt = shortenLinks(rt)
+          rt = stripInvalidMentions(rt)
+
+          setPublishingStage(l`Posting...`)
+          const res = await postAsAgent({
+            agent: postAs.handle,
+            text: rt.text,
+            facets: rt.facets,
+            videoId: authorityVideo.videoId,
+            langs: currentLanguages.slice(0, 3),
+          })
+          if (!res.ok) {
+            throw new Error(
+              res.code === 'not-your-agent'
+                ? l`That agent isn't linked to your account.`
+                : res.code === 'too-long'
+                  ? l`That post is too long.`
+                  : (res.error ??
+                    l`The runtime could not publish your video post.`),
+            )
+          }
+          setIsPublishing(false)
+          setAuthorityVideo(null)
+          onPost?.(res.uri)
+          onClose()
+          const agentName = postAs.displayName ?? postAs.handle
+          setTimeout(() => {
+            Toast.show(`Posted as ${agentName}`, {type: 'success'})
+          }, 500)
+        } else {
+          // HUMAN posts as SELF: build the embed from the runtime, upload the video
+          // blob to the human's OWN repo, and create the record on the human's own
+          // session (apilib.post) - identical identity path to their text/images.
+          setPublishingStage(l`Processing...`)
+          const source = await fetchVideoEmbedSource(authorityVideo.videoId)
+          if (!source.ok) {
+            throw new Error(
+              source.error ?? l`Could not prepare your video for posting.`,
+            )
+          }
+          setPublishingStage(l`Uploading video...`)
+          const {data} = await agent.uploadBlob(new Uint8Array(source.bytes), {
+            encoding: source.contentType,
+          })
+          const videoEmbed = {
+            ...source.embed,
+            $type: 'app.bsky.embed.video' as const,
+            video: data.blob,
+          }
+          const {uris} = await apilib.post(agent, queryClient, {
+            thread: filteredThread,
+            replyTo: replyTo?.uri,
+            langs: currentLanguages.slice(0, 3),
+            onStateChange: setPublishingStage,
+            videoEmbed,
+          })
+          setIsPublishing(false)
+          setAuthorityVideo(null)
+          onPost?.(uris[0])
+          onClose()
+          setTimeout(() => {
+            Toast.show(l`Your video was posted`, {type: 'success'})
+          }, 500)
         }
-        setIsPublishing(false)
-        setAuthorityVideo(null)
-        onPost?.(res.uri)
-        onClose()
-        setTimeout(() => {
-          Toast.show(l`Your video was posted`, {type: 'success'})
-        }, 500)
       } catch (e) {
         logger.error(e as Error, {message: 'Composer: video post failed'})
         setError(cleanError((e as Error).message))

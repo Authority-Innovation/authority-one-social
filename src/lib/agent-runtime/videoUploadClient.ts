@@ -234,3 +234,97 @@ export async function getVideoStatus(
     return {ok: false, error: 'Network error checking video status.'}
   }
 }
+
+/**
+ * app.bsky.embed.video record MINUS the `video` blob — the alt/aspectRatio and
+ * the custom `onePlayback` playback companion the runtime derives from Cloudflare
+ * Stream. The caller uploads the original bytes to ITS OWN PDS repo and adds
+ * `video: <that blobRef>` to complete the embed. `onePlayback` is only present
+ * once Stream has finished processing (kept as unknown — the app just forwards it
+ * verbatim into the record; the AppView reads it).
+ */
+export interface VideoEmbedMeta {
+  $type: string
+  alt?: string
+  aspectRatio?: {width: number; height: number}
+  onePlayback?: unknown
+}
+
+export interface VideoEmbedSource {
+  bytes: ArrayBuffer
+  contentType: string
+  streamState: VideoStreamState
+  embed: VideoEmbedMeta
+}
+
+export type VideoEmbedSourceResult =
+  | ({ok: true} & VideoEmbedSource)
+  | {ok: false; code?: string; error: string}
+
+/** Decode the base64(UTF-8 JSON) X-One-Video-Embed header. atob/btoa are present
+ *  on web and on RN 0.81 (Hermes). */
+function decodeEmbedHeader(b64: string): VideoEmbedMeta {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  const parsed = JSON.parse(new TextDecoder().decode(bytes)) as VideoEmbedMeta
+  return parsed && typeof parsed === 'object'
+    ? parsed
+    : {$type: 'app.bsky.embed.video'}
+}
+
+/**
+ * Fetch the Stream-backed embed material for an uploaded video so the CURRENT PDS
+ * session (whoever's profile the person is composing on) can build the
+ * app.bsky.embed.video and create the post record ITSELF — the runtime is used
+ * ONLY to produce the embed, never to write the record. This is what keeps a
+ * human's video post under the human's own repo instead of their agent's.
+ *
+ * GET /app/media/video/{videoId}/embed-source returns the ORIGINAL bytes as the
+ * body + the embed companion (no blob) in the X-One-Video-Embed header. Owner-
+ * scoped (Supabase bearer). NEVER throws — returns a tagged result.
+ */
+export async function fetchVideoEmbedSource(
+  videoId: string,
+): Promise<VideoEmbedSourceResult> {
+  try {
+    const token = await getSupabaseAccessToken()
+    if (!token) return {ok: false, code: 'signed-out', error: 'You are signed out.'}
+    const url = `${VIDEO_UPLOAD_ENDPOINT}/${encodeURIComponent(videoId)}/embed-source`
+    const res = await fetch(url, {headers: {Authorization: `Bearer ${token}`}})
+    if (!res.ok) {
+      let body: {error?: unknown; code?: unknown} = {}
+      try {
+        body = await res.json()
+      } catch {
+        body = {}
+      }
+      return {
+        ok: false,
+        code: typeof body.code === 'string' ? body.code : undefined,
+        error:
+          typeof body.error === 'string' && body.error
+            ? body.error
+            : `Could not prepare the video for posting (${res.status}).`,
+      }
+    }
+    const header = res.headers.get('x-one-video-embed')
+    const embed = header
+      ? decodeEmbedHeader(header)
+      : {$type: 'app.bsky.embed.video'}
+    const bytes = await res.arrayBuffer()
+    const contentType = (res.headers.get('content-type') || 'video/mp4')
+      .split(';')[0]
+      .trim()
+    const streamState: VideoStreamState =
+      res.headers.get('x-one-video-stream-state') || 'pending'
+    return {ok: true, bytes, contentType, streamState, embed}
+  } catch (e) {
+    logger.warn('authority video embed source failed', {safeMessage: String(e)})
+    return {
+      ok: false,
+      code: 'network',
+      error: 'Could not prepare the video. Please try again.',
+    }
+  }
+}

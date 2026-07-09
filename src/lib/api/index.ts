@@ -52,6 +52,17 @@ interface PostOpts {
   replyTo?: string
   onStateChange?: (state: string) => void
   langs?: string[]
+  /**
+   * AUTHORITY ONE video: a pre-built app.bsky.embed.video for the FIRST post,
+   * whose `video` blob the caller already uploaded to THIS agent's own repo (via
+   * the runtime's embed-source path). When set, it replaces the draft's resolved
+   * embed for post[0] so a human's video post is written by their OWN session —
+   * landing under whoever's profile they were composing on, not their agent.
+   * Carries the custom `onePlayback` companion field, so the write skips strict
+   * lexicon validation (matching the runtime's own createRecord for video posts).
+   * Video posts are single, top-level (the composer enforces both).
+   */
+  videoEmbed?: $Typed<AppBskyEmbedVideo.Main> & {onePlayback?: unknown}
 }
 
 export async function post(
@@ -89,12 +100,12 @@ export async function post(
 
     // Not awaited to avoid waterfalls.
     const rtPromise = resolveRT(agent, draft.richtext)
-    const embedPromise = resolveEmbed(
-      agent,
-      queryClient,
-      draft,
-      opts.onStateChange,
-    )
+    // AUTHORITY ONE video: a caller-supplied embed (blob already uploaded to this
+    // repo) wins for the first post; otherwise resolve the draft's own embed.
+    const embedPromise =
+      opts.videoEmbed && i === 0
+        ? Promise.resolve(opts.videoEmbed)
+        : resolveEmbed(agent, queryClient, draft, opts.onStateChange)
     let labels: $Typed<ComAtprotoLabelDefs.SelfLabels> | undefined
     if (draft.labels.length) {
       labels = {
@@ -178,7 +189,12 @@ export async function post(
     await agent.com.atproto.repo.applyWrites({
       repo: agent.assertDid,
       writes: writes,
-      validate: true,
+      // The AuthorityOne video embed carries a custom `onePlayback` field that is
+      // not in the app.bsky.embed.video lexicon, so strict validation would reject
+      // it. The runtime's own agent-path createRecord doesn't validate either, so
+      // skipping it here keeps the two write paths byte-compatible. All other posts
+      // stay strictly validated.
+      validate: opts.videoEmbed ? false : true,
     })
   } catch (err) {
     const e = err as Error
