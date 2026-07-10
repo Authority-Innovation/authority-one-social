@@ -234,7 +234,7 @@ function Inner({
               placeholder={`Message ${displayName}…`}
               value={input}
               onChangeText={setInput}
-              onSubmitEditing={onSend}
+              onSubmitEditing={() => void onSend()}
               editable={!sending}
               returnKeyType="send"
             />
@@ -244,7 +244,7 @@ function Inner({
             size="small"
             color="primary"
             disabled={sending || !input.trim()}
-            onPress={onSend}>
+            onPress={() => void onSend()}>
             <ButtonText>Send</ButtonText>
           </Button>
         </View>

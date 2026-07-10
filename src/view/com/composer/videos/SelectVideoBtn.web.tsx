@@ -33,16 +33,18 @@ export function SelectVideoBtn({
     input.setAttribute('id', String(Math.random()))
     document.body.appendChild(input)
 
-    input.addEventListener('change', async () => {
-      try {
-        const file = input.files?.[0]
-        if (file) {
-          const asset = await getVideoMetadata(file)
-          onPickVideo(asset as ImagePickerAsset)
+    input.addEventListener('change', () => {
+      void (async () => {
+        try {
+          const file = input.files?.[0]
+          if (file) {
+            const asset = await getVideoMetadata(file)
+            onPickVideo(asset)
+          }
+        } finally {
+          document.body.removeChild(input)
         }
-      } finally {
-        document.body.removeChild(input)
-      }
+      })()
     })
 
     input.dispatchEvent(new MouseEvent('click'))

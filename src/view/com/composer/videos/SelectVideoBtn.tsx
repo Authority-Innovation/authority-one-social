@@ -48,7 +48,7 @@ export function SelectVideoBtn({
   return (
     <Button
       testID="openVideoBtn"
-      onPress={onPress}
+      onPress={() => void onPress()}
       label={_(
         msg({
           message: `Add a video to post`,

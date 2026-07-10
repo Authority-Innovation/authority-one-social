@@ -1,7 +1,19 @@
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 
 // Mock expo/fetch so we can observe the request and feed canned responses.
-const mockExpoFetch = jest.fn()
+type MockRequestInit = {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+}
+type MockResponse = {
+  ok: boolean
+  status: number
+  json?: () => Promise<unknown>
+  arrayBuffer?: () => Promise<ArrayBuffer>
+}
+const mockExpoFetch =
+  jest.fn<(url: string, init?: MockRequestInit) => Promise<MockResponse>>()
 jest.mock('expo/fetch', () => ({fetch: mockExpoFetch}))
 
 jest.mock('#/logger', () => ({logger: {error: jest.fn(), warn: jest.fn()}}))
@@ -21,18 +33,18 @@ import {fetchPublicAgentAudioBase64, publicChat} from '../publicChatClient'
 
 const mockToken = jest.mocked(getSupabaseAccessToken)
 
-function jsonResponse(body: unknown, status = 200) {
+function jsonResponse(body: unknown, status = 200): MockResponse {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
+    json: () => Promise.resolve(body),
   }
 }
-function audioResponse(bytes: number[], status = 200) {
+function audioResponse(bytes: number[], status = 200): MockResponse {
   return {
     ok: status >= 200 && status < 300,
     status,
-    arrayBuffer: async () => new Uint8Array(bytes).buffer,
+    arrayBuffer: () => Promise.resolve(new Uint8Array(bytes).buffer),
   }
 }
 
@@ -66,14 +78,14 @@ describe('publicChat', () => {
   it('works WITHOUT a bearer (anonymous) and sends one when signed in', async () => {
     mockExpoFetch.mockResolvedValue(jsonResponse({message: 'hey', sessionId: 's', hasVoice: false}))
     await publicChat({agent: 'bull', message: 'hi'})
-    let headers = (mockExpoFetch.mock.calls[0][1] as any).headers
-    expect(headers.Authorization).toBeUndefined() // anonymous: no bearer
+    let headers = mockExpoFetch.mock.calls[0][1]?.headers
+    expect(headers?.Authorization).toBeUndefined() // anonymous: no bearer
 
     mockExpoFetch.mockClear()
     mockToken.mockResolvedValue("viewer-tok")
     await publicChat({agent: 'bull', message: 'hi'})
-    headers = (mockExpoFetch.mock.calls[0][1] as any).headers
-    expect(headers.Authorization).toBe('Bearer viewer-tok') // signed-in: budget keyed per-DID
+    headers = mockExpoFetch.mock.calls[0][1]?.headers
+    expect(headers?.Authorization).toBe('Bearer viewer-tok') // signed-in: budget keyed per-DID
   })
 
   it('429 budget-exhausted → conversion card, not an error', async () => {
@@ -143,7 +155,9 @@ describe('fetchPublicAgentAudioBase64 (fail-open)', () => {
   it('never trusts a client voiceId — body carries only agent/text/sessionId', async () => {
     mockExpoFetch.mockResolvedValue(audioResponse([1, 2, 3]))
     await fetchPublicAgentAudioBase64({agent: 'bull', text: 'hi', sessionId: 's1'})
-    const body = JSON.parse((mockExpoFetch.mock.calls[0][1] as any).body)
+    const body = JSON.parse(
+      mockExpoFetch.mock.calls[0][1]?.body ?? '{}',
+    ) as Record<string, unknown>
     expect(Object.keys(body).sort()).toEqual(['agent', 'sessionId', 'text'])
   })
 })

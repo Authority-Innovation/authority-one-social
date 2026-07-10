@@ -2,8 +2,8 @@ import {fetch as expoFetch} from 'expo/fetch'
 
 import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
-import {bytesToBase64} from './tts'
 import {PUBLIC_CHAT_ENDPOINT, PUBLIC_TTS_ENDPOINT} from './config'
+import {bytesToBase64} from './tts'
 
 /**
  * PUBLIC "TALK TO <AGENT>" client (metered visitor chat, refreshing budget — §3.6 / E7).
@@ -65,6 +65,19 @@ export type PublicChatResult =
       agent: string
     }
 
+/** Loosely-typed wire shape of a /public/chat response — every field optional/untrusted. */
+type PublicChatWireResponse = {
+  message?: unknown
+  sessionId?: string | null
+  agent?: string
+  remaining?: PublicChatRemaining | null
+  exhausted?: boolean
+  hasVoice?: boolean
+  code?: string
+  resetsAt?: string | null
+  cta?: PublicChatConversionCard | null
+}
+
 /** Best-effort viewer bearer (only to key the budget per-DID). Never required. PURE-ish. */
 async function optionalBearer(): Promise<string | null> {
   try {
@@ -98,11 +111,13 @@ export async function publicChat(input: {
       body: JSON.stringify({agent, message, ...(input.sessionId ? {sessionId: input.sessionId} : {})}),
       signal: input.signal,
     })
-    const data: any = await res.json().catch(() => ({}))
+    const data = (await res
+      .json()
+      .catch(() => ({}))) as PublicChatWireResponse
 
     if (res.status === 429 || data?.exhausted || data?.code === 'budget-exhausted' || data?.code === 'global-ceiling') {
       const code = data?.code === 'rate-limited' ? 'rate-limited' : data?.code === 'global-ceiling' ? 'global-ceiling' : 'budget-exhausted'
-      return {ok: false, kind: 'exhausted', code, sessionId: data?.sessionId ?? input.sessionId ?? null, agent, resetsAt: data?.resetsAt ?? null, cta: (data?.cta as PublicChatConversionCard) ?? null}
+      return {ok: false, kind: 'exhausted', code, sessionId: data?.sessionId ?? input.sessionId ?? null, agent, resetsAt: data?.resetsAt ?? null, cta: data?.cta ?? null}
     }
     if (!res.ok || typeof data?.message !== 'string') {
       // Check the runtime's explicit code BEFORE falling back to the HTTP status, so an
@@ -124,7 +139,7 @@ export async function publicChat(input: {
       message: data.message,
       sessionId: data.sessionId ?? input.sessionId ?? '',
       agent: data.agent ?? agent,
-      remaining: (data.remaining as PublicChatRemaining) ?? null,
+      remaining: data.remaining ?? null,
       exhausted: Boolean(data.exhausted),
       hasVoice: Boolean(data.hasVoice),
     }

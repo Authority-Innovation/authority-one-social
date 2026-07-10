@@ -464,6 +464,7 @@ export type Events = {
       | 'OnboardingSuggestedAccounts'
       | 'FindContacts'
       | 'GroupChat'
+      | 'TalkToAgent'
   }
   'profile:followers:view': {
     contextProfileDid: string
@@ -570,6 +571,7 @@ export type Events = {
       | 'OnboardingSuggestedAccounts'
       | 'FindContacts'
       | 'GroupChat'
+      | 'TalkToAgent'
   }
   'chat:create': {
     logContext:

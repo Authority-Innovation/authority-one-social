@@ -1,7 +1,19 @@
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 
 // Mock expo/fetch so we can observe the TTS request and feed canned responses.
-const mockExpoFetch = jest.fn()
+type MockRequestInit = {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+}
+type MockAudioResponse = {
+  ok: boolean
+  status: number
+  headers: {get: () => string}
+  arrayBuffer: () => Promise<ArrayBuffer>
+}
+const mockExpoFetch =
+  jest.fn<(url: string, init?: MockRequestInit) => Promise<MockAudioResponse>>()
 jest.mock('expo/fetch', () => ({fetch: mockExpoFetch}))
 
 jest.mock('#/logger', () => ({logger: {error: jest.fn(), warn: jest.fn()}}))
@@ -15,12 +27,12 @@ jest.mock('../config', () => ({
 import {setSupabaseTokenProvider} from '../authToken'
 import {bytesToBase64, fetchBobAudioBase64} from '../tts'
 
-function audioResponse(bytes: number[], status = 200) {
+function audioResponse(bytes: number[], status = 200): MockAudioResponse {
   return {
     ok: status >= 200 && status < 300,
     status,
     headers: {get: () => 'audio/mpeg'},
-    arrayBuffer: async () => new Uint8Array(bytes).buffer,
+    arrayBuffer: () => Promise.resolve(new Uint8Array(bytes).buffer),
   }
 }
 
@@ -37,11 +49,11 @@ describe('bytesToBase64', () => {
 describe('fetchBobAudioBase64', () => {
   beforeEach(() => {
     mockExpoFetch.mockReset()
-    setSupabaseTokenProvider(async () => 'tok-123')
+    setSupabaseTokenProvider(() => Promise.resolve('tok-123'))
   })
 
   it('returns null (fallback) when signed out — never calls the proxy', async () => {
-    setSupabaseTokenProvider(async () => null)
+    setSupabaseTokenProvider(() => Promise.resolve(null))
     const out = await fetchBobAudioBase64('hello')
     expect(out).toBeNull()
     expect(mockExpoFetch).not.toHaveBeenCalled()
@@ -57,11 +69,14 @@ describe('fetchBobAudioBase64', () => {
     mockExpoFetch.mockResolvedValue(audioResponse([1, 2, 3, 4]))
     const out = await fetchBobAudioBase64('speak this')
     expect(out).toBe('AQIDBA==')
-    const [url, init] = mockExpoFetch.mock.calls[0] as [string, any]
+    const [url, init] = mockExpoFetch.mock.calls[0]
     expect(url).toBe('https://runtime.test/app/tts')
-    expect(init.method).toBe('POST')
-    expect(init.headers.Authorization).toBe('Bearer tok-123')
-    const body = JSON.parse(init.body)
+    expect(init?.method).toBe('POST')
+    expect(init?.headers?.Authorization).toBe('Bearer tok-123')
+    const body = JSON.parse(init?.body ?? '{}') as {
+      text?: string
+      voiceId?: string
+    }
     expect(body.text).toBe('speak this')
     expect(body.voiceId).toBe('bob-default')
   })
@@ -69,8 +84,9 @@ describe('fetchBobAudioBase64', () => {
   it('honors an explicit voiceId override', async () => {
     mockExpoFetch.mockResolvedValue(audioResponse([9]))
     await fetchBobAudioBase64('hi', {voiceId: 'bob-v5'})
-    const init = mockExpoFetch.mock.calls[0][1] as any
-    expect(JSON.parse(init.body).voiceId).toBe('bob-v5')
+    const init = mockExpoFetch.mock.calls[0][1]
+    const body = JSON.parse(init?.body ?? '{}') as {voiceId?: string}
+    expect(body.voiceId).toBe('bob-v5')
   })
 
   it('returns null on 503 (proxy unconfigured) → on-device fallback', async () => {

@@ -9,17 +9,23 @@ jest.mock('../config', () => ({
   DEFAULT_AGENT: 'ada',
 }))
 
-import {setSupabaseTokenProvider} from '../authToken'
 import {postApprovalDecision} from '../approvals'
+import {setSupabaseTokenProvider} from '../authToken'
 
-const mockFetch = jest.fn()
+type MockRequestInit = {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+}
+const mockFetch =
+  jest.fn<(url: string, init?: MockRequestInit) => Promise<{ok: boolean}>>()
 // approvals.ts uses the global fetch.
 ;(global as unknown as {fetch: unknown}).fetch = mockFetch
 
 describe('postApprovalDecision — runtime approval contract', () => {
   beforeEach(() => {
     mockFetch.mockReset()
-    setSupabaseTokenProvider(async () => 'tok-123')
+    setSupabaseTokenProvider(() => Promise.resolve('tok-123'))
   })
 
   it('POSTs to /app/approve with {id, decision} (NOT /app/approvals / actionId)', async () => {
@@ -28,25 +34,31 @@ describe('postApprovalDecision — runtime approval contract', () => {
     expect(ok).toBe(true)
 
     expect(mockFetch).toHaveBeenCalledTimes(1)
-    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    const [url, init] = mockFetch.mock.calls[0]
     // The bug was the wrong path + field — the runtime 404/400'd the decision while
     // the UI optimistically removed the card, so the action survived server-side.
     expect(url).toBe('https://runtime.test/app/approve')
     expect(url).not.toContain('/app/approvals')
 
-    const body = JSON.parse(String(init.body))
+    const body = JSON.parse(init?.body ?? '{}') as {
+      id?: string
+      decision?: string
+    }
     expect(body.id).toBe('act-9') // runtime reads `id`
     expect(body).not.toHaveProperty('actionId')
     expect(body.decision).toBe('reject')
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-123')
+    expect(init?.headers?.Authorization).toBe('Bearer tok-123')
   })
 
   it('approve decisions use the same corrected endpoint + field', async () => {
     mockFetch.mockResolvedValueOnce({ok: true})
     await postApprovalDecision({actionId: 'act-1', decision: 'approve', agent: 'ada'})
-    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    const [url, init] = mockFetch.mock.calls[0]
     expect(url).toBe('https://runtime.test/app/approve')
-    const body = JSON.parse(String(init.body))
+    const body = JSON.parse(init?.body ?? '{}') as {
+      id?: string
+      decision?: string
+    }
     expect(body.id).toBe('act-1')
     expect(body.decision).toBe('approve')
   })
@@ -58,7 +70,7 @@ describe('postApprovalDecision — runtime approval contract', () => {
   })
 
   it('does not post an unauthenticated decision (signed out → false, no fetch)', async () => {
-    setSupabaseTokenProvider(async () => null)
+    setSupabaseTokenProvider(() => Promise.resolve(null))
     const ok = await postApprovalDecision({actionId: 'act-3', decision: 'reject'})
     expect(ok).toBe(false)
     expect(mockFetch).not.toHaveBeenCalled()

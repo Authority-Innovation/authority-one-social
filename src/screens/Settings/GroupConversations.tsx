@@ -1,8 +1,8 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {ActivityIndicator, Pressable, View} from 'react-native'
+import {setStringAsync} from 'expo-clipboard'
 import {Image} from 'expo-image'
 import {Trans, useLingui} from '@lingui/react/macro'
-import {setStringAsync} from 'expo-clipboard'
 
 import {
   downloadGroupExport,
@@ -42,7 +42,7 @@ export function GroupConversationsScreen({}: Props) {
 
   useEffect(() => {
     let live = true
-    fetchOwnerGroups().then(g => {
+    void fetchOwnerGroups().then(g => {
       if (live) setGroups(g)
     })
     return () => {
@@ -160,21 +160,22 @@ function ConversationView({
   const [busy, setBusy] = useState(false)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const load = useCallback(async () => {
-    const res = await fetchGroupThread(sid)
-    if (res.error) setLoadError(res.error)
-    else setLoadError(null)
-    setMessages(res.messages)
+  const load = useCallback(() => {
+    return fetchGroupThread(sid).then(res => {
+      if (res.error) setLoadError(res.error)
+      else setLoadError(null)
+      setMessages(res.messages)
+    })
   }, [sid])
 
   useEffect(() => {
-    load()
-    fetchShareStatus(sid).then(setShareState)
+    void load()
+    void fetchShareStatus(sid).then(setShareState)
   }, [sid, load])
 
   useEffect(() => {
     if (auto) {
-      timer.current = setInterval(load, POLL_MS)
+      timer.current = setInterval(() => void load(), POLL_MS)
     }
     return () => {
       if (timer.current) clearInterval(timer.current)
@@ -259,7 +260,7 @@ function ConversationView({
                 variant="solid"
                 color="primary"
                 disabled={busy}
-                onPress={onCopyShare}>
+                onPress={() => void onCopyShare()}>
                 <ButtonText>
                   <Trans>Copy link</Trans>
                 </ButtonText>
@@ -270,7 +271,7 @@ function ConversationView({
                 variant="outline"
                 color="negative"
                 disabled={busy}
-                onPress={onRevokeShare}>
+                onPress={() => void onRevokeShare()}>
                 <ButtonText>
                   <Trans>Revoke</Trans>
                 </ButtonText>
@@ -283,7 +284,7 @@ function ConversationView({
               variant="solid"
               color="primary"
               disabled={busy}
-              onPress={onCreateShare}>
+              onPress={() => void onCreateShare()}>
               <ButtonText>
                 <Trans>Share (read-only link)</Trans>
               </ButtonText>
@@ -294,7 +295,7 @@ function ConversationView({
             size="small"
             variant="ghost"
             color="secondary"
-            onPress={load}>
+            onPress={() => void load()}>
             <ButtonText>
               <Trans>Refresh</Trans>
             </ButtonText>
@@ -317,13 +318,13 @@ function ConversationView({
           <Text style={[a.text_xs, t.atoms.text_contrast_medium, a.self_center]}>
             <Trans>Export:</Trans>
           </Text>
-          <Button label={l`Export HTML`} size="tiny" variant="outline" color="secondary" onPress={() => onExport('html')}>
+          <Button label={l`Export HTML`} size="tiny" variant="outline" color="secondary" onPress={() => void onExport('html')}>
             <ButtonText>HTML</ButtonText>
           </Button>
-          <Button label={l`Export text`} size="tiny" variant="outline" color="secondary" onPress={() => onExport('text')}>
+          <Button label={l`Export text`} size="tiny" variant="outline" color="secondary" onPress={() => void onExport('text')}>
             <ButtonText>TXT</ButtonText>
           </Button>
-          <Button label={l`Export JSON`} size="tiny" variant="outline" color="secondary" onPress={() => onExport('json')}>
+          <Button label={l`Export JSON`} size="tiny" variant="outline" color="secondary" onPress={() => void onExport('json')}>
             <ButtonText>JSON</ButtonText>
           </Button>
         </View>
