@@ -14,6 +14,7 @@ import {
   type NativeStackScreenProps,
 } from '#/lib/routes/types'
 import {useOwnerBillingQuery} from '#/state/queries/agents'
+import {IS_IOS} from '#/env'
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
@@ -112,34 +113,48 @@ function BillingBody({billing}: {billing: OwnerBilling}) {
       ))}
 
       <View style={[a.px_lg, a.py_md, a.gap_sm]}>
-        {billing.upgradeUrl ? (
-          <Button
-            label={l`Change plan`}
-            size="large"
-            variant="solid"
-            color="primary"
-            onPress={onUpgrade}>
-            <ButtonText>
-              {billing.plan === 'scale' ? (
-                <Trans>Change plan</Trans>
-              ) : (
-                <Trans>Upgrade plan</Trans>
-              )}
-            </ButtonText>
-          </Button>
-        ) : null}
-        {billing.manageUrl ? (
-          <Button
-            label={l`Manage billing`}
-            size="large"
-            variant="outline"
-            color="secondary"
-            onPress={onManage}>
-            <ButtonText>
-              <Trans>Manage billing</Trans>
-            </ButtonText>
-          </Button>
-        ) : null}
+        {IS_IOS ? (
+          // App Store guideline 3.1.1: no CTAs that hand off to an external
+          // (Stripe) purchase flow on iOS. Until a StoreKit/IAP decision is
+          // made, iOS shows a read-only pointer to the web app instead of the
+          // Upgrade/Manage buttons. Android and web are unchanged.
+          <Text style={[a.text_sm, {opacity: 0.7}]}>
+            <Trans>
+              Plan changes and billing are managed on the web app.
+            </Trans>
+          </Text>
+        ) : (
+          <>
+            {billing.upgradeUrl ? (
+              <Button
+                label={l`Change plan`}
+                size="large"
+                variant="solid"
+                color="primary"
+                onPress={onUpgrade}>
+                <ButtonText>
+                  {billing.plan === 'scale' ? (
+                    <Trans>Change plan</Trans>
+                  ) : (
+                    <Trans>Upgrade plan</Trans>
+                  )}
+                </ButtonText>
+              </Button>
+            ) : null}
+            {billing.manageUrl ? (
+              <Button
+                label={l`Manage billing`}
+                size="large"
+                variant="outline"
+                color="secondary"
+                onPress={onManage}>
+                <ButtonText>
+                  <Trans>Manage billing</Trans>
+                </ButtonText>
+              </Button>
+            ) : null}
+          </>
+        )}
       </View>
 
       <View style={[a.px_lg, a.pb_2xl]}>
