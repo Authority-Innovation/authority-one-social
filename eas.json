@@ -18,7 +18,17 @@
         "resourceClass": "large"
       },
       "env": {
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_PDS_URL": "https://pds.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_URL": "https://appview.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_BLUESKY_PROXY_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_AGENT_RUNTIME_URL": "https://authority-one-agent-runtime.e-479.workers.dev",
+        "EXPO_PUBLIC_AGENT_HANDLE_SUFFIX": "pds.authority-one.com",
+        "EXPO_PUBLIC_APP_CONFIG_URL": "",
+        "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
+        "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
       }
     },
     "preview": {
@@ -29,7 +39,17 @@
         "resourceClass": "large"
       },
       "env": {
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_PDS_URL": "https://pds.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_URL": "https://appview.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_BLUESKY_PROXY_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_AGENT_RUNTIME_URL": "https://authority-one-agent-runtime.e-479.workers.dev",
+        "EXPO_PUBLIC_AGENT_HANDLE_SUFFIX": "pds.authority-one.com",
+        "EXPO_PUBLIC_APP_CONFIG_URL": "",
+        "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
+        "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
       }
     },
     "production": {
@@ -37,14 +57,26 @@
       "ios": {
         "resourceClass": "large",
         "autoIncrement": true,
-        "buildArtifactPaths": ["ios/build/*"]
+        "buildArtifactPaths": [
+          "ios/build/*"
+        ]
       },
       "android": {
         "autoIncrement": true
       },
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_PDS_URL": "https://pds.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_URL": "https://appview.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_BLUESKY_PROXY_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_AGENT_RUNTIME_URL": "https://authority-one-agent-runtime.e-479.workers.dev",
+        "EXPO_PUBLIC_AGENT_HANDLE_SUFFIX": "pds.authority-one.com",
+        "EXPO_PUBLIC_APP_CONFIG_URL": "",
+        "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
+        "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
       }
     },
     "production-apk": {
@@ -52,28 +84,52 @@
       "distribution": "internal",
       "ios": {
         "autoIncrement": false,
-        "buildArtifactPaths": ["ios/build/*"]
+        "buildArtifactPaths": [
+          "ios/build/*"
+        ]
       },
       "android": {
         "autoIncrement": false
       },
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_PDS_URL": "https://pds.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_URL": "https://appview.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_BLUESKY_PROXY_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_AGENT_RUNTIME_URL": "https://authority-one-agent-runtime.e-479.workers.dev",
+        "EXPO_PUBLIC_AGENT_HANDLE_SUFFIX": "pds.authority-one.com",
+        "EXPO_PUBLIC_APP_CONFIG_URL": "",
+        "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
+        "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
       }
     },
     "testflight": {
       "extends": "base",
       "ios": {
         "autoIncrement": true,
-        "buildArtifactPaths": ["ios/build/*"]
+        "buildArtifactPaths": [
+          "ios/build/*"
+        ]
       },
       "android": {
         "autoIncrement": true
       },
       "channel": "testflight",
       "env": {
-        "EXPO_PUBLIC_ENV": "testflight"
+        "EXPO_PUBLIC_ENV": "testflight",
+        "EXPO_PUBLIC_PDS_URL": "https://pds.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_URL": "https://appview.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_BLUESKY_PROXY_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_AGENT_RUNTIME_URL": "https://authority-one-agent-runtime.e-479.workers.dev",
+        "EXPO_PUBLIC_AGENT_HANDLE_SUFFIX": "pds.authority-one.com",
+        "EXPO_PUBLIC_APP_CONFIG_URL": "",
+        "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
+        "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
       }
     },
     "testflight-android": {
@@ -81,14 +137,26 @@
       "distribution": "internal",
       "ios": {
         "autoIncrement": true,
-        "buildArtifactPaths": ["ios/build/*"]
+        "buildArtifactPaths": [
+          "ios/build/*"
+        ]
       },
       "android": {
         "autoIncrement": true
       },
       "channel": "testflight",
       "env": {
-        "EXPO_PUBLIC_ENV": "testflight"
+        "EXPO_PUBLIC_ENV": "testflight",
+        "EXPO_PUBLIC_PDS_URL": "https://pds.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_URL": "https://appview.authority-one.com",
+        "EXPO_PUBLIC_APPVIEW_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_BLUESKY_PROXY_DID": "did:web:appview.authority-one.com",
+        "EXPO_PUBLIC_AGENT_RUNTIME_URL": "https://authority-one-agent-runtime.e-479.workers.dev",
+        "EXPO_PUBLIC_AGENT_HANDLE_SUFFIX": "pds.authority-one.com",
+        "EXPO_PUBLIC_APP_CONFIG_URL": "",
+        "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
+        "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
       }
     }
   },
