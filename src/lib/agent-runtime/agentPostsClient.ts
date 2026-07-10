@@ -204,6 +204,12 @@ export async function postAsAgent(input: {
   facets?: AppBskyRichtextFacet.Main[]
   /** Up to 4 hosted https urls (from /app/media/upload). */
   imageUrls?: string[]
+  /**
+   * A single videoId from POST /app/media/video. The runtime resolves it back to
+   * the original bytes and embeds app.bsky.embed.video server-side. Mutually
+   * exclusive with imageUrls (the runtime returns 409 embed-type-conflict).
+   */
+  videoId?: string
   replyTo?: {uri: string; cid: string}
   langs?: string[]
 }): Promise<PostAsAgentResult> {
@@ -218,6 +224,7 @@ export async function postAsAgent(input: {
         text: input.text,
         facets: input.facets?.length ? input.facets : undefined,
         imageUrls: input.imageUrls?.length ? input.imageUrls : undefined,
+        videoId: input.videoId || undefined,
         replyTo: input.replyTo ?? undefined,
         langs: input.langs?.length ? input.langs : undefined,
       }),

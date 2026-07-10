@@ -74,8 +74,16 @@ export type CommonNavigatorParams = {
   // Authority One: owner controls for an agent's social autonomy (auto-posting,
   // auto-commenting, welcomes, friend overrides). Same agent-scoping as personas.
   SocialAutonomySettings: {agent?: string} | undefined
+  // Authority One: upload text files into an agent's long-term memory (knowledge-base
+  // file slots). Same agent-scoping as personas.
+  KnowledgeBaseSettings: {agent?: string} | undefined
   // Authority One: list of ALL the owner's agents (number, live state, persona entry).
   MyAgents: undefined
+  // Authority One: per-agent usage rollup ("agent burn") across ALL owned agents.
+  AgentUsage: undefined
+  // Authority One: customer plan & billing — current tier, allowance, usage,
+  // the three tiers, and Upgrade/Manage handoffs to the AppView Stripe flows.
+  AgentBilling: undefined
   // Authority One: per-agent hub — 1:1 chat + owner management (posts, profile,
   // settings) for ONE owned agent. `agent` = the agent's full handle (or DID).
   AgentHub: {agent: string}
@@ -103,6 +111,10 @@ export type CommonNavigatorParams = {
   MessagesJoinRequests: {conversation: string}
   MessagesSettings: undefined
   MessagesInbox: undefined
+  // Read-only mirror of one SMS/MMS group (opened from the "SMS groups" section
+  // on the Chats page). `sid` = Twilio Conversations SID; `name` is an optional
+  // display-title hint (the thread endpoint also returns the group title).
+  MessagesSmsGroupThread: {sid: string; name?: string}
   NotificationsActivityList: {posts: string}
   LegacyNotificationSettings: undefined
   Feeds: undefined

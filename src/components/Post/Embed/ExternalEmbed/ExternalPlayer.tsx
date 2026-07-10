@@ -2,6 +2,7 @@ import {useCallback, useEffect, useMemo, useState} from 'react'
 import {
   ActivityIndicator,
   type GestureResponderEvent,
+  Linking,
   Pressable,
   useWindowDimensions,
   View,
@@ -76,20 +77,45 @@ function PlaceholderOverlay({
 function Player({
   params,
   onLoad,
+  onError,
   isPlayerActive,
 }: {
   isPlayerActive: boolean
   params: EmbedPlayerParams
   onLoad: () => void
+  onError: () => void
 }) {
-  // ensures we only load what's requested
-  // when it's a youtube video, we need to allow both bsky.app and youtube.com
+  // ensures we only load what's requested. YouTube now plays via a direct
+  // youtube-nocookie embed, so allow the youtube-nocookie + youtube.com/ytimg
+  // assets it pulls in; every other source stays pinned to its exact playerUri.
   const onShouldStartLoadWithRequest = useCallback(
-    (event: ShouldStartLoadRequest) =>
-      event.url === params.playerUri ||
-      (params.source.startsWith('youtube') &&
-        event.url.includes('www.youtube.com')),
+    (event: ShouldStartLoadRequest) => {
+      if (event.url === params.playerUri) return true
+      if (params.source.startsWith('youtube')) {
+        return (
+          event.url.includes('youtube-nocookie.com') ||
+          event.url.includes('youtube.com') ||
+          event.url.includes('ytimg.com')
+        )
+      }
+      return false
+    },
     [params.playerUri, params.source],
+  )
+
+  // If the embedded player fails to load (e.g. inline playback blocked), fall
+  // back to opening the video in the external browser / native app rather than
+  // showing a broken frame.
+  const onLoadError = useCallback(
+    (event: {nativeEvent?: {url?: string}}) => {
+      // Only treat a failure of the top-level player URL as fatal — sub-resource
+      // errors are normal and self-recover.
+      if (event?.nativeEvent?.url && event.nativeEvent.url !== params.playerUri) {
+        return
+      }
+      onError()
+    },
+    [onError, params.playerUri],
   )
 
   // Don't show the player until it is active
@@ -108,6 +134,8 @@ function Player({
           nestedScrollEnabled
           source={{uri: params.playerUri}}
           onLoad={onLoad}
+          onError={onLoadError}
+          onHttpError={onLoadError}
           style={a.bg_transparent}
           setSupportMultipleWindows={false} // Prevent any redirects from opening a new window (ads)
         />
@@ -192,6 +220,16 @@ export function ExternalPlayer({
     setIsLoading(false)
   }, [])
 
+  // Graceful fallback: if the inline player can't load, deactivate it and open
+  // the original link so the OS can route to the browser / native app.
+  const onPlayerError = useCallback(() => {
+    setIsPlayerActive(false)
+    setIsLoading(false)
+    if (link.uri) {
+      Linking.openURL(link.uri).catch(() => {})
+    }
+  }, [link.uri])
+
   const onPlayPress = useCallback(
     (event: GestureResponderEvent) => {
       // Prevent this from propagating upward on web
@@ -258,6 +296,7 @@ export function ExternalPlayer({
           isPlayerActive={isPlayerActive}
           params={params}
           onLoad={onLoad}
+          onError={onPlayerError}
         />
       </Animated.View>
     </>

@@ -37,6 +37,7 @@ import {
 } from '#/components/KnownFollowers'
 import {ProfileBadges} from '#/components/ProfileBadges'
 import * as Prompt from '#/components/Prompt'
+import {TalkToAgentButton} from '#/components/TalkToAgent/TalkToAgentButton'
 import {RichText} from '#/components/RichText'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
@@ -394,6 +395,10 @@ export function HeaderStandardButtons({
         )
       ) : !profile.viewer?.blockedBy ? (
         <>
+          {/* Public "Talk to <Agent>" — metered visitor chat (§3.6/E7). Renders only on
+              non-owned AGENT profiles when PUBLIC_CHAT_ENABLED; otherwise a no-op. */}
+          <TalkToAgentButton profile={profile} />
+
           {hasSession && (!minimal || profile.viewer?.following) && (
             <>
               {subscriptionsAllowed && (

@@ -60,7 +60,13 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 import {useQueries, useQueryClient} from '@tanstack/react-query'
 
-import {postAsAgent, uploadChatImage} from '#/lib/agent-runtime'
+import {
+  getVideoStatus,
+  postAsAgent,
+  uploadAuthorityVideo,
+  uploadChatImage,
+  VIDEO_POSTS_ENABLED,
+} from '#/lib/agent-runtime'
 import * as apilib from '#/lib/api/index'
 import {EmbeddingDisabledError} from '#/lib/api/resolve'
 import {useAppState} from '#/lib/appState'
@@ -123,6 +129,7 @@ import {SuggestedLanguage} from '#/view/com/composer/select-language/SuggestedLa
 // due to linting false positives
 import {TextInput} from '#/view/com/composer/text-input/TextInput'
 import {ThreadgateBtn} from '#/view/com/composer/threadgate/ThreadgateBtn'
+import {SelectVideoBtn} from '#/view/com/composer/videos/SelectVideoBtn'
 import {SubtitleDialogBtn} from '#/view/com/composer/videos/SubtitleDialog'
 import {VideoPreview} from '#/view/com/composer/videos/VideoPreview'
 import {VideoTranscodeProgress} from '#/view/com/composer/videos/VideoTranscodeProgress'
@@ -131,6 +138,7 @@ import {atoms as a, native, useBreakpoints, useTheme, web} from '#/alf'
 import {Admonition} from '#/components/Admonition'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as EmojiPicker from '#/components/EmojiPicker'
+import {CircleCheck_Stroke2_Corner0_Rounded as CircleCheckIcon} from '#/components/icons/CircleCheck'
 import {CircleInfo_Stroke2_Corner0_Rounded as CircleInfoIcon} from '#/components/icons/CircleInfo'
 import {EmojiArc_Stroke2_Corner0_Rounded as EmojiSmileIcon} from '#/components/icons/Emoji'
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
@@ -253,6 +261,31 @@ function useAddImagesWithCap(
   )
 }
 
+/**
+ * Authority One VIDEO attachment (Option A). The composer uploads the picked
+ * video to the runtime (/app/media/video) and holds the returned `videoId`; on
+ * publish the post is routed through /app/agents/posts carrying that id, and the
+ * runtime builds app.bsky.embed.video server-side. Kept OUTSIDE the reducer's
+ * media state (which drives the upstream bsky-video pipeline) so the image/GIF/
+ * text paths are entirely untouched and the whole feature is killable via the
+ * VIDEO_POSTS_ENABLED flag. Mutually exclusive with images/GIF.
+ */
+type AuthorityVideoState =
+  | {
+      status: 'uploading'
+      filename: string
+      progress: number
+      abort: AbortController
+    }
+  | {
+      status: 'processing'
+      filename: string
+      videoId: string
+      abort: AbortController
+    }
+  | {status: 'ready'; filename: string; videoId: string}
+  | {status: 'error'; filename: string; error: string}
+
 type Props = ComposerOpts
 export const ComposePost = ({
   replyTo,
@@ -297,6 +330,113 @@ export const ComposePost = ({
   const [isPublishing, setIsPublishing] = useState(false)
   const [publishingStage, setPublishingStage] = useState('')
   const [error, setError] = useState('')
+
+  // Authority One video attachment (Option A) — see AuthorityVideoState.
+  const [authorityVideo, setAuthorityVideo] =
+    useState<AuthorityVideoState | null>(null)
+
+  const onClearAuthorityVideo = useCallback(() => {
+    setAuthorityVideo(prev => {
+      if (prev?.status === 'uploading' || prev?.status === 'processing') {
+        prev.abort.abort()
+      }
+      return null
+    })
+  }, [])
+
+  const onSelectAuthorityVideo = useCallback(
+    (asset: ImagePickerAsset) => {
+      const filename =
+        (asset.fileName && asset.fileName.trim()) || l`your video`
+      const abort = new AbortController()
+      // Replace any prior selection / cancel an in-flight upload.
+      setAuthorityVideo(prev => {
+        if (prev?.status === 'uploading') prev.abort.abort()
+        return {status: 'uploading', filename, progress: 0, abort}
+      })
+      void uploadAuthorityVideo(
+        {
+          uri: asset.uri,
+          mime: asset.mimeType ?? 'video/mp4',
+          name: filename,
+          size: typeof asset.fileSize === 'number' ? asset.fileSize : undefined,
+        },
+        {
+          signal: abort.signal,
+          onProgress: p =>
+            setAuthorityVideo(cur =>
+              cur && cur.status === 'uploading' && cur.abort === abort
+                ? {...cur, progress: p}
+                : cur,
+            ),
+        },
+      ).then(async (res: Awaited<ReturnType<typeof uploadAuthorityVideo>>) => {
+        if (abort.signal.aborted) return
+        if (!res.ok) {
+          // Capture narrowed values before entering setState callback.
+          const code = res.code
+          const errMsg = res.error
+          setAuthorityVideo(cur => {
+            if (!cur || cur.status !== 'uploading' || cur.abort !== abort)
+              return cur
+            if (code === 'canceled') return null
+            return {status: 'error', filename, error: errMsg}
+          })
+          return
+        }
+        // Phase 1 complete: bytes in R2, Stream transcoding queued.
+        // Wait for stream.state === 'ready' before letting the user submit,
+        // so buildVideoEmbed can write onePlayback into the record.
+        const videoId = res.videoId
+        setAuthorityVideo(cur => {
+          if (!cur || cur.status !== 'uploading' || cur.abort !== abort)
+            return cur
+          return {status: 'processing', filename, videoId, abort}
+        })
+        let failures = 0
+        while (!abort.signal.aborted) {
+          await new Promise(resolve => setTimeout(resolve, 2500))
+          if (abort.signal.aborted) break
+          const statusResult = await getVideoStatus(videoId)
+          if (!statusResult.ok) {
+            failures++
+            if (failures >= 6) {
+              const errMsg = statusResult.error
+              setAuthorityVideo(cur => {
+                if (!cur || cur.status !== 'processing' || cur.abort !== abort)
+                  return cur
+                return {status: 'error', filename, error: errMsg}
+              })
+              return
+            }
+            continue
+          }
+          failures = 0
+          if (statusResult.streamState === 'ready') {
+            setAuthorityVideo(cur => {
+              if (!cur || cur.status !== 'processing' || cur.abort !== abort)
+                return cur
+              return {status: 'ready', filename, videoId}
+            })
+            return
+          }
+          if (statusResult.streamState === 'error') {
+            setAuthorityVideo(cur => {
+              if (!cur || cur.status !== 'processing' || cur.abort !== abort)
+                return cur
+              return {
+                status: 'error',
+                filename,
+                error: l`Video processing failed. Please try again.`,
+              }
+            })
+            return
+          }
+        }
+      })
+    },
+    [l],
+  )
 
   /**
    * Track when a draft was created so we can measure draft age in metrics.
@@ -898,7 +1038,7 @@ export const ComposePost = ({
       !ChatBskyGroupDefs.isJoinLinkPreviewView(q.data.view),
   )
 
-  const canPost =
+  const baseCanPost =
     !missingAltError &&
     !hasUnavailableChatInvite &&
     thread.posts.some(post => !isEmptyPost(post)) &&
@@ -911,6 +1051,12 @@ export const ComposePost = ({
             post.embed.media.video.status === 'error'
           )),
     )
+  // With an Authority One video attached, posting is gated on the upload being
+  // READY (a ready video may post with no caption text; uploading/errored blocks
+  // publish until the user waits or removes it).
+  const canPost = authorityVideo
+    ? authorityVideo.status === 'ready'
+    : baseCanPost
 
   const getFilteredThread = useCallback((): {
     type: 'none' | 'trailing-only' | 'non-trailing'
@@ -973,6 +1119,76 @@ export const ComposePost = ({
     skipEmptyConfirmedRef.current = false
     setError('')
     setIsPublishing(true)
+
+    // AUTHORITY ONE VIDEO (Option A): a post carrying an uploaded videoId is
+    // published through the runtime (POST /app/agents/posts), which resolves the
+    // id back to the original bytes and builds app.bsky.embed.video server-side.
+    // Works whether or not the owner is explicitly posting-as an agent — with no
+    // `postAs` the runtime writes as the owner's own agent identity. ONE embed per
+    // post: video is mutually exclusive with images/GIF/quote/link (also enforced
+    // in the toolbar, and re-checked server-side as a 409).
+    if (VIDEO_POSTS_ENABLED && authorityVideo) {
+      try {
+        if (authorityVideo.status !== 'ready') {
+          throw new Error(
+            authorityVideo.status === 'uploading'
+              ? l`Your video is still uploading. Please wait a moment.`
+              : authorityVideo.status === 'processing'
+                ? l`Your video is still processing. Please wait a moment.`
+                : l`That video couldn't be uploaded. Remove it and try again.`,
+          )
+        }
+        if (filteredThread.posts.length > 1) {
+          throw new Error(l`Threads aren't supported with a video yet.`)
+        }
+        const draft = filteredThread.posts[0]
+        if (draft.embed.media || draft.embed.quote || draft.embed.link) {
+          throw new Error(
+            l`A video can't be combined with images, a GIF, a quote, or a link card.`,
+          )
+        }
+
+        setPublishingStage(l`Processing...`)
+        let rt = new RichText(
+          {text: draft.richtext.text.replace(/^(\s*\n)+/, '').trimEnd()},
+          {cleanNewlines: true},
+        )
+        await rt.detectFacets(agent)
+        rt = shortenLinks(rt)
+        rt = stripInvalidMentions(rt)
+
+        setPublishingStage(l`Posting...`)
+        const res = await postAsAgent({
+          agent: postAs?.handle ?? '',
+          text: rt.text,
+          facets: rt.facets,
+          videoId: authorityVideo.videoId,
+          langs: currentLanguages.slice(0, 3),
+        })
+        if (!res.ok) {
+          throw new Error(
+            res.code === 'not-your-agent'
+              ? l`That agent isn't linked to your account.`
+              : res.code === 'too-long'
+                ? l`That post is too long.`
+                : (res.error ??
+                  l`The runtime could not publish your video post.`),
+          )
+        }
+        setIsPublishing(false)
+        setAuthorityVideo(null)
+        onPost?.(res.uri)
+        onClose()
+        setTimeout(() => {
+          Toast.show(l`Your video was posted`, {type: 'success'})
+        }, 500)
+      } catch (e) {
+        logger.error(e as Error, {message: 'Composer: video post failed'})
+        setError(cleanError((e as Error).message))
+        setIsPublishing(false)
+      }
+      return
+    }
 
     // POST-AS-AGENT: the owner speaks through the agent's identity, verbatim.
     // The record is written by the ownership-scoped runtime endpoint (POST
@@ -1272,6 +1488,7 @@ export const ComposePost = ({
     emptyPostsPromptControl,
     getFilteredThread,
     linkQueries,
+    authorityVideo,
   ])
 
   const handleConfirmSkipEmpty = () => {
@@ -1393,6 +1610,9 @@ export const ComposePost = ({
         }
         onError={setError}
         onSelectVideo={selectVideo}
+        authorityVideo={authorityVideo}
+        onSelectAuthorityVideo={onSelectAuthorityVideo}
+        onClearAuthorityVideo={onClearAuthorityVideo}
         onAddPost={() => {
           composerDispatch({
             type: 'add_post',
@@ -2133,6 +2353,9 @@ function ComposerFooter({
   dispatch,
   showAddButton,
   onSelectVideo,
+  authorityVideo,
+  onSelectAuthorityVideo,
+  onClearAuthorityVideo,
   onAddPost,
   currentLanguages,
   onSelectLanguage,
@@ -2145,6 +2368,9 @@ function ComposerFooter({
   showAddButton: boolean
   onError: (error: string) => void
   onSelectVideo: (postId: string, asset: ImagePickerAsset) => void
+  authorityVideo: AuthorityVideoState | null
+  onSelectAuthorityVideo: (asset: ImagePickerAsset) => void
+  onClearAuthorityVideo: () => void
   onAddPost: () => void
   currentLanguages: string[]
   onSelectLanguage?: (language: string) => void
@@ -2225,7 +2451,14 @@ function ComposerFooter({
 
           onImageAdd(selectedImages)
         } else if (type === 'video') {
-          onSelectVideo(post.id, assets[0])
+          // Route video to the Authority One runtime pipeline (Option A) instead
+          // of the upstream bsky-video path when the feature is enabled. Falls
+          // back to the original path only if the flag is off.
+          if (VIDEO_POSTS_ENABLED) {
+            onSelectAuthorityVideo(assets[0])
+          } else {
+            onSelectVideo(post.id, assets[0])
+          }
         } else if (type === 'gif') {
           onSelectVideo(post.id, assets[0])
         }
@@ -2237,8 +2470,15 @@ function ComposerFooter({
         })
       })
     },
-    [post.id, onSelectVideo, onImageAdd],
+    [post.id, onSelectVideo, onSelectAuthorityVideo, onImageAdd],
   )
+
+  // Mutual exclusivity: a video and images/GIF can never coexist (one embed per
+  // post). When a video is attached, the media/camera/GIF buttons are disabled;
+  // when other media is present (or the flag is off), the video button is.
+  const hasAuthorityVideo = VIDEO_POSTS_ENABLED && !!authorityVideo
+  const videoBtnDisabled = !!media || hasAuthorityVideo
+  const otherMediaDisabledByVideo = hasAuthorityVideo
 
   return (
     <View
@@ -2256,10 +2496,15 @@ function ComposerFooter({
         <LayoutAnimationConfig skipEntering skipExiting>
           {video && video.status !== 'done' ? (
             <VideoUploadToolbar state={video} />
+          ) : hasAuthorityVideo && authorityVideo ? (
+            <AuthorityVideoChip
+              state={authorityVideo}
+              onClear={onClearAuthorityVideo}
+            />
           ) : (
             <ToolbarWrapper style={[a.flex_row, a.align_center, a.gap_xs]}>
               <SelectMediaButton
-                disabled={isMediaSelectionDisabled}
+                disabled={isMediaSelectionDisabled || otherMediaDisabledByVideo}
                 allowedAssetTypes={selectedAssetsType}
                 selectedAssetsCount={selectedAssetsCount}
                 onSelectAssets={onSelectAssets}
@@ -2267,13 +2512,24 @@ function ComposerFooter({
               />
               <OpenCameraBtn
                 disabled={
-                  media?.type === 'images' || media?.type === 'gallery'
-                    ? isMaxImages
-                    : !!media
+                  otherMediaDisabledByVideo
+                    ? true
+                    : media?.type === 'images' || media?.type === 'gallery'
+                      ? isMaxImages
+                      : !!media
                 }
                 onAdd={onImageAdd}
               />
-              <SelectGifBtn onSelectGif={onSelectGif} disabled={!!media} />
+              <SelectGifBtn
+                onSelectGif={onSelectGif}
+                disabled={!!media || otherMediaDisabledByVideo}
+              />
+              {VIDEO_POSTS_ENABLED ? (
+                <SelectVideoBtn
+                  onPickVideo={onSelectAuthorityVideo}
+                  disabled={videoBtnDisabled}
+                />
+              ) : null}
               {IS_WEB && gtPhone ? (
                 <EmojiPicker.Root nextFocusRef={textInputRef}>
                   <EmojiPicker.Trigger label={l`Open emoji picker`}>
@@ -2319,6 +2575,70 @@ function ComposerFooter({
         />
       </View>
     </View>
+  )
+}
+
+/**
+ * Compact status chip shown in the composer toolbar while an Authority One video
+ * is attached (replaces the media buttons, mirroring VideoUploadToolbar). Shows
+ * upload progress, a ready state, or an error, plus a remove (X) button that
+ * cancels any in-flight upload and clears the attachment.
+ */
+function AuthorityVideoChip({
+  state,
+  onClear,
+}: {
+  state: AuthorityVideoState
+  onClear: () => void
+}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+
+  let label = state.filename
+  if (state.status === 'uploading') {
+    const pct = Math.round(state.progress * 100)
+    label = pct > 0 ? `Uploading video… ${pct}%` : l`Uploading video…`
+  } else if (state.status === 'processing') {
+    label = l`Processing video…`
+  } else if (state.status === 'ready') {
+    label = l`Video ready`
+  } else if (state.status === 'error') {
+    label = state.error
+  }
+
+  return (
+    <ToolbarWrapper style={[a.flex_row, a.align_center, {paddingVertical: 5}]}>
+      {state.status === 'uploading' || state.status === 'processing' ? (
+        <ActivityIndicator size="small" />
+      ) : state.status === 'ready' ? (
+        <CircleCheckIcon size="sm" fill={t.palette.positive_500} />
+      ) : (
+        <CircleInfoIcon size="sm" fill={t.palette.negative_500} />
+      )}
+      <Text
+        numberOfLines={1}
+        style={[
+          a.text_sm,
+          a.ml_sm,
+          a.mr_xs,
+          {maxWidth: 190},
+          state.status === 'error'
+            ? {color: t.palette.negative_500}
+            : t.atoms.text_contrast_medium,
+        ]}>
+        {label}
+      </Text>
+      <Button
+        testID="removeVideoBtn"
+        label={l`Remove video`}
+        onPress={onClear}
+        style={a.p_sm}
+        variant="ghost"
+        shape="round"
+        color="secondary">
+        <XIcon size="sm" />
+      </Button>
+    </ToolbarWrapper>
   )
 }
 

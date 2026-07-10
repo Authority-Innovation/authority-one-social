@@ -14,12 +14,7 @@ import {Trans} from '@lingui/react/macro'
 import {useQueryClient} from '@tanstack/react-query'
 
 import {uploadBlob} from '#/lib/api'
-import {
-  BSKY_APP_ACCOUNT_DID,
-  DISCOVER_SAVED_FEED,
-  TIMELINE_SAVED_FEED,
-  VIDEO_SAVED_FEED,
-} from '#/lib/constants'
+import {BSKY_APP_ACCOUNT_DID, TIMELINE_SAVED_FEED} from '#/lib/constants'
 import {useRequestNotificationsPermission} from '#/lib/notifications/notifications'
 import {logger} from '#/logger'
 import {useSetHasCheckedForStarterPack} from '#/state/preferences/used-starter-packs'
@@ -108,18 +103,13 @@ export function StepFinished() {
           // Interests need to get saved first, then we can write the feeds to prefs
           await agent.setInterestsPref({tags: selectedInterests})
 
-          // Default feeds that every user should have pinned when landing in the app
+          // Default feeds that every user should have pinned when landing in
+          // the app. Authority One: only the native Following timeline —
+          // Bluesky's Discover/Video feedgens can't be served by our AppView
+          // (no app.bsky.feed.getFeed).
           const feedsToSave: AppBskyActorDefs.SavedFeed[] = [
             {
-              ...DISCOVER_SAVED_FEED,
-              id: TID.nextStr(),
-            },
-            {
               ...TIMELINE_SAVED_FEED,
-              id: TID.nextStr(),
-            },
-            {
-              ...VIDEO_SAVED_FEED,
               id: TID.nextStr(),
             },
           ]

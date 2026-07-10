@@ -10,7 +10,7 @@ import {
   generateHostedImage,
   uploadChatImage,
 } from '#/lib/agent-runtime'
-import {IMAGE_SIZE_CONFIG_2K_1MB} from '#/lib/constants'
+import {IMAGE_SIZE_CONFIG_PROFILE} from '#/lib/constants'
 import {compressIfNeeded} from '#/lib/media/manip'
 import {openPicker} from '#/lib/media/picker'
 import {isOverMaxGraphemeCount} from '#/lib/strings/helpers'
@@ -116,7 +116,7 @@ function ProfileEditorInner({
       const img = picked?.[0]
       if (!img) return
       setSlot(slot, {busy: true})
-      const compressed = await compressIfNeeded(img, IMAGE_SIZE_CONFIG_2K_1MB)
+      const compressed = await compressIfNeeded(img, IMAGE_SIZE_CONFIG_PROFILE)
       const url = await uploadChatImage({
         uri: compressed.path,
         mime: compressed.mime,
@@ -483,7 +483,9 @@ function friendlyProfileError(e: AgentProfileWriteError): string {
     case 'bad-image-type':
       return `That ${e.field === 'bannerUrl' ? 'banner' : 'image'} isn't a supported format (PNG, JPEG, or WebP).`
     case 'image-too-large':
-      return 'That image is too large for a profile (1MB max). Try a smaller one.'
+      // Post-auto-shrink this only fires when even recompression couldn't fit it
+      // (or the server's image service was unavailable) — rare, keep it honest.
+      return 'That image couldn’t be compressed under the profile limit (1MB). Try a smaller one.'
     case 'image-empty':
     case 'image-fetch-failed':
       return 'The image could not be read from its url. Re-upload and try again.'

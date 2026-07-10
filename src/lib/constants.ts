@@ -144,6 +144,14 @@ export const IMAGE_SIZE_CONFIG_2K_1MB = {
   maxSize: 1000000,
 }
 
+/** Profile avatar/banner pre-shrink: 100KB of headroom under the PDS 1MB blob
+ * cap so client re-encode jitter can't tip an upload back over the wall (the
+ * runtime auto-shrinks server-side too — this just avoids the round trip). */
+export const IMAGE_SIZE_CONFIG_PROFILE = {
+  maxDimension: 2000,
+  maxSize: 900000,
+}
+
 export const STAGING_LINK_META_PROXY =
   'https://cardyb.staging.bsky.dev/v1/extract?url='
 
@@ -206,10 +214,13 @@ export const VIDEO_SAVED_FEED = {
   pinned: true,
 }
 
+// Authority One: recommend only the native Following timeline — Bluesky's
+// Discover feedgen points at api.bsky.app's generator, which our AppView
+// cannot serve (no app.bsky.feed.getFeed).
 export const RECOMMENDED_SAVED_FEEDS: Pick<
   AppBskyActorDefs.SavedFeed,
   'type' | 'value' | 'pinned'
->[] = [DISCOVER_SAVED_FEED, TIMELINE_SAVED_FEED]
+>[] = [TIMELINE_SAVED_FEED]
 
 // Authority One — Phase 2 personalized ("For You") feed generator.
 // The at-uri of the app.bsky.feed.generator RECORD published by

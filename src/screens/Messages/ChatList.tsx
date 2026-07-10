@@ -46,6 +46,7 @@ import {IS_NATIVE, IS_WEB} from '#/env'
 import {ChatDisabled} from './components/ChatDisabled'
 import {ChatListItem} from './components/ChatListItem'
 import {InboxRequests} from './components/InboxRequests'
+import {SMSGroupsSection} from './components/SMSGroupsSection'
 import {useIsWithinSplitView} from './components/splitView/context'
 import {splitViewLeftScroll} from './components/splitView/leftColumnScroll'
 
@@ -443,9 +444,15 @@ export function ChatList({
                         icon: MessagePlusIcon,
                       }
                 }
-                style={[a.h_full, {paddingTop: '20%'}]}
+                // Not full-height: the "SMS groups" section renders directly
+                // below this empty state, so both stay visible without having
+                // to scroll past a blank screen.
+                style={{paddingTop: 48, paddingBottom: 24}}
               />
             )}
+            {/* SMS groups mirror — always at the bottom of the Chats page,
+                including when there are no DM conversations yet. */}
+            <SMSGroupsSection />
           </>
         )}
       </Layout.Center>
@@ -467,13 +474,18 @@ export function ChatList({
         ) : undefined
       }
       ListFooterComponent={
-        <ListFooter
-          isFetchingNextPage={isFetchingNextPage}
-          error={cleanError(error)}
-          onRetry={fetchNextPage}
-          style={{borderColor: 'transparent'}}
-          hasNextPage={hasNextPage}
-        />
+        <>
+          <ListFooter
+            isFetchingNextPage={isFetchingNextPage}
+            error={cleanError(error)}
+            onRetry={fetchNextPage}
+            style={{borderColor: 'transparent'}}
+            hasNextPage={hasNextPage}
+          />
+          {/* SMS groups mirror — read-only section at the bottom of the Chats
+              page, scrolls with the conversation list. */}
+          <SMSGroupsSection />
+        </>
       }
       onEndReachedThreshold={IS_NATIVE ? 1.5 : 0}
       onContentSizeChange={onContentSizeChange}

@@ -83,6 +83,44 @@ export const AGENTS_PROFILE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents/pro
 export const CHAT_IMAGE_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/media/upload`
 
 /**
+ * VIDEO upload endpoint (owner-scoped). The app POSTs the RAW video bytes with a
+ * video `Content-Type` (video/mp4|quicktime|webm); the runtime commits the
+ * original to R2 (the pipeline's transaction boundary), kicks the Cloudflare
+ * Stream + Sensus fan-out, and returns `{videoId, status, originalUrl}`. The
+ * post is then published via /app/agents/posts carrying that `videoId`, which
+ * the runtime resolves back to the bytes to build app.bsky.embed.video
+ * server-side (Option A). Playback hydrates once Stream is configured + ready;
+ * until then the post is published and renders text-only (graceful degrade).
+ */
+export const VIDEO_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/media/video`
+/** GET the two-leg status for an uploaded video (playback readiness poll). */
+export const videoStatusUrl = (videoId: string) =>
+  `${VIDEO_UPLOAD_ENDPOINT}/${encodeURIComponent(videoId)}`
+/**
+ * Phase-1 upload cap enforced by the runtime (`VIDEO_MAX_BYTES` = 95MB Worker
+ * body headroom). The app validates against the SAME number so an over-size
+ * pick fails fast client-side instead of at the edge.
+ */
+export const VIDEO_UPLOAD_MAX_BYTES = 95 * 1024 * 1024
+/** Video MIME types the runtime accepts (matches its VIDEO_MIME regex). */
+export const VIDEO_UPLOAD_MIME_TYPES = [
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+] as const
+
+/**
+ * CLIENT-SIDE kill switch for composing VIDEO posts. DEFAULT ON — the video
+ * button + upload path are live unless explicitly disabled by setting
+ * EXPO_PUBLIC_VIDEO_POSTS_ENABLED to a falsey value (0/false/no/off) in the
+ * Cloudflare Pages env. When OFF the button is hidden and no video code runs, so
+ * normal image/GIF/text composing is byte-identical to before.
+ */
+export const VIDEO_POSTS_ENABLED = !/^(0|false|no|off)$/i.test(
+  String(process.env.EXPO_PUBLIC_VIDEO_POSTS_ENABLED ?? '').trim(),
+)
+
+/**
  * Server-side AI image generation. POST {prompt, references?:[url]} -> {url,
  * contentType} — the runtime generates and HOSTS the image, returning a public url
  * usable anywhere a hosted image url is accepted (e.g. the agent profile editor).
@@ -104,6 +142,54 @@ export const HISTORY_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/history`
  * ElevenLabs directly. See pilot-agent-runtime/src/tts.js.
  */
 export const TTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/tts`
+
+/**
+ * PUBLIC "TALK TO <AGENT>" visitor chat (metered, refreshing budget — §3.6 / E7).
+ * UNAUTHENTICATED public surface: a non-owner / anonymous visitor talks to a specific
+ * agent's persona to evaluate it. NO owner bearer (an optional viewer bearer only keys
+ * the refreshing budget per-DID). The runtime runs a STRUCTURALLY FENCED persona turn
+ * (read-only, no tools/writes) and returns text + a `hasVoice` hint. See
+ * pilot-agent-runtime/src/public-chat-v2.js.
+ */
+export const PUBLIC_CHAT_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/public/chat`
+
+/**
+ * Companion public voice proxy. POST {agent, text, sessionId} — the runtime resolves the
+ * agent's ASSIGNED ElevenLabs voice SERVER-SIDE (a client voiceId is ignored) and streams
+ * MP3 under the SAME public budget/rate limits. FAIL-OPEN: non-2xx ⇒ the client shows text
+ * only (no audio). The EL key never leaves the Worker.
+ */
+export const PUBLIC_TTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/public/tts`
+
+/**
+ * CLIENT-SIDE feature flag for the public "Talk to <Agent>" button. Keeps the entry point
+ * DARK until BOTH the runtime flag (PUBLIC_CHAT_ENABLED on the Worker) AND this build flag
+ * are on — so the button never shows before the runtime surface is live. Default OFF.
+ * Set EXPO_PUBLIC_PUBLIC_CHAT_ENABLED=true (Cloudflare Pages env) to reveal it.
+ */
+export const PUBLIC_CHAT_ENABLED = /^(1|true|yes|on)$/i.test(
+  String(process.env.EXPO_PUBLIC_PUBLIC_CHAT_ENABLED ?? '').trim(),
+)
+
+/**
+ * Handle suffix that marks an atproto profile as an AGENT (vs a human) — agents live on the
+ * self-hosted PDS, so their handles end with the PDS host (e.g. `bull.pds.authority-one.com`).
+ * Overridable per-build via EXPO_PUBLIC_AGENT_HANDLE_SUFFIX. Used to show the public
+ * "Talk to <Agent>" button only on agent profiles.
+ */
+export const AGENT_HANDLE_SUFFIX = String(
+  process.env.EXPO_PUBLIC_AGENT_HANDLE_SUFFIX ?? 'pds.authority-one.com',
+).toLowerCase()
+
+/** Is this handle an AuthorityOne agent handle (lives on the PDS host)? PURE. */
+export function isAgentHandle(handle?: string | null): boolean {
+  const h = String(handle ?? '')
+    .trim()
+    .toLowerCase()
+  return (
+    !!h && (h === AGENT_HANDLE_SUFFIX || h.endsWith('.' + AGENT_HANDLE_SUFFIX))
+  )
+}
 
 /**
  * Persona/avatar endpoints (owner-scoped from the bearer). The runtime owns the
@@ -131,6 +217,56 @@ export const voiceDeleteUrl = (id: string) =>
  * runtime — this endpoint only shapes what gets drafted.
  */
 export const SOCIAL_AUTONOMY_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/social-autonomy`
+
+/**
+ * Knowledge-base file slots (owner-scoped, agent-scoped like the persona routes).
+ * GET /app/knowledge[?agent=] lists the agent's uploaded files (slots) with
+ * name/size/timestamp/status. POST /app/knowledge/upload[?agent=&filename=] uploads
+ * ONE text document (.txt/.md/.csv) as RAW bytes with a text `Content-Type` header
+ * (the runtime reads request.arrayBuffer() + validates the type — it does NOT parse
+ * multipart/form-data); the file is written into the agent's long-term Mnemonic
+ * memory and lands PROVISIONAL pending review. Honest failures: 415 unsupported
+ * format (pdf/docx/image), 413 too large, and a 200 {ok:false,status:'blocked'}
+ * when the runtime PII guard refuses a doc containing an email/phone/secret.
+ */
+export const KNOWLEDGE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/knowledge`
+export const KNOWLEDGE_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/knowledge/upload`
+/** Max text size the runtime accepts per file (its MAX_DOCUMENT_BYTES = 512KB). The
+ *  app validates against the SAME number so an over-size pick fails fast client-side. */
+export const KNOWLEDGE_UPLOAD_MAX_BYTES = 512 * 1024
+/** Text file extensions the runtime ingests today (pdf/docx are "not supported yet"). */
+export const KNOWLEDGE_SUPPORTED_EXTS = ['.txt', '.md', '.csv'] as const
+
+/** Owner-facing per-agent usage rollup ("agent burn") — read-only. */
+export const USAGE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/usage`
+
+/**
+ * READ-ONLY SMS/MMS GROUP MIRROR (owner-scoped). The SMS groups an owner's agent
+ * hosts live in Twilio Conversations; these routes read that history WITHOUT ever
+ * returning a raw phone number (display names only) and WITHOUT any post path.
+ *   GET  /app/groups?agent=<handle>            → list the agent's groups
+ *   GET  /app/groups/:sid/thread               → normalized (phone-free) messages
+ *   GET  /app/groups/:sid/export?format=…       → downloadable transcript
+ *   GET  /app/groups/:sid/share                 → current read-only share-link status
+ *   POST /app/groups/:sid/share {action}        → create/rotate or revoke the link
+ */
+export const OWNER_GROUPS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/groups`
+export const groupThreadUrl = (sid: string) =>
+  `${OWNER_GROUPS_ENDPOINT}/${encodeURIComponent(sid)}/thread`
+export const groupExportUrl = (sid: string, format: string) =>
+  `${OWNER_GROUPS_ENDPOINT}/${encodeURIComponent(sid)}/export?format=${encodeURIComponent(format)}`
+export const groupShareUrl = (sid: string) =>
+  `${OWNER_GROUPS_ENDPOINT}/${encodeURIComponent(sid)}/share`
+
+/**
+ * Owner-facing BILLING/PLAN read (read-only). GET /app/billing returns the
+ * customer's current tier + token allowance, this-cycle usage against it, the
+ * plan catalog, whether Stripe is armed (`billingArmed`), and the AppView
+ * handoff URLs (Upgrade → /billing checkout, Manage → /billing/portal). While
+ * Stripe is disabled the handoff URLs resolve to the AppView's own in-preview
+ * stub page. Resolved server-side from the session — no owner id is ever sent.
+ */
+export const BILLING_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/billing`
 
 /**
  * "For You" engagement endpoints (owner-scoped). `signals` ingests batched

@@ -91,6 +91,7 @@ import {MessagesConversationSettingsScreen} from '#/screens/Messages/Conversatio
 import {MessagesInboxScreen} from '#/screens/Messages/Inbox'
 import {MessagesJoinRequestsScreen} from '#/screens/Messages/JoinRequests'
 import {MessagesSettingsScreen} from '#/screens/Messages/Settings'
+import {MessagesSmsGroupThreadScreen} from '#/screens/Messages/SmsGroupThread'
 import {ModerationScreen} from '#/screens/Moderation'
 import {Screen as ModerationVerificationSettings} from '#/screens/Moderation/VerificationSettings'
 import {Screen as ModerationInteractionSettings} from '#/screens/ModerationInteractionSettings'
@@ -111,6 +112,8 @@ import {AboutSettingsScreen} from '#/screens/Settings/AboutSettings'
 import {AccessibilitySettingsScreen} from '#/screens/Settings/AccessibilitySettings'
 import {AccountSettingsScreen} from '#/screens/Settings/AccountSettings'
 import {ActivityPrivacySettingsScreen} from '#/screens/Settings/ActivityPrivacySettings'
+import {AgentBillingScreen} from '#/screens/Settings/AgentBilling'
+import {AgentUsageScreen} from '#/screens/Settings/AgentUsage'
 import {AppearanceSettingsScreen} from '#/screens/Settings/AppearanceSettings'
 import {AppIconSettingsScreen} from '#/screens/Settings/AppIconSettings'
 import {AppPasswordsScreen} from '#/screens/Settings/AppPasswords'
@@ -122,6 +125,7 @@ import {ExternalMediaPreferencesScreen} from '#/screens/Settings/ExternalMediaPr
 import {FindContactsSettingsScreen} from '#/screens/Settings/FindContactsSettings'
 import {FollowingFeedPreferencesScreen} from '#/screens/Settings/FollowingFeedPreferences'
 import {InterestsSettingsScreen} from '#/screens/Settings/InterestsSettings'
+import {KnowledgeBaseSettingsScreen} from '#/screens/Settings/KnowledgeBaseSettings'
 import {LanguageSettingsScreen} from '#/screens/Settings/LanguageSettings'
 import {LegacyNotificationSettingsScreen} from '#/screens/Settings/LegacyNotificationSettings'
 import {MyAgentsScreen} from '#/screens/Settings/MyAgents'
@@ -462,10 +466,34 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         }}
       />
       <Stack.Screen
+        name="KnowledgeBaseSettings"
+        getComponent={() => KnowledgeBaseSettingsScreen}
+        options={{
+          title: title(msg`Knowledge base`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
         name="MyAgents"
         getComponent={() => MyAgentsScreen}
         options={{
           title: title(msg`My Agents`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="AgentUsage"
+        getComponent={() => AgentUsageScreen}
+        options={{
+          title: title(msg`Agent Usage`),
+          requireAuth: true,
+        }}
+      />
+      <Stack.Screen
+        name="AgentBilling"
+        getComponent={() => AgentBillingScreen}
+        options={{
+          title: title(msg`Plan & Billing`),
           requireAuth: true,
         }}
       />
@@ -607,6 +635,11 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
           options={{title: title(msg`Chat request inbox`), requireAuth: true}}
         />
       </Stack.Group>
+      <Stack.Screen
+        name="MessagesSmsGroupThread"
+        getComponent={() => MessagesSmsGroupThreadScreen}
+        options={{title: title(msg`SMS group`), requireAuth: true}}
+      />
       <Stack.Screen
         name="NotificationsActivityList"
         getComponent={() => NotificationsActivityListScreen}

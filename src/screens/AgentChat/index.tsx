@@ -1,12 +1,20 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {
-  KeyboardAvoidingView,
+  AppState,
   Platform,
   Pressable,
   ScrollView,
   TextInput,
   View,
 } from 'react-native'
+// KEYBOARD AVOIDANCE: use the keyboard-controller KeyboardAvoidingView, NOT RN's.
+// The app mounts <KeyboardProvider> (App.native.tsx), which intercepts the native
+// keyboard frame — under it, RN's built-in KeyboardAvoidingView does NOT lift the
+// composer (the reported bug: input + send hidden behind the keyboard). The DM
+// chat (MessagesList) already relies on this library for the same reason. Drop-in
+// with the same behavior/keyboardVerticalOffset API but driven by the controller's
+// native keyboard tracking, so it lifts correctly on iOS AND Android.
+import {KeyboardAvoidingView} from 'react-native-keyboard-controller'
 import {Image} from 'expo-image'
 import {useNavigation} from '@react-navigation/native'
 
@@ -332,6 +340,36 @@ function AgentChatScreenInner({
     scrollRef.current?.scrollToEnd({animated: true})
   }, [])
 
+  // When the keyboard OPENS, the content size doesn't change, so the pin-to-newest
+  // above doesn't fire — scroll to the latest message so the newest bubble isn't
+  // hidden behind the (now smaller) visible area above the keyboard. Native-only
+  // by nature: web has no soft keyboard, so isKeyboardVisible stays false there.
+  useEffect(() => {
+    if (isKeyboardVisible) {
+      scrollRef.current?.scrollToEnd({animated: true})
+    }
+  }, [isKeyboardVisible])
+
+  // RESUME FROM BACKGROUND: when the app returns to the foreground the
+  // KeyboardAvoidingView recalculates its frame (the OS dismissed the keyboard
+  // while backgrounded), and a plain ScrollView snaps its offset to the top on
+  // that parent-height change — so the chat "collapsed up near the top" on
+  // resume. maintainVisibleContentPosition on the list (below) holds position
+  // across the layout change; this belt re-pins to the newest message on the
+  // next frame so the returning user lands on the latest bubble, not the top.
+  // Native-only: web has no background/foreground keyboard cycle.
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const sub = AppState.addEventListener('change', next => {
+      if (next === 'active') {
+        requestAnimationFrame(() =>
+          scrollRef.current?.scrollToEnd({animated: false}),
+        )
+      }
+    })
+    return () => sub.remove()
+  }, [])
+
   const showMic = voice.capabilities.available
   // Show the live partial transcript whenever the mic is actively capturing the
   // user (continuous listening — not while thinking/speaking).
@@ -444,11 +482,16 @@ function AgentChatScreenInner({
   const chatBody = (
     <KeyboardAvoidingView
       style={[a.flex_1]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      // MUST be 0: this KAV is rendered below the header, so RN already measures
-      // its frame correctly and the padding it inserts equals the keyboard
-      // overlap. A non-zero offset (the old `insets.top + 44`) opened exactly
-      // that much empty band above the keyboard. See composerOffset.ts.
+      // keyboard-controller KAV: 'padding' on iOS, 'height' on Android (its
+      // recommended cross-platform pair). It reads the real on-screen frame from
+      // the controller, so the composer lifts flush to the keyboard top on both.
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // Stays 0: the KAV measures its actual frame (below the in-flow header /
+      // inside the hub tab) natively, so the inserted padding already equals the
+      // keyboard overlap. A non-zero offset opens an empty band above the keyboard
+      // (the old `insets.top + 44` bug). Tab-bar clearance when CLOSED comes from
+      // composerBottomOffset (the composer's paddingBottom), not this. See
+      // composerOffset.ts.
       keyboardVerticalOffset={COMPOSER_KEYBOARD_VERTICAL_OFFSET}>
       <ScrollView
         ref={scrollRef}
@@ -461,6 +504,13 @@ function AgentChatScreenInner({
           centerColumn,
         ]}
         onContentSizeChange={onContentSizeChange}
+        // Hold the visible content in place when the parent frame changes (keyboard
+        // show/hide, and especially app resume-from-background) instead of snapping
+        // the ScrollView offset to the top. Same fix Messages/PostThread use. Native
+        // only — web ScrollView doesn't support it (and has no soft-keyboard cycle).
+        maintainVisibleContentPosition={
+          Platform.OS === 'web' ? undefined : {minIndexForVisible: 0}
+        }
         keyboardDismissMode="interactive">
         {messages.length === 0 && isHydrating ? (
           // Recent thread is loading — show a quiet loader instead of the empty-state

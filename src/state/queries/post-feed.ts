@@ -143,11 +143,12 @@ export function usePostFeedQuery(
   const enabled =
     opts?.enabled !== false && Boolean(moderationOpts) && Boolean(preferences)
   const userInterests = aggregateUserInterests(preferences)
-  const followingPinnedIndex =
-    preferences?.savedFeeds?.findIndex(
-      f => f.pinned && f.value === 'following',
-    ) ?? -1
-  const enableFollowingToDiscoverFallback = followingPinnedIndex === 0
+  // Authority One: never fall back from Following to Bluesky's Discover
+  // feedgen (HomeFeedAPI). Our AppView does not serve app.bsky.feed.getFeed,
+  // and on a small network the timeline exhausts in one page (no cursor),
+  // which is exactly the trigger — an exhausted timeline must render empty,
+  // not error. Upstream condition was: following pinned at index 0.
+  const enableFollowingToDiscoverFallback = false
   const agent = useAgent()
   const lastRun = useRef<{
     data: InfiniteData<FeedPageUnselected>

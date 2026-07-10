@@ -26,15 +26,38 @@ export {
   setSupabaseTokenProvider,
   type TokenProvider,
 } from './authToken'
+export {
+  fetchOwnerBilling,
+  formatTokenAllowance,
+  normalizeOwnerBilling,
+  type OwnerBilling,
+  type OwnerBillingResult,
+  PLAN_META,
+  PLAN_ORDER,
+  type PlanMeta,
+  type PlanTier,
+} from './billingClient'
 export {AgentAuthError, streamChat, type StreamHandlers} from './chatClient'
 export {
   AGENT_RUNTIME_BASE_URL,
+  BILLING_ENDPOINT,
   BOB_VOICE_ID,
   CHAT_ENDPOINT,
   CHAT_IMAGE_UPLOAD_ENDPOINT,
   DEFAULT_AGENT,
   HISTORY_ENDPOINT,
   TTS_ENDPOINT,
+} from './config'
+export {
+  AGENT_HANDLE_SUFFIX,
+  isAgentHandle,
+  PUBLIC_CHAT_ENABLED,
+  PUBLIC_CHAT_ENDPOINT,
+  PUBLIC_TTS_ENDPOINT,
+  VIDEO_POSTS_ENABLED,
+  VIDEO_UPLOAD_ENDPOINT,
+  VIDEO_UPLOAD_MAX_BYTES,
+  VIDEO_UPLOAD_MIME_TYPES,
 } from './config'
 export {
   deleteContextEvent,
@@ -49,8 +72,29 @@ export {
   normalizeFeedProfile,
   postFeedSignals,
 } from './feedClient'
+export {
+  downloadGroupExport,
+  fetchGroupThread,
+  fetchOwnerGroups,
+  fetchShareStatus,
+  type MirrorGroup,
+  type MirrorGroupMeta,
+  type MirrorMedia,
+  type MirrorMessage,
+  type MirrorThread,
+  setShare,
+  type ShareStatus,
+} from './groupMirrorClient'
 export {fetchHistory, type HistoryResult} from './historyClient'
 export {type ChatImageToUpload, uploadChatImage} from './imageUploadClient'
+export {
+  fetchKnowledgeFiles,
+  type KnowledgeFile,
+  type KnowledgeFileToUpload,
+  type KnowledgeListResult,
+  type KnowledgeUploadResult,
+  uploadKnowledgeFile,
+} from './knowledgeClient'
 export {
   createPersona,
   deletePersona,
@@ -85,6 +129,7 @@ export {
   updatePersona,
 } from './personasClient'
 export {postPhotoContext} from './photoContextClient'
+export {playAgentClipBase64} from './playAgentClip'
 export {
   fetchNearbyPoi,
   normalizeNearbyPlace,
@@ -99,6 +144,13 @@ export {
   type GenerateImageResult,
   updateAgentProfile,
 } from './profileClient'
+export {
+  fetchPublicAgentAudioBase64,
+  publicChat,
+  type PublicChatConversionCard,
+  type PublicChatRemaining,
+  type PublicChatResult,
+} from './publicChatClient'
 export {fetchSceneTags, type SceneImage} from './sceneClient'
 export {
   applyAutoSocialPatch,
@@ -152,6 +204,27 @@ export {
 } from './threadsClient'
 export {bytesToBase64, fetchBobAudioBase64} from './tts'
 export * from './types'
+export {
+  type AgentUsage,
+  fetchOwnerUsage,
+  formatCostUsd,
+  formatTokens,
+  normalizeOwnerUsage,
+  type OwnerUsage,
+  type OwnerUsageResult,
+  type UsageBucket,
+  type UsageSource,
+  type UsageWindow,
+} from './usageClient'
+export {
+  getVideoStatus,
+  uploadAuthorityVideo,
+  type VideoStatusResult,
+  type VideoStreamState,
+  type VideoToUpload,
+  type VideoUploadErrorCode,
+  type VideoUploadResult,
+} from './videoUploadClient'
 export {
   addLibraryVoice,
   type BuiltinVoice,
