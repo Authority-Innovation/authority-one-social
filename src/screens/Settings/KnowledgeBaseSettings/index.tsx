@@ -80,7 +80,10 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
           )
           return
         }
-        Toast.show(l`Added to ${agentLabel}’s knowledge base — pending review.`, {
+        // Plain template literal, not l`` — the catalog was never re-extracted for
+        // these interpolated strings, and uncompiled messages render the literal
+        // "{agentLabel}" placeholder (same bug/fix as the composer {pct} label).
+        Toast.show(`Added to ${agentLabel}’s knowledge base — pending review.`, {
           type: 'success',
         })
       },
@@ -139,7 +142,7 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
               ) : files.length === 0 ? (
                 <Notice
                   title={l`No files yet`}
-                  body={l`Upload a .txt, .md, or .csv file to add it to ${agentLabel}’s long-term memory.`}
+                  body={`Upload a .txt, .md, or .csv file to add it to ${agentLabel}’s long-term memory.`}
                 />
               ) : (
                 files.map(file => <FileRow key={file.id || file.name} file={file} />)
@@ -158,10 +161,7 @@ function Intro({agentLabel}: {agentLabel: string}) {
   return (
     <View style={[a.px_lg, a.py_md, a.gap_xs]}>
       <Text style={[a.text_sm, t.atoms.text_contrast_medium, a.leading_snug]}>
-        <Trans>
-          Add text files to {agentLabel}’s long-term memory, alongside what it learns
-          from your chats. Supported formats: .txt, .md, and .csv.
-        </Trans>
+        {`Add text files to ${agentLabel}’s long-term memory, alongside what it learns from your chats. Supported formats: .txt, .md, and .csv.`}
       </Text>
       <Text style={[a.text_xs, t.atoms.text_contrast_low, a.leading_snug]}>
         <Trans>
@@ -186,16 +186,12 @@ function UploadRow({
   agentLabel: string
   onPick: () => void
 }) {
-  const {t: l} = useLingui()
   const t = useTheme()
   if (!supported) {
     return (
       <View style={[a.px_lg, a.py_md, a.gap_xs]}>
         <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          <Trans>
-            Uploading files is available on the web app for now. Open One in a browser
-            to add files to {agentLabel}’s knowledge base.
-          </Trans>
+          {`Uploading files is available on the web app for now. Open One in a browser to add files to ${agentLabel}’s knowledge base.`}
         </Text>
       </View>
     )
@@ -203,7 +199,7 @@ function UploadRow({
   return (
     <View style={[a.px_lg, a.py_sm]}>
       <Button
-        label={l`Add a file to ${agentLabel}’s knowledge base`}
+        label={`Add a file to ${agentLabel}’s knowledge base`}
         size="large"
         variant="solid"
         color="primary"
