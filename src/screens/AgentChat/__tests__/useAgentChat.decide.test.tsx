@@ -25,8 +25,14 @@ import {
 } from '#/lib/agent-runtime'
 import {useAgentChat} from '../useAgentChat'
 
+type StreamHandlers = {
+  onActions: (actions: ApprovalAction[]) => void
+  onDone: (result: unknown) => void
+}
 const mockFetchHistory = fetchHistory as unknown as jest.Mock
-const mockStreamChat = streamChat as unknown as jest.Mock
+const mockStreamChat = streamChat as unknown as jest.Mock<
+  (req: unknown, handlers: StreamHandlers) => {abort: () => void}
+>
 const mockDecision = postApprovalDecision as unknown as jest.Mock
 
 const ACTION: ApprovalAction = {
@@ -39,13 +45,7 @@ const ACTION: ApprovalAction = {
 async function mountWithCard() {
   mockFetchHistory.mockResolvedValue({signedOut: false, messages: []} as never)
   mockStreamChat.mockImplementation(
-    (
-      _req: unknown,
-      handlers: {
-        onActions: (actions: ApprovalAction[]) => void
-        onDone: (result: unknown) => void
-      },
-    ) => {
+    (_req: unknown, handlers: StreamHandlers) => {
       handlers.onActions([ACTION])
       handlers.onDone({
         message: 'Draft ready — approve to post.',
