@@ -118,7 +118,12 @@ export function useCreateOwnerAgentMutation() {
   return useMutation<
     CreateAgentResult,
     Error,
-    {targetHandle: string; provisionNumber?: boolean; areaCode?: string}
+    {
+      targetHandle: string
+      name?: string
+      provisionNumber?: boolean
+      areaCode?: string
+    }
   >({
     mutationFn: createOwnerAgent,
     onSuccess: result => {

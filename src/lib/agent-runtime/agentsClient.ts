@@ -146,6 +146,7 @@ export function normalizeCreatedAgent(
  */
 export async function createOwnerAgent(input: {
   targetHandle: string
+  name?: string
   provisionNumber?: boolean
   areaCode?: string
 }): Promise<CreateAgentResult> {
@@ -157,6 +158,9 @@ export async function createOwnerAgent(input: {
       headers: {...headers, 'Content-Type': 'application/json'},
       body: JSON.stringify({
         targetHandle: input.targetHandle,
+        // The human-typed display name — the handle is the slugified form of it, so
+        // this is what keeps "Ron Pickles" while the handle becomes @ron-pickles.…
+        name: input.name || undefined,
         provisionNumber: input.provisionNumber || undefined,
         areaCode: input.areaCode || undefined,
       }),
@@ -171,6 +175,7 @@ export async function createOwnerAgent(input: {
     }
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
     const serverError = str(body.error) ?? str(body.message)
+    const serverCode = str(body.code)
     if (res.status === 401 || res.status === 403) {
       return {
         ok: false,
@@ -187,7 +192,10 @@ export async function createOwnerAgent(input: {
         error: serverError,
       }
     }
-    if (res.status === 400 && serverError?.includes('did-required')) {
+    if (
+      res.status === 400 &&
+      (serverCode === 'did-required' || serverError?.includes('did-required'))
+    ) {
       return {
         ok: false,
         signedOut: false,
@@ -195,6 +203,8 @@ export async function createOwnerAgent(input: {
         error: serverError,
       }
     }
+    // Other 400s (e.g. code 'invalid-handle') and 5xx: the runtime now returns a
+    // user-facing `error` string on every failure body, so surface it verbatim.
     return {
       ok: false,
       signedOut: false,

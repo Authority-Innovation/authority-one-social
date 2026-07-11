@@ -316,6 +316,20 @@ describe('createOwnerAgent', () => {
     expect(JSON.parse(call[1].body)).toEqual({targetHandle: 'nova'})
   })
 
+  it('sends the display name alongside the slugified handle', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = status(200, {handle: 'ron-pickles.pds.authority-one.com'})
+    await createOwnerAgent({targetHandle: 'ron-pickles', name: 'Ron Pickles'})
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0] as [
+      string,
+      {body: string},
+    ]
+    expect(JSON.parse(call[1].body)).toEqual({
+      targetHandle: 'ron-pickles',
+      name: 'Ron Pickles',
+    })
+  })
+
   it('402 -> errorKind limit', async () => {
     mockToken.mockResolvedValue('tok')
     global.fetch = status(402, {error: 'payment_required'})
@@ -328,6 +342,29 @@ describe('createOwnerAgent', () => {
     global.fetch = status(400, {error: 'did-required'})
     const res = await createOwnerAgent({targetHandle: 'nova'})
     expect(res).toMatchObject({ok: false, errorKind: 'did-required'})
+  })
+
+  it('400 with code did-required (error is the human message) -> errorKind did-required', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = status(400, {
+      error: 'an atproto (DID) session is required to create an agent',
+      code: 'did-required',
+    })
+    const res = await createOwnerAgent({targetHandle: 'nova'})
+    expect(res).toMatchObject({ok: false, errorKind: 'did-required'})
+  })
+
+  it('400 invalid-handle -> errorKind runtime with the server error surfaced', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = status(400, {
+      error:
+        "Agent name can't contain spaces or special characters - use letters, numbers, and hyphens.",
+      code: 'invalid-handle',
+    })
+    const res = await createOwnerAgent({targetHandle: 'ron pickles'})
+    expect(res.ok).toBe(false)
+    expect(res.errorKind).toBe('runtime')
+    expect(res.error).toContain("Agent name can't contain spaces")
   })
 
   it('401 -> signedOut + errorKind auth', async () => {

@@ -1,4 +1,8 @@
-import {type IsValidHandle, validateServiceHandle} from '#/lib/strings/handles'
+import {
+  type IsValidHandle,
+  slugifyHandlePart,
+  validateServiceHandle,
+} from '#/lib/strings/handles'
 
 describe('handle validation', () => {
   const valid = [
@@ -39,4 +43,23 @@ describe('handle validation', () => {
       expect(result[expectedError]).toEqual(false)
     },
   )
+})
+
+describe('slugifyHandlePart', () => {
+  const cases: [string, string][] = [
+    ['Ron Pickles', 'ron-pickles'],
+    ['  a__b  ', 'a-b'],
+    ['Cafe Noir', 'cafe-noir'],
+    ['Café', 'cafe'],
+    ['a--  --b', 'a-b'],
+    ['-lead-and-trail-', 'lead-and-trail'],
+    ["ron's pickles!", 'rons-pickles'],
+    ['ada', 'ada'],
+    ['!!!', ''],
+    ['   ', ''],
+    ['', ''],
+  ]
+  it.each(cases)('slugifies %j to %j', (input, expected) => {
+    expect(slugifyHandlePart(input)).toEqual(expected)
+  })
 })

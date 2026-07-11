@@ -7,6 +7,26 @@ const VALIDATE_REGEX =
 
 export const MAX_SERVICE_HANDLE_LENGTH = 18
 
+/**
+ * Slugify a human-typed agent name into a valid handle label: lowercase, diacritics
+ * stripped, whitespace/underscores → hyphens, other invalid chars dropped, repeated
+ * hyphens collapsed, no leading/trailing hyphen, ≤63 chars. Returns '' when nothing
+ * valid remains ("!!!" → ''). Mirrors the runtime's server-side backstop so the
+ * previewed handle is exactly what the PDS will accept.
+ */
+export function slugifyHandlePart(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+    .replace(/-+$/g, '')
+}
+
 export function makeValidHandle(str: string): string {
   if (str.length > 20) {
     str = str.slice(0, 20)

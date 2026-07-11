@@ -4,12 +4,13 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
 import {type CreatedAgent} from '#/lib/agent-runtime'
+import {AGENT_HANDLE_SUFFIX} from '#/lib/agent-runtime'
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
   type NavigationProp,
 } from '#/lib/routes/types'
-import {sanitizeHandle} from '#/lib/strings/handles'
+import {sanitizeHandle, slugifyHandlePart} from '#/lib/strings/handles'
 import {useCreateOwnerAgentMutation} from '#/state/queries/agents'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
@@ -39,13 +40,18 @@ export function NewAgentScreen({}: Props) {
   const [created, setCreated] = useState<CreatedAgent | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // The typed name is kept as the agent's DISPLAY name; the handle is its slug
+  // ("Ron Pickles" -> @ron-pickles.<pds>). Empty slug (e.g. "!!!") disables submit.
+  const displayName = name.trim()
+  const handleSlug = slugifyHandlePart(name)
+
   const onCreate = () => {
-    const targetHandle = name.trim().toLowerCase()
-    if (!targetHandle || create.isPending) return
+    if (!handleSlug || create.isPending) return
     setError(null)
     create.mutate(
       {
-        targetHandle,
+        targetHandle: handleSlug,
+        name: displayName,
         provisionNumber: wantsNumber,
         areaCode: wantsNumber ? areaCode.trim() || undefined : undefined,
       },
@@ -115,11 +121,39 @@ export function NewAgentScreen({}: Props) {
                     autoCorrect={false}
                   />
                 </TextField.Root>
-                <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-                  <Trans>
-                    A short name becomes the agent’s full handle automatically.
-                  </Trans>
-                </Text>
+                {handleSlug ? (
+                  <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+                    <Trans>
+                      This becomes{' '}
+                      <Text style={[a.text_xs, a.font_bold]}>
+                        @{handleSlug}.{AGENT_HANDLE_SUFFIX}
+                      </Text>
+                    </Trans>
+                    {displayName !== handleSlug ? (
+                      <>
+                        {' '}
+                        <Trans>
+                          The name “{displayName}” is kept as the agent’s
+                          display name.
+                        </Trans>
+                      </>
+                    ) : null}
+                  </Text>
+                ) : name.trim() ? (
+                  <Text style={[a.text_xs, {color: t.palette.negative_500}]}>
+                    <Trans>
+                      That name can’t become a handle – use letters, numbers, or
+                      hyphens.
+                    </Trans>
+                  </Text>
+                ) : (
+                  <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+                    <Trans>
+                      A short name becomes the agent’s full handle
+                      automatically.
+                    </Trans>
+                  </Text>
+                )}
               </View>
 
               <Toggle.Item
@@ -170,7 +204,7 @@ export function NewAgentScreen({}: Props) {
                 size="large"
                 variant="solid"
                 color="primary"
-                disabled={!name.trim() || create.isPending}
+                disabled={!handleSlug || create.isPending}
                 onPress={onCreate}>
                 <ButtonText>
                   {create.isPending ? (
