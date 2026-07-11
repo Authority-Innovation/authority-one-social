@@ -421,16 +421,44 @@ export function useAgentChat(
             : m,
         ),
       )
-      const ok = await postApprovalDecision({
+      const res = await postApprovalDecision({
         actionId: action.id,
         decision,
         agent,
       })
-      // RESTORE ON FAILURE: if the runtime did not accept the decision, the action is
-      // STILL pending server-side — an optimistic removal would lie to the user (the
-      // card vanishes while the item lingers and is later resurfaced). Put the card back
-      // so the queue state the user sees matches the server's.
-      if (!ok && holderId) {
+      if (res?.ok) return
+
+      // Non-ok does NOT mean still-pending: the runtime consumes the draft the
+      // moment it accepts a decision, so an accepted-but-failed execution comes
+      // back 409 + status 'failed' and a re-posted decision 404s ('not-found').
+      // Restoring the card in those states resurrects a zombie card that can never
+      // be resolved — every click 404s and re-restores it, forever. Branch on the
+      // body `status`, not on HTTP-ok.
+      if (res?.status === 'failed') {
+        // Decision accepted, execution failed — the draft is consumed. Tell the
+        // user what actually happened instead of resurrecting the card.
+        const failMsg: ChatMessage = {
+          id: newId('a'),
+          role: 'assistant',
+          text: `⚠️ Couldn't complete “${action.title}”${res.error ? `: ${res.error}` : '.'}`,
+          status: 'error',
+          pending: false,
+          createdAt: Date.now(),
+        }
+        setMessages(prev => [...prev, failMsg])
+        return
+      }
+      if (res?.status === 'not-found' || res?.status === 'expired') {
+        // Already resolved (or expired) server-side — nothing to restore or say.
+        return
+      }
+
+      // RESTORE ON FAILURE: everything else means the action is genuinely STILL
+      // pending server-side (signed-out/auth, runtime paused, transport blip, or
+      // an unrecognized state) — an optimistic removal would lie to the user (the
+      // card vanishes while the item lingers and is later resurfaced). Put the card
+      // back so the queue state the user sees matches the server's.
+      if (holderId) {
         setMessages(prev =>
           prev.map(m =>
             m.id === holderId && !m.actions?.some(a => a.id === action.id)
