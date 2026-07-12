@@ -7,14 +7,18 @@ import {
   TextInput,
   View,
 } from 'react-native'
-// KEYBOARD AVOIDANCE: use the keyboard-controller KeyboardAvoidingView, NOT RN's.
-// The app mounts <KeyboardProvider> (App.native.tsx), which intercepts the native
-// keyboard frame — under it, RN's built-in KeyboardAvoidingView does NOT lift the
-// composer (the reported bug: input + send hidden behind the keyboard). The DM
-// chat (MessagesList) already relies on this library for the same reason. Drop-in
-// with the same behavior/keyboardVerticalOffset API but driven by the controller's
-// native keyboard tracking, so it lifts correctly on iOS AND Android.
-import {KeyboardAvoidingView} from 'react-native-keyboard-controller'
+// KEYBOARD AVOIDANCE: drive the composer off the controller's animated keyboard
+// height (useReanimatedKeyboardAnimation) — the SAME primitive the working DM
+// composer uses (via KeyboardStickyView). The app mounts <KeyboardProvider>
+// (App.native.tsx), which intercepts the native keyboard frame; under it BOTH
+// RN's KeyboardAvoidingView AND keyboard-controller's KeyboardAvoidingView failed
+// to lift this composer on iOS (the reported bug: input + send stuck behind the
+// keyboard). Instead, an animated spacer below the composer grows with the
+// keyboard and pushes the whole column up, so the input rides flush to the
+// keyboard top on iOS + Android. Stays 0 on web (no soft keyboard).
+import {useReanimatedKeyboardAnimation} from 'react-native-keyboard-controller'
+import Animated, {useAnimatedStyle} from 'react-native-reanimated'
+import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {Image} from 'expo-image'
 import {useNavigation} from '@react-navigation/native'
 
@@ -25,7 +29,6 @@ import {
   pickAgentHeaderName,
   uploadChatImage,
 } from '#/lib/agent-runtime'
-import {useBottomBarOffset} from '#/lib/hooks/useBottomBarOffset'
 import {useIsKeyboardVisible} from '#/lib/hooks/useIsKeyboardVisible'
 import {openPicker} from '#/lib/media/picker'
 import {
@@ -49,10 +52,6 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {canSend, type ChatAttachment, imagesForSend} from './attachment'
 import {groupSenderLabel, isSelfSender} from './attribution'
-import {
-  COMPOSER_KEYBOARD_VERTICAL_OFFSET,
-  composerBottomOffset,
-} from './composerOffset'
 import {agentChatHeaderTitleSize} from './headerTitleStyle'
 import {MessageBubble} from './MessageBubble'
 import {useAgentChat} from './useAgentChat'
@@ -111,15 +110,24 @@ function AgentChatScreenInner({
   // gate on that session, not a separate Authority One (Supabase) account.
   const {hasSession, currentAccount} = useSession()
   const navigation = useNavigation<NavigationProp>()
-  // Lift the composer above the native bottom tab bar (and mobile-web bottom
-  // bar). Returns 0 on desktop web, so the web centered layout is unaffected.
-  const bottomBarOffset = useBottomBarOffset(8)
-  // When the keyboard is OPEN, the iOS KeyboardAvoidingView already lifts the
-  // composer by the full keyboard height (which spans the home-indicator inset),
-  // and the tab bar is covered — so the tab-bar offset must NOT be added on top,
-  // or the composer floats above the keyboard by exactly that gap. Use the
-  // "will" events so the padding change rides the keyboard animation.
+  // Home-indicator inset: the composer keeps this gap below it when the keyboard
+  // is CLOSED, and collapses it to 0 as the keyboard opens (the keyboard then
+  // provides the bottom inset), so the input hugs the keyboard top.
+  const insets = useSafeAreaInsets()
+  // Still used to re-pin the scroll to the newest bubble when the keyboard opens.
   const [isKeyboardVisible] = useIsKeyboardVisible({iosUseWillEvents: true})
+  // The whole chat column (scroll area + composer) rides UP by the keyboard
+  // height: the spacer below the composer grows from 0 to the keyboard height,
+  // shrinking the flex scroll area and lifting the composer flush onto the
+  // keyboard. Driven by the controller's animated keyboard value so it tracks the
+  // real open/close animation. Height stays 0 on web (no soft keyboard).
+  const keyboardAnim = useReanimatedKeyboardAnimation()
+  const keyboardSpacerStyle = useAnimatedStyle(() => ({
+    height: Math.max(0, -keyboardAnim.height.get()),
+  }))
+  const composerInsetStyle = useAnimatedStyle(() => ({
+    paddingBottom: insets.bottom * (1 - keyboardAnim.progress.get()),
+  }))
   // The SELECTED agent (E6 selector). Kept undefined when the caller didn't pick
   // one so the transport omits it and the runtime routes to the owner's primary
   // agent — a hardcoded default here would misroute owners once the server-side
@@ -350,10 +358,10 @@ function AgentChatScreenInner({
     }
   }, [isKeyboardVisible])
 
-  // RESUME FROM BACKGROUND: when the app returns to the foreground the
-  // KeyboardAvoidingView recalculates its frame (the OS dismissed the keyboard
-  // while backgrounded), and a plain ScrollView snaps its offset to the top on
-  // that parent-height change — so the chat "collapsed up near the top" on
+  // RESUME FROM BACKGROUND: when the app returns to the foreground the keyboard
+  // spacer collapses (the OS dismissed the keyboard while backgrounded), and a
+  // plain ScrollView snaps its offset to the top on that parent-height change —
+  // so the chat "collapsed up near the top" on
   // resume. maintainVisibleContentPosition on the list (below) holds position
   // across the layout change; this belt re-pins to the newest message on the
   // next frame so the returning user lands on the latest bubble, not the top.
@@ -480,19 +488,7 @@ function AgentChatScreenInner({
   )
 
   const chatBody = (
-    <KeyboardAvoidingView
-      style={[a.flex_1]}
-      // keyboard-controller KAV: 'padding' on iOS, 'height' on Android (its
-      // recommended cross-platform pair). It reads the real on-screen frame from
-      // the controller, so the composer lifts flush to the keyboard top on both.
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      // Stays 0: the KAV measures its actual frame (below the in-flow header /
-      // inside the hub tab) natively, so the inserted padding already equals the
-      // keyboard overlap. A non-zero offset opens an empty band above the keyboard
-      // (the old `insets.top + 44` bug). Tab-bar clearance when CLOSED comes from
-      // composerBottomOffset (the composer's paddingBottom), not this. See
-      // composerOffset.ts.
-      keyboardVerticalOffset={COMPOSER_KEYBOARD_VERTICAL_OFFSET}>
+    <View style={[a.flex_1]}>
       <ScrollView
         ref={scrollRef}
         style={[a.flex_1]}
@@ -588,8 +584,11 @@ function AgentChatScreenInner({
         </Pressable>
       ) : null}
 
-      {/* Composer — pinned to bottom, aligned to the centered column. */}
-      <View style={[a.border_t, t.atoms.border_contrast_low]}>
+      {/* Composer — pinned to bottom, aligned to the centered column. The
+          animated bottom inset collapses the home-indicator gap as the keyboard
+          opens so the input hugs the keyboard top. */}
+      <Animated.View
+        style={[a.border_t, t.atoms.border_contrast_low, composerInsetStyle]}>
         {/* Pending image attachment preview — thumbnail with an upload spinner /
             failure state and a remove button. Sits above the input row. */}
         {attachment ? (
@@ -647,12 +646,6 @@ function AgentChatScreenInner({
             a.py_sm,
             a.w_full,
             centerColumn,
-            {
-              paddingBottom: composerBottomOffset(
-                bottomBarOffset,
-                isKeyboardVisible,
-              ),
-            },
           ]}>
           {showMic ? (
             // Single ON/OFF control for continuous, hands-free voice chat. ON =
@@ -731,8 +724,11 @@ function AgentChatScreenInner({
             </Button>
           )}
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </Animated.View>
+      {/* Grows with the keyboard, lifting the column so the composer sits flush
+          above it. Height is 0 on web and whenever the keyboard is closed. */}
+      <Animated.View style={keyboardSpacerStyle} />
+    </View>
   )
 
   // EMBEDDED (AgentHub Chat tab): no screen chrome — the hub owns the header.
