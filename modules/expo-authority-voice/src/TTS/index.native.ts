@@ -38,11 +38,17 @@ interface NativeTtsModule {
   ): NativeSubscription
 }
 
-// iOS-only native impl (AVSpeechSynthesizer). Android degrades to no-op.
-const Native: NativeTtsModule | null =
-  Platform.OS === 'ios'
-    ? requireNativeModule<NativeTtsModule>('AuthorityTtsModule')
-    : null
+// Native impl for BOTH iOS (AVSpeechSynthesizer + AVAudioPlayer clip player) and
+// Android (TextToSpeech + MediaPlayer clip player). Wrapped so a missing/unlinked
+// native module degrades to no-op instead of crashing the screen.
+const Native: NativeTtsModule | null = (() => {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return null
+  try {
+    return requireNativeModule<NativeTtsModule>('AuthorityTtsModule')
+  } catch {
+    return null
+  }
+})()
 
 let counter = 0
 function nextUtteranceId(): string {

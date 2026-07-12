@@ -3,7 +3,7 @@
 //   import {STT, TTS} from '../../modules/expo-authority-voice'
 //
 // Platform resolution:
-//   - iOS / Android: src/STT/index.native.ts + src/TTS/index.native.ts (iOS native, Android no-op)
+//   - iOS / Android: src/STT/index.native.ts + src/TTS/index.native.ts (native on both)
 //   - Web:           src/STT/index.ts + src/TTS/index.ts (no-op fallbacks)
 export {STT} from './src/STT'
 export type {
