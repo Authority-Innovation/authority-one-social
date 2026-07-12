@@ -180,14 +180,25 @@ function AgentUsageRow({row}: {row: AgentUsage}) {
   return (
     <SettingsList.Item>
       <View style={[a.flex_1, a.gap_2xs]}>
-        <View style={[a.flex_row, a.align_center, a.justify_between]}>
+        <View style={[a.flex_row, a.align_center, a.justify_between, a.gap_sm]}>
+          {/* Let a long name/handle shrink + ellipsize so the token total keeps
+              its full width. Without flex_1 here the two siblings overflow the
+              row and the total (incl. the "~$" figure) is clipped off-screen. */}
           <Text
             emoji
-            style={[a.text_md, a.font_bold, t.atoms.text]}
+            style={[a.flex_1, a.text_md, a.font_bold, t.atoms.text]}
             numberOfLines={1}>
             {title}
           </Text>
-          <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
+          <Text
+            style={[
+              a.text_md,
+              a.font_bold,
+              a.text_right,
+              t.atoms.text,
+              {flexShrink: 0},
+            ]}
+            numberOfLines={1}>
             {formatTokens(row.totalTokens)}
             <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
               {' '}
