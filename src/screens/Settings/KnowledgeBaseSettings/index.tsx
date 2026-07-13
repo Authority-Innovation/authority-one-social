@@ -1,7 +1,10 @@
 import {ActivityIndicator, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
-import {type KnowledgeFile, type KnowledgeFileToUpload} from '#/lib/agent-runtime'
+import {
+  type KnowledgeFile,
+  type KnowledgeFileToUpload,
+} from '#/lib/agent-runtime'
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
@@ -27,10 +30,13 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {KNOWLEDGE_PICKER_SUPPORTED, pickTextFile} from './pickTextFile'
 
-type Props = NativeStackScreenProps<CommonNavigatorParams, 'KnowledgeBaseSettings'>
+type Props = NativeStackScreenProps<
+  CommonNavigatorParams,
+  'KnowledgeBaseSettings'
+>
 
 /**
- * The agent's KNOWLEDGE BASE ("file slots"): upload text documents (.txt/.md/.csv)
+ * The agent's KNOWLEDGE BASE ("file slots"): upload documents (.txt/.md/.csv/.pdf)
  * into the agent's long-term Mnemonic memory, alongside the chat/event ingestion the
  * agent already does. Reached from the per-agent editor (PersonaSettings). Scoped like
  * PersonaSettings via route param `agent` (the FULL handle from My Agents); without it,
@@ -39,8 +45,9 @@ type Props = NativeStackScreenProps<CommonNavigatorParams, 'KnowledgeBaseSetting
  * Everything uploaded lands as PROVISIONAL memory pending review (per the Mnemonic
  * contract) — labeled clearly throughout. The runtime refuses documents honestly: a
  * file containing a real email/phone/secret is BLOCKED by the PII guard and shown as a
- * blocked slot with the real reason (never a fake save); pdf/docx are "not supported
- * yet". Read-only list for v1 (no delete). FOLLOW-UP: delete a slot + native picker.
+ * blocked slot with the real reason (never a fake save); docx is "not supported yet".
+ * PDFs upload as raw binary and route to Mnemonic's document-extraction pipeline.
+ * Read-only list for v1 (no delete). FOLLOW-UP: delete a slot + native picker.
  */
 export function KnowledgeBaseSettingsScreen({route}: Props) {
   const {t: l} = useLingui()
@@ -55,7 +62,8 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
       )
     : undefined
   const agentLabel =
-    agentRow?.displayName ?? (agent ? sanitizeHandle(agent, '@') : l`your agent`)
+    agentRow?.displayName ??
+    (agent ? sanitizeHandle(agent, '@') : l`your agent`)
   const notYourAgent =
     error instanceof KnowledgeError && error.code === 'not-your-agent'
   const files = data ?? []
@@ -83,9 +91,12 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
         // Plain template literal, not l`` — the catalog was never re-extracted for
         // these interpolated strings, and uncompiled messages render the literal
         // "{agentLabel}" placeholder (same bug/fix as the composer {pct} label).
-        Toast.show(`Added to ${agentLabel}’s knowledge base — pending review.`, {
-          type: 'success',
-        })
+        Toast.show(
+          `Added to ${agentLabel}’s knowledge base — pending review.`,
+          {
+            type: 'success',
+          },
+        )
       },
       onError: err => {
         Toast.show(
@@ -142,10 +153,12 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
               ) : files.length === 0 ? (
                 <Notice
                   title={l`No files yet`}
-                  body={`Upload a .txt, .md, or .csv file to add it to ${agentLabel}’s long-term memory.`}
+                  body={`Upload a .txt, .md, .csv, or .pdf file to add it to ${agentLabel}’s long-term memory.`}
                 />
               ) : (
-                files.map(file => <FileRow key={file.id || file.name} file={file} />)
+                files.map(file => (
+                  <FileRow key={file.id || file.name} file={file} />
+                ))
               )}
             </>
           )}
@@ -161,13 +174,13 @@ function Intro({agentLabel}: {agentLabel: string}) {
   return (
     <View style={[a.px_lg, a.py_md, a.gap_xs]}>
       <Text style={[a.text_sm, t.atoms.text_contrast_medium, a.leading_snug]}>
-        {`Add text files to ${agentLabel}’s long-term memory, alongside what it learns from your chats. Supported formats: .txt, .md, and .csv.`}
+        {`Add files to ${agentLabel}’s long-term memory, alongside what it learns from your chats. Supported formats: .txt, .md, .csv, and .pdf.`}
       </Text>
       <Text style={[a.text_xs, t.atoms.text_contrast_low, a.leading_snug]}>
         <Trans>
-          Uploads land as provisional memory pending review before they surface in
-          recall. Files with a real email address, phone number, or secret are
-          declined automatically.
+          Uploads land as provisional memory pending review before they surface
+          in recall. Files with a real email address, phone number, or secret
+          are declined automatically.
         </Trans>
       </Text>
     </View>
@@ -237,11 +250,16 @@ function FileRow({file}: {file: KnowledgeFile}) {
     <SettingsList.Item>
       <SettingsList.ItemIcon icon={PageTextIcon} />
       <View style={[a.flex_1, a.gap_2xs]}>
-        <Text style={[a.text_md, a.font_bold, t.atoms.text]} numberOfLines={1} emoji>
+        <Text
+          style={[a.text_md, a.font_bold, t.atoms.text]}
+          numberOfLines={1}
+          emoji>
           {file.name}
         </Text>
         {meta ? (
-          <Text style={[a.text_xs, t.atoms.text_contrast_medium]} numberOfLines={1}>
+          <Text
+            style={[a.text_xs, t.atoms.text_contrast_medium]}
+            numberOfLines={1}>
             {meta}
           </Text>
         ) : null}
