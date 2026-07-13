@@ -18,7 +18,6 @@ import {
 // keyboard top on iOS + Android. Stays 0 on web (no soft keyboard).
 import {useReanimatedKeyboardAnimation} from 'react-native-keyboard-controller'
 import Animated, {useAnimatedStyle} from 'react-native-reanimated'
-import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {Image} from 'expo-image'
 import {useNavigation} from '@react-navigation/native'
 
@@ -29,6 +28,7 @@ import {
   pickAgentHeaderName,
   uploadChatImage,
 } from '#/lib/agent-runtime'
+import {useBottomBarOffset} from '#/lib/hooks/useBottomBarOffset'
 import {useIsKeyboardVisible} from '#/lib/hooks/useIsKeyboardVisible'
 import {openPicker} from '#/lib/media/picker'
 import {
@@ -110,10 +110,14 @@ function AgentChatScreenInner({
   // gate on that session, not a separate Authority One (Supabase) account.
   const {hasSession, currentAccount} = useSession()
   const navigation = useNavigation<NavigationProp>()
-  // Home-indicator inset: the composer keeps this gap below it when the keyboard
-  // is CLOSED, and collapses it to 0 as the keyboard opens (the keyboard then
-  // provides the bottom inset), so the input hugs the keyboard top.
-  const insets = useSafeAreaInsets()
+  // Bottom TAB BAR clearance: the shell's bottom bar (Home/Search/Chat/…) is an
+  // OVERLAY on native and mobile web, so the composer needs the bar's height as
+  // bottom padding while the keyboard is CLOSED — the bare home-indicator inset
+  // left the input hidden behind the bar (the regression the keyboard rework
+  // introduced by dropping useBottomBarOffset; see composerOffset.ts). The
+  // offset already includes the safe-area bottom inset, and is 0 on
+  // tablet/desktop web where no bottom bar renders.
+  const bottomBarOffset = useBottomBarOffset()
   // Still used to re-pin the scroll to the newest bubble when the keyboard opens.
   const [isKeyboardVisible] = useIsKeyboardVisible({iosUseWillEvents: true})
   // The whole chat column (scroll area + composer) rides UP by the keyboard
@@ -126,7 +130,7 @@ function AgentChatScreenInner({
     height: Math.max(0, -keyboardAnim.height.get()),
   }))
   const composerInsetStyle = useAnimatedStyle(() => ({
-    paddingBottom: insets.bottom * (1 - keyboardAnim.progress.get()),
+    paddingBottom: bottomBarOffset * (1 - keyboardAnim.progress.get()),
   }))
   // The SELECTED agent (E6 selector). Kept undefined when the caller didn't pick
   // one so the transport omits it and the runtime routes to the owner's primary
@@ -585,8 +589,9 @@ function AgentChatScreenInner({
       ) : null}
 
       {/* Composer — pinned to bottom, aligned to the centered column. The
-          animated bottom inset collapses the home-indicator gap as the keyboard
-          opens so the input hugs the keyboard top. */}
+          animated bottom inset keeps the input clear of the overlay bottom tab
+          bar while the keyboard is closed, and collapses as the keyboard opens
+          (the keyboard covers the bar) so the input hugs the keyboard top. */}
       <Animated.View
         style={[a.border_t, t.atoms.border_contrast_low, composerInsetStyle]}>
         {/* Pending image attachment preview — thumbnail with an upload spinner /

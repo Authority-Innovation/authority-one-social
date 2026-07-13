@@ -7,6 +7,7 @@ export const KNOWLEDGE_PICKER_SUPPORTED = true
 
 function guessMime(name: string): string {
   const n = name.toLowerCase()
+  if (n.endsWith('.pdf')) return 'application/pdf'
   if (n.endsWith('.csv')) return 'text/csv'
   if (n.endsWith('.md') || n.endsWith('.markdown')) return 'text/markdown'
   return 'text/plain'
@@ -30,15 +31,22 @@ function readFileBlob(uri: string): Promise<Blob> {
 }
 
 /**
- * Open the system document picker for a single text file and resolve it as raw
+ * Open the system document picker for a single document and resolve it as raw
  * bytes (a Blob) plus its name/mime/size — the same contract as the web picker.
  * Resolves null if the user cancels. The MIME filter is a first-pass only
  * (Android content resolvers are loose about .md/.csv types, so `text/*` keeps
  * real text files pickable); the runtime re-validates format and content.
+ * PDFs are supported and travel as raw binary (never decoded to text).
  */
 export async function pickTextFile(): Promise<KnowledgeFileToUpload | null> {
   const result = await DocumentPicker.getDocumentAsync({
-    type: ['text/plain', 'text/markdown', 'text/csv', 'text/*'],
+    type: [
+      'text/plain',
+      'text/markdown',
+      'text/csv',
+      'text/*',
+      'application/pdf',
+    ],
     multiple: false,
     // Copy content:// documents into our cache so the XHR read below always
     // has a directly readable URI (Android SAF URIs can be single-use).

@@ -19,9 +19,11 @@ import {
  * refuses documents honestly, never faking success:
  *   - a text file with a real email/phone/secret is BLOCKED by the runtime PII guard
  *     -> HTTP 200 {ok:false, status:'blocked', file:{reason:<real reason>}}
- *   - pdf/docx/image -> 415 (not a text format yet); >512KB -> 413; empty -> 400.
- * The upload transport reads RAW bytes (no multipart) with a text Content-Type, the
- * same shape uploadChatImage uses. Typed results, never throws.
+ *   - docx/image -> 415 (not supported yet); >512KB -> 413; empty -> 400.
+ * The upload transport reads RAW bytes (no multipart) with the file's Content-Type,
+ * the same shape uploadChatImage uses. Text formats go as text/*; PDFs go as
+ * application/pdf binary (never UTF-8-decoded) for the runtime's document-extraction
+ * pipeline. Typed results, never throws.
  */
 
 /** One uploaded file "slot" as the runtime reports it. */
@@ -90,7 +92,8 @@ async function authHeaders(): Promise<Record<string, string> | null> {
 function normalizeFile(raw: unknown): KnowledgeFile | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
-  const status = r.status === 'blocked' || r.status === 'failed' ? r.status : 'saved'
+  const status =
+    r.status === 'blocked' || r.status === 'failed' ? r.status : 'saved'
   return {
     id: str(r.id) ?? '',
     name: str(r.name) ?? 'document',
@@ -132,11 +135,14 @@ export async function fetchKnowledgeFiles(
       return {
         signedOut: false,
         code,
-        error: str(body.error) ?? str(body.message) ?? `Runtime error ${res.status}`,
+        error:
+          str(body.error) ?? str(body.message) ?? `Runtime error ${res.status}`,
       }
     }
     const files = Array.isArray(body.files)
-      ? body.files.map(normalizeFile).filter((f): f is KnowledgeFile => f !== null)
+      ? body.files
+          .map(normalizeFile)
+          .filter((f): f is KnowledgeFile => f !== null)
       : []
     return {files, signedOut: false}
   } catch (e) {
@@ -146,9 +152,9 @@ export async function fetchKnowledgeFiles(
 }
 
 /**
- * POST /app/knowledge/upload — upload one text document into the agent's long-term
- * memory. RAW bytes + a text Content-Type (the runtime reads arrayBuffer(); do NOT
- * use FormData). Returns the recorded slot; a runtime PII-guard BLOCK is a normal
+ * POST /app/knowledge/upload — upload one document into the agent's long-term
+ * memory. RAW bytes + the file's Content-Type (the runtime reads arrayBuffer(); do
+ * NOT use FormData). Returns the recorded slot; a runtime PII-guard BLOCK is a normal
  * result ({ok:false, file:{status:'blocked', reason}}) — not a thrown error — so the
  * caller can show the real reason. Never throws.
  */
@@ -177,12 +183,16 @@ export async function uploadKnowledgeFile(
     const params = new URLSearchParams()
     params.set('filename', file.name)
     if (agent) params.set('agent', agent)
-    const res = await fetch(`${KNOWLEDGE_UPLOAD_ENDPOINT}?${params.toString()}`, {
-      method: 'POST',
-      // Raw bytes + explicit text Content-Type — the runtime gates on this header.
-      headers: {...headers, 'Content-Type': file.mime || 'text/plain'},
-      body: file.blob,
-    })
+    const res = await fetch(
+      `${KNOWLEDGE_UPLOAD_ENDPOINT}?${params.toString()}`,
+      {
+        method: 'POST',
+        // Raw bytes + the file's explicit Content-Type — the runtime gates on this
+        // header (text/* -> text ingestion, application/pdf -> document extraction).
+        headers: {...headers, 'Content-Type': file.mime || 'text/plain'},
+        body: file.blob,
+      },
+    )
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
     if (!res.ok) {
       const code = str(body.code)
@@ -193,7 +203,8 @@ export async function uploadKnowledgeFile(
         ok: false,
         signedOut: false,
         code,
-        error: str(body.error) ?? str(body.message) ?? `Runtime error ${res.status}`,
+        error:
+          str(body.error) ?? str(body.message) ?? `Runtime error ${res.status}`,
       }
     }
     const slot = normalizeFile(body.file)
@@ -201,10 +212,16 @@ export async function uploadKnowledgeFile(
       ok: body.ok === true,
       signedOut: false,
       ...(slot ? {file: slot} : {}),
-      ...(body.ok === true ? {} : {error: str(body.reason) ?? slot?.reason ?? undefined}),
+      ...(body.ok === true
+        ? {}
+        : {error: str(body.reason) ?? slot?.reason ?? undefined}),
     }
   } catch (e) {
     logger.warn('knowledge: upload failed', {safeMessage: String(e)})
-    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'network error'}
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
   }
 }

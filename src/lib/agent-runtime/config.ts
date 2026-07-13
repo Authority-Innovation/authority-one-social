@@ -222,11 +222,12 @@ export const SOCIAL_AUTONOMY_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/social-au
  * Knowledge-base file slots (owner-scoped, agent-scoped like the persona routes).
  * GET /app/knowledge[?agent=] lists the agent's uploaded files (slots) with
  * name/size/timestamp/status. POST /app/knowledge/upload[?agent=&filename=] uploads
- * ONE text document (.txt/.md/.csv) as RAW bytes with a text `Content-Type` header
- * (the runtime reads request.arrayBuffer() + validates the type — it does NOT parse
- * multipart/form-data); the file is written into the agent's long-term Mnemonic
- * memory and lands PROVISIONAL pending review. Honest failures: 415 unsupported
- * format (pdf/docx/image), 413 too large, and a 200 {ok:false,status:'blocked'}
+ * ONE document (.txt/.md/.csv/.pdf) as RAW bytes with the file's `Content-Type`
+ * header (the runtime reads request.arrayBuffer() + validates the type — it does NOT
+ * parse multipart/form-data); the file is written into the agent's long-term Mnemonic
+ * memory and lands PROVISIONAL pending review. PDFs go as `application/pdf` binary
+ * and route to Mnemonic's document-extraction pipeline. Honest failures: 415
+ * unsupported format (docx/image), 413 too large, and a 200 {ok:false,status:'blocked'}
  * when the runtime PII guard refuses a doc containing an email/phone/secret.
  */
 export const KNOWLEDGE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/knowledge`
@@ -234,8 +235,8 @@ export const KNOWLEDGE_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/knowledg
 /** Max text size the runtime accepts per file (its MAX_DOCUMENT_BYTES = 512KB). The
  *  app validates against the SAME number so an over-size pick fails fast client-side. */
 export const KNOWLEDGE_UPLOAD_MAX_BYTES = 512 * 1024
-/** Text file extensions the runtime ingests today (pdf/docx are "not supported yet"). */
-export const KNOWLEDGE_SUPPORTED_EXTS = ['.txt', '.md', '.csv'] as const
+/** File extensions the runtime ingests today (docx is "not supported yet"). */
+export const KNOWLEDGE_SUPPORTED_EXTS = ['.txt', '.md', '.csv', '.pdf'] as const
 
 /** Owner-facing per-agent usage rollup ("agent burn") — read-only. */
 export const USAGE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/usage`

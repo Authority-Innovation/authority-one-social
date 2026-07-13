@@ -5,22 +5,25 @@ export const KNOWLEDGE_PICKER_SUPPORTED = true
 
 function guessMime(name: string): string {
   const n = name.toLowerCase()
+  if (n.endsWith('.pdf')) return 'application/pdf'
   if (n.endsWith('.csv')) return 'text/csv'
   if (n.endsWith('.md') || n.endsWith('.markdown')) return 'text/markdown'
   return 'text/plain'
 }
 
 /**
- * Open the browser file picker for a single text document and resolve the picked
+ * Open the browser file picker for a single document and resolve the picked
  * file as raw bytes (a Blob) plus its name/mime/size. Resolves null if the user
- * cancels. Accepts .txt/.md/.csv (the formats the runtime ingests today); the
- * runtime re-validates the type, so this is only a first-pass filter.
+ * cancels. Accepts .txt/.md/.csv/.pdf (the formats the runtime ingests today —
+ * PDFs go to the document-extraction pipeline as raw binary); the runtime
+ * re-validates the type, so this is only a first-pass filter.
  */
 export function pickTextFile(): Promise<KnowledgeFileToUpload | null> {
   return new Promise(resolve => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.txt,.md,.markdown,.csv,text/plain,text/markdown,text/csv'
+    input.accept =
+      '.txt,.md,.markdown,.csv,.pdf,text/plain,text/markdown,text/csv,application/pdf'
     let settled = false
     const done = (v: KnowledgeFileToUpload | null) => {
       if (settled) return
