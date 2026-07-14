@@ -1103,7 +1103,7 @@ msgstr ""
 msgid "Add a content warning"
 msgstr ""
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:214
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:227
 msgid "Add a file"
 msgstr "Add a file"
 
@@ -3570,7 +3570,7 @@ msgstr ""
 msgid "Could not upload contacts. You need to re-verify your phone number to proceed"
 msgstr ""
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:96
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:107
 msgid "Could not upload the file."
 msgstr "Could not upload the file."
 
@@ -3858,7 +3858,7 @@ msgstr "Decline"
 msgid "Decline this language suggestion"
 msgstr "Decline this language suggestion"
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:279
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:297
 msgid "Declined"
 msgstr "Declined"
 
@@ -4997,7 +4997,7 @@ msgstr ""
 msgid "Extremist content"
 msgstr ""
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:288
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:306
 msgid "Failed"
 msgstr "Failed"
 
@@ -7033,14 +7033,14 @@ msgid "Kick member"
 msgstr "Kick member"
 
 #: src/Navigation.tsx:473
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:109
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:120
 #: src/screens/Settings/PersonaSettings/index.tsx:156
 #: src/screens/Settings/PersonaSettings/index.tsx:166
 #: src/screens/Settings/PersonaSettings/PersonaEditorDialog.tsx:778
 msgid "Knowledge base"
 msgstr "Knowledge base"
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:126
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:137
 msgid "Knowledge base unavailable"
 msgstr "Knowledge base unavailable"
 
@@ -7654,7 +7654,7 @@ msgstr ""
 msgid "Make sure you’re signed in and the agent runtime is reachable. The agent keeps its current settings in the meantime."
 msgstr "Make sure you’re signed in and the agent runtime is reachable. The agent keeps its current settings in the meantime."
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:127
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:138
 msgid "Make sure you’re signed in and the agent runtime is reachable. Your agent keeps its existing memory in the meantime."
 msgstr "Make sure you’re signed in and the agent runtime is reachable. Your agent keeps its existing memory in the meantime."
 
@@ -8413,7 +8413,7 @@ msgstr ""
 msgid "No feeds found. Try searching for something else."
 msgstr ""
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:144
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:155
 msgid "No files yet"
 msgstr "No files yet"
 
@@ -8680,7 +8680,7 @@ msgstr ""
 msgid "Not ready to hit post? Keep your best ideas in Drafts until the timing is just right."
 msgstr ""
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:121
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:132
 #: src/screens/Settings/PersonaSettings/index.tsx:409
 #: src/screens/Settings/SocialAutonomySettings/index.tsx:113
 msgid "Not your agent"
@@ -9440,7 +9440,7 @@ msgstr ""
 msgid "Paused"
 msgstr "Paused"
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:269
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:287
 msgid "Pending review"
 msgstr "Pending review"
 
@@ -12800,7 +12800,7 @@ msgstr "That agent isn't linked to your account."
 
 #: src/components/PostControls/PostMenu/PostMenuItems.tsx:262
 #: src/screens/AgentHub/index.tsx:396
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:93
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:104
 #: src/screens/Settings/MyAgents.tsx:50
 #: src/screens/Settings/SocialAutonomySettings/index.tsx:75
 msgid "That agent isn’t linked to your account."
@@ -12810,7 +12810,7 @@ msgstr "That agent isn’t linked to your account."
 msgid "That contains the following:"
 msgstr ""
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:78
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:86
 msgid "That file couldn’t be saved."
 msgstr "That file couldn’t be saved."
 
@@ -13140,7 +13140,7 @@ msgstr ""
 msgid "This agent isn’t linked to your account"
 msgstr "This agent isn’t linked to your account"
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:122
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:133
 msgid "This agent isn’t linked to your account, so its knowledge base can’t be managed from here. Pick one of your own agents from My Agents."
 msgstr "This agent isn’t linked to your account, so its knowledge base can’t be managed from here. Pick one of your own agents from My Agents."
 
@@ -14220,7 +14220,7 @@ msgstr ""
 msgid "Uploading video…"
 msgstr "Uploading video…"
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:167
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:180
 msgid "Uploads land as provisional memory pending review before they surface in recall. Files with a real email address, phone number, or secret are declined automatically."
 msgstr "Uploads land as provisional memory pending review before they surface in recall. Files with a real email address, phone number, or secret are declined automatically."
 
@@ -15783,7 +15783,7 @@ msgstr ""
 msgid "Your account was found to be in violation of the <0>Terms of Service</0>. You have been sent an email outlining the specific violation and suspension period, if applicable. You can appeal this decision if you believe it was made in error."
 msgstr "Your account was found to be in violation of the <0>Terms of Service</0>. You have been sent an email outlining the specific violation and suspension period, if applicable. You can appeal this decision if you believe it was made in error."
 
-#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:58
+#: src/screens/Settings/KnowledgeBaseSettings/index.tsx:66
 msgid "your agent"
 msgstr "your agent"
 
