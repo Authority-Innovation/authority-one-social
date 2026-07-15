@@ -29,6 +29,7 @@ import {PostListFeedAPI} from '#/lib/api/feed/posts'
 import {type FeedAPI, type ReasonFeedSource} from '#/lib/api/feed/types'
 import {aggregateUserInterests} from '#/lib/api/feed/utils'
 import {FeedTuner, type FeedTunerFn} from '#/lib/api/feed-manip'
+import {normalizeLegacyBlobRefs} from '#/lib/api/normalize-blob-refs'
 import {DISCOVER_FEED_URI} from '#/lib/constants'
 import {logger} from '#/logger'
 import {STALE} from '#/state/queries'
@@ -204,6 +205,11 @@ export function usePostFeedQuery(
           }
 
       const res = await api.fetch({cursor, limit: fetchLimit})
+
+      // The AppView has indexed some records with raw dag-json blob refs,
+      // which fail lexicon validation and silently drop the post from the
+      // feed (FeedViewPostsSlice). Normalize them into real BlobRefs.
+      normalizeLegacyBlobRefs(res.feed)
 
       /*
        * If this is a public view, we need to check if posts fail moderation.
