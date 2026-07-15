@@ -6,6 +6,7 @@ import {Gesture} from 'react-native-gesture-handler'
 import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {useNavigation, useNavigationState} from '@react-navigation/native'
 
+import {useAgentUnreadIconBadge} from '#/lib/hooks/useAgentUnreadIconBadge'
 import {useDedupe} from '#/lib/hooks/useDedupe'
 import {useIntentHandler} from '#/lib/hooks/useIntentHandler'
 import {useNotificationsHandler} from '#/lib/hooks/useNotificationHandler'
@@ -59,6 +60,8 @@ function ShellInner() {
 
   useNotificationsRegistration()
   useNotificationsHandler()
+  // Foreground app-icon badge: total unread across the owner's agents.
+  useAgentUnreadIconBadge()
 
   useEffect(() => {
     if (IS_ANDROID) {

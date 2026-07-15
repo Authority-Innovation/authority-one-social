@@ -294,6 +294,19 @@ export async function resetBadgeCount() {
   await setBadgeCountAsync(0)
 }
 
+/**
+ * Set the app-icon badge to an absolute count (foreground path — needs only
+ * notification authorization, not the push entitlement). Used by the agent
+ * unread rollup; coexists with the Bluesky DM/notification decrement/reset
+ * paths above (last writer wins).
+ */
+export async function setAppIconBadgeCount(count: number) {
+  if (!IS_NATIVE) return
+  const clamped = Math.max(0, Math.floor(count))
+  await BackgroundNotificationHandler.setBadgeCountAsync(clamped)
+  await setBadgeCountAsync(clamped)
+}
+
 export async function unregisterPushToken(agents: AtpAgent[]) {
   if (!IS_NATIVE) return
 

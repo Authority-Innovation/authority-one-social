@@ -8,6 +8,7 @@ import {
   type NativeStackScreenProps,
   type NavigationProp,
 } from '#/lib/routes/types'
+import {useMarkThreadReadMutation} from '#/state/queries/agent-conversations'
 import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {useGroupOpMutation, useThreadsQuery} from '#/state/queries/threads'
 import {atoms as a, useTheme} from '#/alf'
@@ -36,6 +37,7 @@ export function ChatListScreen({}: Props) {
   const {t: l} = useLingui()
   const navigation = useNavigation<NavigationProp>()
   const {data, isLoading} = useThreadsQuery()
+  const markRead = useMarkThreadReadMutation()
 
   // data === undefined -> unreachable/error (fall back). signedOut handled by the chat.
   const threads = data?.threads ?? []
@@ -111,12 +113,16 @@ export function ChatListScreen({}: Props) {
                 <ThreadRow
                   key={g.id}
                   thread={g}
-                  onOpen={() =>
+                  onOpen={() => {
+                    // Opening clears the unread pill (POST /app/threads/:id/read).
+                    if (g.unreadCount > 0) {
+                      markRead.mutate({id: g.id})
+                    }
                     navigation.navigate('AgentChat', {
                       threadId: g.id,
                       threadTitle: g.title,
                     })
-                  }
+                  }}
                   onManage={() =>
                     navigation.navigate('GroupManage', {
                       threadId: g.id,

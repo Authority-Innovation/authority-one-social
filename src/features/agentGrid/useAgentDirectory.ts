@@ -1,7 +1,7 @@
 import {isAgentHandle} from '#/lib/agent-runtime'
+import {useOwnedAgentsUnread} from '#/state/queries/agent-conversations'
 import {
   useAgentGroupThreadsQuery,
-  useAgentUnreadCounts,
   useLiveAgentKeys,
 } from '#/state/queries/agent-threads'
 import {useOwnerAgentsQuery} from '#/state/queries/agents'
@@ -47,14 +47,15 @@ export function useAgentDirectory(): {
     currentAccount?.did,
   )
   const liveKeys = useLiveAgentKeys()
-  const unreadCounts = useAgentUnreadCounts()
+  // Real unread counts from the unified conversations endpoint, per owned
+  // agent (non-owned agents are behind the ownership gate -> no counts).
+  const {byAgent: unreadCounts} = useOwnedAgentsUnread()
 
   const isLive = (handle: string, did?: string) =>
     liveKeys.has(handle.toLowerCase()) ||
     (!!did && liveKeys.has(did.toLowerCase()))
-  const unreadFor = (handle: string, did?: string) =>
-    (unreadCounts.get(handle.toLowerCase()) ?? 0) +
-    (did ? (unreadCounts.get(did.toLowerCase()) ?? 0) : 0)
+  const unreadFor = (handle: string) =>
+    unreadCounts.get(handle.toLowerCase()) ?? 0
 
   const owned: AgentGridEntry[] = ownedAgents.map(agent => {
     const profile = ownedProfiles?.profiles.find(
@@ -72,7 +73,7 @@ export function useAgentDirectory(): {
       owned: true,
       live: isLive(agent.handle, did),
       paused: agent.paused === true,
-      unread: unreadFor(agent.handle, did),
+      unread: unreadFor(agent.handle),
     }
   })
 
@@ -100,7 +101,7 @@ export function useAgentDirectory(): {
       owned: false,
       live: isLive(profile.handle, profile.did),
       paused: false,
-      unread: unreadFor(profile.handle, profile.did),
+      unread: unreadFor(profile.handle),
     })
   }
 

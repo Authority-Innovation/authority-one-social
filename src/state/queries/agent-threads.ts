@@ -78,56 +78,6 @@ export function useAgentGroupThreadsQuery(agent: AgentIdentity | undefined) {
 }
 
 /**
- * Sum unread counts per agent identity key. Each row is one thread's unread
- * count plus the agent keys of its roster; a thread's unread lands on every
- * agent in it (multi-agent groups count for each). PURE + tested.
- */
-export function unreadByAgentKey(
-  rows: {unreadCount: number; agentKeys: string[]}[],
-): Map<string, number> {
-  const totals = new Map<string, number>()
-  for (const row of rows) {
-    if (row.unreadCount <= 0) continue
-    for (const key of row.agentKeys) {
-      totals.set(key, (totals.get(key) ?? 0) + row.unreadCount)
-    }
-  }
-  return totals
-}
-
-/**
- * Per-agent UNREAD rollup for the grid headshot badges, from the in-app thread
- * list: group threads carrying unreadCount > 0 have their rosters resolved and
- * their counts summed onto each agent member. Rosters are fetched only for
- * unread threads, so a fully-read inbox costs zero extra requests. NOTE: this
- * covers in-app group threads only — 1:1 chats and SMS/WA/iMessage threads have
- * no per-agent unread source client-side yet (runtime work; see the Messages
- * unification plan).
- */
-export function useAgentUnreadCounts(): Map<string, number> {
-  const {data: threadsData} = useThreadsQuery()
-  const unreadThreads = (threadsData?.threads ?? []).filter(
-    th =>
-      th.kind === 'group' && th.membership !== 'pending' && th.unreadCount > 0,
-  )
-
-  const memberResults = useQueries({
-    queries: unreadThreads.map(th => ({
-      queryKey: createThreadMembersQueryKey(th.id),
-      queryFn: () => fetchThreadMembers(th.id),
-      staleTime: STALE.SECONDS.FIFTEEN,
-    })),
-  })
-
-  return unreadByAgentKey(
-    unreadThreads.map((th, i) => ({
-      unreadCount: th.unreadCount,
-      agentKeys: rosterAgentKeys(memberResults[i]?.data),
-    })),
-  )
-}
-
-/**
  * Lowercased identity keys (handle/DID) of every agent that is a member of a LIVE
  * thread — drives the live dot on agent-grid tiles. Rosters are fetched only for
  * live threads, so with no live rooms (today's steady state) this costs zero

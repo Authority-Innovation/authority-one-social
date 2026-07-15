@@ -1,6 +1,6 @@
 import {describe, expect, it} from '@jest/globals'
 
-import {rosterHasAgent, unreadByAgentKey} from '../agent-threads'
+import {rosterHasAgent} from '../agent-threads'
 
 const roster = {
   creatorDid: 'did:plc:owner',
@@ -43,22 +43,5 @@ describe('rosterHasAgent', () => {
     expect(
       rosterHasAgent(undefined, {handle: 'ada.pds.authority-one.com'}),
     ).toBe(false)
-  })
-})
-
-describe('unreadByAgentKey', () => {
-  it('sums unread per agent across threads, skipping read threads', () => {
-    const totals = unreadByAgentKey([
-      {unreadCount: 3, agentKeys: ['ada.pds.authority-one.com']},
-      {
-        unreadCount: 2,
-        agentKeys: ['ada.pds.authority-one.com', 'did:plc:agent1'],
-      },
-      {unreadCount: 0, agentKeys: ['bull.pds.authority-one.com']},
-      {unreadCount: 5, agentKeys: []},
-    ])
-    expect(totals.get('ada.pds.authority-one.com')).toBe(5)
-    expect(totals.get('did:plc:agent1')).toBe(2)
-    expect(totals.has('bull.pds.authority-one.com')).toBe(false)
   })
 })

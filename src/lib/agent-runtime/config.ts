@@ -40,6 +40,23 @@ export const threadDeleteUrl = (id: string) =>
 export const AGENTS_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/agents`
 
 /**
+ * Unified per-agent conversation list across ALL channels (owner-scoped; the
+ * agent path segment goes through the ownership gate). GET ->
+ * `{conversations:[{id, channel, kind, name, lastMessage, updatedAt,
+ * unreadCount, memberCount?, hosted?}]}` newest-first. Id spaces: thread ids
+ * (app), `ch:<channel>` (per-channel 1:1), Twilio `CH…` sids (legacy SMS groups).
+ */
+export const agentConversationsUrl = (agent: string) =>
+  `${AGENTS_ENDPOINT}/${encodeURIComponent(agent)}/conversations`
+
+/**
+ * Reset a conversation row's unread count to 0 (optional body `{agent}` for
+ * rows in another owned agent's space). Accepts every conversations id space.
+ */
+export const threadReadUrl = (id: string) =>
+  `${AGENT_RUNTIME_BASE_URL}/app/threads/${encodeURIComponent(id)}/read`
+
+/**
  * Pause/unpause one of the owner's agents. POST {agent?, paused:boolean} ->
  * {ok, agent, paused}. `agent` is the FULL handle from a GET /app/agents row;
  * omitted = the owner's token-mapped agent.

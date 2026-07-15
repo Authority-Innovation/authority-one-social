@@ -4,7 +4,11 @@ import {type AppBskyActorDefs} from '@atproto/api'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
-import {type MirrorGroup, type OwnerAgent} from '#/lib/agent-runtime'
+import {
+  type AgentConversation,
+  conversationOpenKind,
+  type OwnerAgent,
+} from '#/lib/agent-runtime'
 import {useOpenComposer} from '#/lib/hooks/useOpenComposer'
 import {useGetTimeAgo} from '#/lib/hooks/useTimeAgo'
 import {
@@ -15,6 +19,10 @@ import {
 import {sanitizeHandle} from '#/lib/strings/handles'
 import {useProfileShadow} from '#/state/cache/profile-shadow'
 import {
+  useAgentConversationsQuery,
+  useMarkThreadReadMutation,
+} from '#/state/queries/agent-conversations'
+import {
   type AgentIdentity,
   useAgentGroupThreadsQuery,
 } from '#/state/queries/agent-threads'
@@ -23,8 +31,8 @@ import {
   useOwnerAgentsQuery,
   usePauseOwnerAgentMutation,
 } from '#/state/queries/agents'
-import {useMirrorGroupsQuery} from '#/state/queries/mirror-groups'
 import {useProfileQuery} from '#/state/queries/profile'
+import {useThreadsQuery} from '#/state/queries/threads'
 import {useSession} from '#/state/session'
 import {PostFeed} from '#/view/com/posts/PostFeed'
 import {EmptyState} from '#/view/com/util/EmptyState'
@@ -289,11 +297,14 @@ function HubTabBar({
 
 /**
  * The Messages tab (default): this agent's conversations, WhatsApp-style.
- * A live drop-in room is pinned to the top (threads arrive live-first from the
- * client sort). For owned agents the 1:1 chat rides as a pinned row above the
- * groups; for non-owned agents the public Talk-to entry takes its place.
- * Group membership resolves from each thread's roster — `Thread` rows carry no
- * agent identity of their own.
+ * OWNED agents read from the unified cross-channel conversations endpoint
+ * (GET /app/agents/:agent/conversations) — in-app threads and groups,
+ * per-channel 1:1 mirrors (SMS/WhatsApp/iMessage/voice), and legacy Twilio
+ * SMS groups, all with real previews and unread counts. Live rooms pin to
+ * the top; the 1:1 chat rides as a pinned row. Opening a row marks it read.
+ * NON-OWNED agents fall back to shared groups resolved from thread rosters
+ * (the conversations endpoint is behind the ownership gate) plus the public
+ * Talk-to entry.
  */
 function MessagesTab({
   identity,
@@ -308,29 +319,130 @@ function MessagesTab({
   owned: boolean
   profile?: AppBskyActorDefs.ProfileViewDetailed
 }) {
-  const t = useTheme()
+  if (owned) {
+    return (
+      <OwnedMessagesTab
+        identity={identity}
+        displayName={displayName}
+        avatar={avatar}
+      />
+    )
+  }
+  return (
+    <SharedMessagesTab
+      identity={identity}
+      displayName={displayName}
+      profile={profile}
+    />
+  )
+}
+
+function OwnedMessagesTab({
+  identity,
+  displayName,
+  avatar,
+}: {
+  identity: AgentIdentity
+  displayName: string
+  avatar?: string
+}) {
   const navigation = useNavigation<NavigationProp>()
-  const {groups, isLoading, unavailable} = useAgentGroupThreadsQuery(identity)
-  // Read-only mirror of the agent's SMS/MMS threads (owner-scoped endpoint, so
-  // only queried for owned agents). WhatsApp/iMessage threads live in the
-  // runtime but have no list endpoint yet — see the Messages unification plan.
-  const {data: mirrorGroups} = useMirrorGroupsQuery(identity.handle, {
-    enabled: owned,
-  })
-  const smsGroups = owned ? (mirrorGroups ?? []) : []
+  const {data: conversations, isLoading} = useAgentConversationsQuery(
+    identity.handle,
+  )
+  // Live-room flags still ride on the threads list (thread.live); the
+  // conversations rows carry no live field yet.
+  const {data: threadsData} = useThreadsQuery()
+  const markRead = useMarkThreadReadMutation()
+
+  const liveIds = new Set(
+    (threadsData?.threads ?? [])
+      .filter(th => th.live === true)
+      .map(th => th.id),
+  )
+  const rows = conversations ?? []
+  // The in-app 1:1 renders as the pinned DirectChatRow, not a list row.
+  const direct = rows.find(
+    c => conversationOpenKind(c) === 'direct' && c.channel === 'app',
+  )
+  const rest = rows.filter(c => c !== direct)
+  const sorted = [
+    ...rest.filter(c => liveIds.has(c.id)),
+    ...rest.filter(c => !liveIds.has(c.id)),
+  ]
+  const unavailable = !isLoading && conversations === undefined
+
+  const open = (c: AgentConversation) => {
+    if (c.unreadCount > 0) {
+      markRead.mutate({id: c.id, agent: identity.handle})
+    }
+    const kind = conversationOpenKind(c)
+    if (kind === 'sms-mirror') {
+      navigation.navigate('MessagesSmsGroupThread', {sid: c.id, name: c.name})
+    } else if (kind === 'thread') {
+      navigation.navigate('AgentChat', {threadId: c.id, threadTitle: c.name})
+    } else {
+      // Per-channel 1:1 mirrors and the in-app 1:1 all render in the unified
+      // AgentChat buffer (turns carry their own channel badges there).
+      navigation.navigate('AgentChat', {agent: identity.handle})
+    }
+  }
 
   return (
     <View style={[a.flex_1]}>
-      {owned ? (
-        <DirectChatRow
-          identity={identity}
-          displayName={displayName}
-          avatar={avatar}
-          onPress={() =>
-            navigation.navigate('AgentChat', {agent: identity.handle})
+      <DirectChatRow
+        identity={identity}
+        displayName={displayName}
+        avatar={avatar}
+        preview={direct?.lastMessage?.text}
+        unreadCount={direct?.unreadCount ?? 0}
+        onPress={() => {
+          if (direct && direct.unreadCount > 0) {
+            markRead.mutate({id: direct.id, agent: identity.handle})
           }
+          navigation.navigate('AgentChat', {agent: identity.handle})
+        }}
+      />
+
+      {isLoading && rows.length === 0 ? (
+        <View style={[a.py_lg, a.align_center]}>
+          <ActivityIndicator />
+        </View>
+      ) : unavailable ? (
+        <MessagesNote text="Messages are unavailable right now." />
+      ) : sorted.length === 0 ? (
+        <MessagesNote
+          text={`No messages with ${displayName} yet. Start a group from Chats.`}
         />
-      ) : profile ? (
+      ) : (
+        sorted.map(c => (
+          <ConversationRow
+            key={c.id}
+            conversation={c}
+            live={liveIds.has(c.id)}
+            onPress={() => open(c)}
+          />
+        ))
+      )}
+    </View>
+  )
+}
+
+function SharedMessagesTab({
+  identity,
+  displayName,
+  profile,
+}: {
+  identity: AgentIdentity
+  displayName: string
+  profile?: AppBskyActorDefs.ProfileViewDetailed
+}) {
+  const navigation = useNavigation<NavigationProp>()
+  const {groups, isLoading, unavailable} = useAgentGroupThreadsQuery(identity)
+
+  return (
+    <View style={[a.flex_1]}>
+      {profile ? (
         <View style={[a.px_lg, a.py_md, a.flex_row]}>
           <PublicTalkEntry profile={profile} />
         </View>
@@ -340,18 +452,14 @@ function MessagesTab({
         <View style={[a.py_lg, a.align_center]}>
           <ActivityIndicator />
         </View>
-      ) : groups.length === 0 && smsGroups.length === 0 ? (
-        <View style={[a.px_lg, a.py_md]}>
-          <Text style={[a.text_sm, t.atoms.text_contrast_low]}>
-            {/* Plain literals: interpolated custom strings break under the
-                uncompiled catalog. */}
-            {unavailable
+      ) : groups.length === 0 ? (
+        <MessagesNote
+          text={
+            unavailable
               ? 'Messages are unavailable right now.'
-              : owned
-                ? `No messages with ${displayName} yet. Start a group from Chats.`
-                : `No shared messages with ${displayName} yet.`}
-          </Text>
-        </View>
+              : `No shared messages with ${displayName} yet.`
+          }
+        />
       ) : (
         groups.map(group => (
           <GroupRow
@@ -370,55 +478,42 @@ function MessagesTab({
           />
         ))
       )}
+    </View>
+  )
+}
 
-      {smsGroups.length > 0 ? (
-        <>
-          <View style={[a.px_lg, a.pt_md, a.pb_xs]}>
-            <Text
-              style={[a.text_xs, a.font_bold, t.atoms.text_contrast_medium]}>
-              {/* Plain literal (custom string). */}
-              Text channels — read-only mirror
-            </Text>
-          </View>
-          {smsGroups.map(group => (
-            <MirrorGroupRow
-              key={group.conversationSid}
-              group={group}
-              onPress={() =>
-                navigation.navigate('MessagesSmsGroupThread', {
-                  sid: group.conversationSid,
-                  name: group.title ?? undefined,
-                })
-              }
-            />
-          ))}
-        </>
-      ) : null}
+/** Quiet inline note. Text arrives as a plain literal (custom strings). */
+function MessagesNote({text}: {text: string}) {
+  const t = useTheme()
+  return (
+    <View style={[a.px_lg, a.py_md]}>
+      <Text style={[a.text_sm, t.atoms.text_contrast_low]}>{text}</Text>
     </View>
   )
 }
 
 /**
- * One mirrored SMS/MMS thread row: the agent's live Twilio group, reflected
- * read-only (display names only, never phone numbers). The list endpoint
- * carries no last message or timestamp — the unified runtime conversations
- * endpoint owns that enrichment when it lands.
+ * One unified conversation row: kind icon, name, channel badge, last-message
+ * preview, relative time, unread pill. Live rooms show the live treatment.
  */
-function MirrorGroupRow({
-  group,
+function ConversationRow({
+  conversation: c,
+  live,
   onPress,
 }: {
-  group: MirrorGroup
+  conversation: AgentConversation
+  live: boolean
   onPress: () => void
 }) {
   const t = useTheme()
-  const badge = channelBadge('sms')
-  const title = group.title || group.conversationSid
+  const timeAgo = useGetTimeAgo()
+  const badge = channelBadge(c.channel)
+  const Icon = c.kind === 'group' ? GroupIcon : MessageIcon
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open ${title}`}
-      accessibilityHint="Opens a read-only mirror of this text thread"
+      accessibilityLabel={`Open ${c.name}`}
+      accessibilityHint=""
       onPress={onPress}
       style={[
         a.flex_row,
@@ -437,10 +532,17 @@ function MirrorGroupRow({
           {
             width: 46,
             height: 46,
-            backgroundColor: t.atoms.bg_contrast_25.backgroundColor,
+            backgroundColor: live
+              ? t.palette.positive_50
+              : t.atoms.bg_contrast_25.backgroundColor,
           },
         ]}>
-        <MessageIcon size="lg" fill={t.atoms.text_contrast_medium.color} />
+        <Icon
+          size="lg"
+          fill={
+            live ? t.palette.positive_600 : t.atoms.text_contrast_medium.color
+          }
+        />
       </View>
       <View style={[a.flex_1]}>
         <View style={[a.flex_row, a.align_center, a.gap_sm]}>
@@ -448,20 +550,39 @@ function MirrorGroupRow({
             emoji
             style={[a.flex_1, a.text_md, a.font_bold, t.atoms.text]}
             numberOfLines={1}>
-            {title}
+            {c.name}
           </Text>
           {badge ? (
             <Text style={[a.text_xs, t.atoms.text_contrast_low]}>
               {badge.label}
             </Text>
           ) : null}
+          {live ? (
+            <LiveBadge />
+          ) : c.updatedAt ? (
+            <Text style={[a.text_xs, t.atoms.text_contrast_low]}>
+              {timeAgo(c.updatedAt, new Date())}
+            </Text>
+          ) : null}
         </View>
         <Text
           style={[a.text_sm, t.atoms.text_contrast_medium]}
           numberOfLines={1}>
-          {`${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}${group.openJoin ? ' · open' : ''}`}
+          {live ? 'Open — drop in' : (c.lastMessage?.text ?? ' ')}
         </Text>
       </View>
+      {c.unreadCount > 0 ? (
+        <View
+          style={[
+            a.rounded_full,
+            a.px_sm,
+            {paddingVertical: 2, backgroundColor: t.palette.primary_500},
+          ]}>
+          <Text style={[a.text_xs, a.font_bold, {color: t.palette.white}]}>
+            {c.unreadCount > 99 ? '99+' : `${c.unreadCount}`}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   )
 }
@@ -471,11 +592,16 @@ function DirectChatRow({
   identity,
   displayName,
   avatar,
+  preview,
+  unreadCount = 0,
   onPress,
 }: {
   identity: AgentIdentity
   displayName: string
   avatar?: string
+  /** Real last-message preview from the unified conversations row, when known. */
+  preview?: string
+  unreadCount?: number
   onPress: () => void
 }) {
   const t = useTheme()
@@ -507,13 +633,35 @@ function DirectChatRow({
           numberOfLines={1}>
           {`Chat with ${displayName}`}
         </Text>
-        <Text
-          style={[a.text_sm, t.atoms.text_contrast_medium]}
-          numberOfLines={1}>
-          <Trans>Your direct conversation</Trans>
-        </Text>
+        {preview ? (
+          <Text
+            emoji
+            style={[a.text_sm, t.atoms.text_contrast_medium]}
+            numberOfLines={1}>
+            {preview}
+          </Text>
+        ) : (
+          <Text
+            style={[a.text_sm, t.atoms.text_contrast_medium]}
+            numberOfLines={1}>
+            <Trans>Your direct conversation</Trans>
+          </Text>
+        )}
       </View>
-      <MessageIcon size="md" fill={t.atoms.text_contrast_low.color} />
+      {unreadCount > 0 ? (
+        <View
+          style={[
+            a.rounded_full,
+            a.px_sm,
+            {paddingVertical: 2, backgroundColor: t.palette.primary_500},
+          ]}>
+          <Text style={[a.text_xs, a.font_bold, {color: t.palette.white}]}>
+            {unreadCount > 99 ? '99+' : `${unreadCount}`}
+          </Text>
+        </View>
+      ) : (
+        <MessageIcon size="md" fill={t.atoms.text_contrast_low.color} />
+      )}
     </Pressable>
   )
 }

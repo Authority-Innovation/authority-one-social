@@ -66,6 +66,18 @@ export {
   postContextEvents,
 } from './contextClient'
 export {
+  type AgentConversation,
+  type AgentConversationsResult,
+  type ConversationKind,
+  conversationOpenKind,
+  fetchAgentConversations,
+  type MarkReadResult,
+  markThreadRead,
+  normalizeConversation,
+  normalizeConversations,
+  sumUnread,
+} from './conversationsClient'
+export {
   type FeedProfileWeights,
   type FeedSignalEvent,
   fetchFeedProfile,
