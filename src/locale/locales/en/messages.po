@@ -115,7 +115,7 @@ msgstr ""
 #. placeholder {0}: numUnreadNotifications ?? 0
 #: src/view/shell/bottom-bar/BottomBar.tsx:234
 #: src/view/shell/bottom-bar/BottomBar.tsx:266
-#: src/view/shell/Drawer.tsx:584
+#: src/view/shell/Drawer.tsx:585
 msgid "{0, plural, one {# unread item} other {# unread items}}"
 msgstr ""
 
@@ -388,7 +388,7 @@ msgstr "{count, plural, one {# new join request} other {# new join requests}}"
 msgid "{count, plural, one {# request} other {# requests}}"
 msgstr "{count, plural, one {# request} other {# requests}}"
 
-#: src/view/shell/desktop/LeftNav.tsx:521
+#: src/view/shell/desktop/LeftNav.tsx:516
 msgid "{count, plural, one {# unread item} other {# unread items}}"
 msgstr ""
 
@@ -757,13 +757,13 @@ msgstr ""
 
 #. placeholder {0}: formatCount(i18n, profile?.followersCount ?? 0)
 #. placeholder {1}: profile?.followersCount || 0
-#: src/view/shell/Drawer.tsx:162
+#: src/view/shell/Drawer.tsx:163
 msgid "<0>{0}</0> {1, plural, one {follower} other {followers}}"
 msgstr ""
 
 #. placeholder {0}: formatCount(i18n, profile?.followsCount ?? 0)
 #. placeholder {1}: profile?.followsCount || 0
-#: src/view/shell/Drawer.tsx:173
+#: src/view/shell/Drawer.tsx:174
 msgid "<0>{0}</0> {1, plural, one {following} other {following}}"
 msgstr ""
 
@@ -934,7 +934,7 @@ msgid "Abusive or discriminatory behavior"
 msgstr ""
 
 #. Accept a chat request
-#: src/screens/Chats/ChatListScreen.tsx:404
+#: src/screens/Chats/ChatListScreen.tsx:322
 #: src/screens/Messages/components/RequestButtons.tsx:287
 msgid "Accept"
 msgstr ""
@@ -1423,6 +1423,8 @@ msgstr ""
 msgid "agent"
 msgstr "agent"
 
+#: src/screens/AgentHub/index.tsx:98
+#: src/screens/AgentHub/index.tsx:109
 #: src/screens/Chats/AddAgents.tsx:144
 #: src/screens/Chats/GroupManageScreen.tsx:344
 #: src/screens/Chats/GroupManageScreen.tsx:345
@@ -2598,10 +2600,9 @@ msgstr ""
 
 #: src/lib/hooks/useNotificationHandler.ts:133
 #: src/Navigation.tsx:624
-#: src/screens/AgentHub/index.tsx:209
 #: src/view/shell/bottom-bar/BottomBar.tsx:230
-#: src/view/shell/desktop/LeftNav.tsx:762
-#: src/view/shell/Drawer.tsx:552
+#: src/view/shell/desktop/LeftNav.tsx:757
+#: src/view/shell/Drawer.tsx:553
 msgid "Chat"
 msgstr ""
 
@@ -2693,7 +2694,7 @@ msgid "Chat unmuted"
 msgstr ""
 
 #: src/Navigation.tsx:200
-#: src/screens/Chats/ChatListScreen.tsx:54
+#: src/screens/Chats/ChatListScreen.tsx:56
 #: src/screens/Messages/ChatList.tsx:78
 #: src/screens/Messages/ChatList.tsx:567
 #: src/screens/Messages/ChatList.tsx:605
@@ -2712,6 +2713,10 @@ msgstr "Check for new activity every"
 #: src/screens/SignupQueued.tsx:83
 msgid "Check my status"
 msgstr ""
+
+#: src/screens/AgentHub/index.tsx:115
+msgid "Check the address, or try again in a moment."
+msgstr "Check the address, or try again in a moment."
 
 #: src/screens/Login/LoginForm.tsx:307
 msgid "Check your email for a sign in code and enter it here."
@@ -3056,7 +3061,7 @@ msgstr ""
 
 #: src/lib/hotkeys/index.tsx:66
 #: src/view/com/feeds/ComposerPrompt.tsx:147
-#: src/view/shell/desktop/LeftNav.tsx:624
+#: src/view/shell/desktop/LeftNav.tsx:619
 msgid "Compose new post"
 msgstr ""
 
@@ -3527,7 +3532,7 @@ msgstr "Could not remove the voice."
 msgid "Could not rename the group."
 msgstr "Could not rename the group."
 
-#: src/screens/AgentHub/index.tsx:271
+#: src/screens/AgentHub/index.tsx:795
 msgid "Could not resolve this agent’s posts right now."
 msgstr "Could not resolve this agent’s posts right now."
 
@@ -3552,7 +3557,7 @@ msgstr "Could not switch persona."
 msgid "Could not update notification settings"
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:397
+#: src/screens/AgentHub/index.tsx:951
 #: src/screens/Settings/MyAgents.tsx:51
 msgid "Could not update the agent."
 msgstr "Could not update the agent."
@@ -3615,7 +3620,7 @@ msgstr ""
 
 #: src/screens/Chats/AddAgents.tsx:97
 #: src/screens/Chats/AddAgents.tsx:104
-#: src/screens/Chats/ChatListScreen.tsx:176
+#: src/screens/Chats/ChatListScreen.tsx:166
 #: src/screens/Settings/MyAgents.tsx:140
 #: src/screens/Settings/MyAgents.tsx:147
 msgid "Create a new agent"
@@ -3850,7 +3855,7 @@ msgstr ""
 msgid "Debug panel"
 msgstr ""
 
-#: src/screens/Chats/ChatListScreen.tsx:415
+#: src/screens/Chats/ChatListScreen.tsx:333
 msgid "Decline"
 msgstr "Decline"
 
@@ -4543,7 +4548,7 @@ msgstr "Edit persona"
 msgid "Edit post interaction settings"
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:367
+#: src/screens/AgentHub/index.tsx:919
 #: src/screens/Profile/Header/EditProfileDialog.tsx:265
 #: src/screens/Profile/Header/EditProfileDialog.tsx:271
 #: src/screens/Profile/Header/ProfileHeaderLabeler.tsx:296
@@ -4944,8 +4949,8 @@ msgstr ""
 
 #: src/Navigation.tsx:889
 #: src/screens/Search/Shell.tsx:362
-#: src/view/shell/desktop/LeftNav.tsx:741
-#: src/view/shell/Drawer.tsx:500
+#: src/view/shell/desktop/LeftNav.tsx:736
+#: src/view/shell/Drawer.tsx:501
 msgid "Explore"
 msgstr ""
 
@@ -5356,7 +5361,7 @@ msgstr ""
 
 #: src/view/shell/desktop/RightNav.tsx:117
 #: src/view/shell/desktop/RightNav.tsx:118
-#: src/view/shell/Drawer.tsx:454
+#: src/view/shell/Drawer.tsx:455
 msgid "Feedback"
 msgstr ""
 
@@ -5373,8 +5378,8 @@ msgstr ""
 #: src/screens/StarterPack/StarterPackScreen.tsx:196
 #: src/view/screens/Feeds.tsx:504
 #: src/view/screens/Profile.tsx:239
-#: src/view/shell/desktop/LeftNav.tsx:776
-#: src/view/shell/Drawer.tsx:616
+#: src/view/shell/desktop/LeftNav.tsx:771
+#: src/view/shell/Drawer.tsx:617
 msgid "Feeds"
 msgstr ""
 
@@ -5837,7 +5842,7 @@ msgstr ""
 msgid "Germ DM reconnected"
 msgstr ""
 
-#: src/view/shell/Drawer.tsx:458
+#: src/view/shell/Drawer.tsx:459
 msgid "Get help"
 msgstr ""
 
@@ -6179,11 +6184,11 @@ msgstr "Group name is too long. {MAX_GROUP_NAME_GRAPHEME_LENGTH, plural, other {
 msgid "Group renamed."
 msgstr "Group renamed."
 
-#: src/screens/Chats/ChatListScreen.tsx:108
+#: src/screens/Chats/ChatListScreen.tsx:110
 msgid "Groups"
 msgstr "Groups"
 
-#: src/screens/Chats/ChatListScreen.tsx:132
+#: src/screens/Chats/ChatListScreen.tsx:138
 msgid "Groups are unavailable right now."
 msgstr "Groups are unavailable right now."
 
@@ -6289,7 +6294,7 @@ msgstr "Held by One for 7 days to prevent abuse, then deleted"
 #: src/screens/Settings/Settings.tsx:273
 #: src/view/shell/desktop/RightNav.tsx:138
 #: src/view/shell/desktop/RightNav.tsx:141
-#: src/view/shell/Drawer.tsx:467
+#: src/view/shell/Drawer.tsx:468
 msgid "Help"
 msgstr ""
 
@@ -6481,8 +6486,8 @@ msgstr ""
 #: src/Navigation.tsx:884
 #: src/Navigation.tsx:905
 #: src/view/shell/bottom-bar/BottomBar.tsx:185
-#: src/view/shell/desktop/LeftNav.tsx:731
-#: src/view/shell/Drawer.tsx:526
+#: src/view/shell/desktop/LeftNav.tsx:726
+#: src/view/shell/Drawer.tsx:527
 msgid "Home"
 msgstr ""
 
@@ -6870,7 +6875,7 @@ msgstr ""
 
 #: src/features/inviteFriends/InviteFriendsDialogInner.tsx:140
 #: src/screens/Profile/Header/ProfileHeaderStandard.tsx:375
-#: src/view/shell/Drawer.tsx:128
+#: src/view/shell/Drawer.tsx:129
 msgid "Invite friends"
 msgstr "Invite friends"
 
@@ -6939,11 +6944,11 @@ msgstr ""
 msgid "Invited"
 msgstr "Invited"
 
-#: src/screens/Chats/ChatListScreen.tsx:393
+#: src/screens/Chats/ChatListScreen.tsx:311
 msgid "Invited you to join"
 msgstr "Invited you to join"
 
-#: src/screens/Chats/ChatListScreen.tsx:95
+#: src/screens/Chats/ChatListScreen.tsx:97
 msgid "Invites"
 msgstr "Invites"
 
@@ -7459,8 +7464,8 @@ msgstr ""
 #: src/view/screens/Lists.tsx:60
 #: src/view/screens/Profile.tsx:233
 #: src/view/screens/Profile.tsx:241
-#: src/view/shell/desktop/LeftNav.tsx:786
-#: src/view/shell/Drawer.tsx:631
+#: src/view/shell/desktop/LeftNav.tsx:781
+#: src/view/shell/Drawer.tsx:632
 msgid "Lists"
 msgstr ""
 
@@ -7472,8 +7477,7 @@ msgstr ""
 msgid "Lists blocking this user:"
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:485
-#: src/screens/Chats/ChatListScreen.tsx:298
+#: src/screens/AgentHub/index.tsx:1039
 #: src/screens/Settings/GroupConversations.tsx:309
 #: src/screens/Settings/MyAgents.tsx:246
 msgid "Live"
@@ -7603,7 +7607,7 @@ msgid "Logo by @sawaratsuki.bsky.social"
 msgstr ""
 
 #: src/view/shell/desktop/RightNav.tsx:147
-#: src/view/shell/Drawer.tsx:869
+#: src/view/shell/Drawer.tsx:865
 msgid "Logo by <0>@sawaratsuki.bsky.social</0>"
 msgstr ""
 
@@ -7663,7 +7667,7 @@ msgid "Make sure you're signed in and the agent runtime is reachable. Your agent
 msgstr "Make sure you're signed in and the agent runtime is reachable. Your agent keeps working with its default name and voice in the meantime."
 
 #: src/components/dialogs/SwitchAccount.tsx:165
-#: src/screens/Chats/ChatListScreen.tsx:367
+#: src/screens/Chats/ChatListScreen.tsx:285
 msgid "Manage"
 msgstr "Manage"
 
@@ -7842,6 +7846,7 @@ msgid "Message options"
 msgstr ""
 
 #: src/Navigation.tsx:899
+#: src/screens/AgentHub/index.tsx:250
 msgid "Messages"
 msgstr ""
 
@@ -8143,7 +8148,7 @@ msgstr ""
 msgid "Navigates to the next screen"
 msgstr ""
 
-#: src/view/shell/Drawer.tsx:99
+#: src/view/shell/Drawer.tsx:100
 msgid "Navigates to your profile"
 msgstr ""
 
@@ -8183,7 +8188,7 @@ msgid "New {postsCount, plural, one {post} other {posts}} from {firstAuthorName}
 msgstr ""
 
 #: src/Navigation.tsx:210
-#: src/screens/Chats/ChatListScreen.tsx:183
+#: src/screens/Chats/ChatListScreen.tsx:173
 #: src/screens/Chats/NewAgentScreen.tsx:87
 msgid "New agent"
 msgstr "New agent"
@@ -8234,7 +8239,7 @@ msgid "New followers"
 msgstr ""
 
 #: src/Navigation.tsx:205
-#: src/screens/Chats/ChatListScreen.tsx:61
+#: src/screens/Chats/ChatListScreen.tsx:63
 #: src/screens/Chats/NewGroupScreen.tsx:71
 msgid "New group"
 msgstr "New group"
@@ -8287,7 +8292,7 @@ msgid "New post"
 msgstr ""
 
 #: src/view/com/feeds/FeedPage.tsx:179
-#: src/view/shell/desktop/LeftNav.tsx:635
+#: src/view/shell/desktop/LeftNav.tsx:630
 msgctxt "action"
 msgid "New post"
 msgstr ""
@@ -8364,7 +8369,7 @@ msgstr "No ads, no invasive tracking, no engagement traps. One respects your tim
 msgid "No agents yet"
 msgstr "No agents yet"
 
-#: src/screens/Chats/ChatListScreen.tsx:197
+#: src/screens/Chats/ChatListScreen.tsx:202
 msgid "No agents yet. Create one to start chatting."
 msgstr "No agents yet. Create one to start chatting."
 
@@ -8372,7 +8377,7 @@ msgstr "No agents yet. Create one to start chatting."
 msgid "No app passwords yet"
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:356
+#: src/screens/AgentHub/index.tsx:895
 msgid "No bio yet."
 msgstr "No bio yet."
 
@@ -8435,7 +8440,7 @@ msgstr "No GIFs to show right now. Try again in a moment."
 msgid "No group conversations"
 msgstr "No group conversations"
 
-#: src/screens/Chats/ChatListScreen.tsx:134
+#: src/screens/Chats/ChatListScreen.tsx:140
 msgid "No groups yet. Tap “New” to start one."
 msgstr "No groups yet. Tap “New” to start one."
 
@@ -8723,8 +8728,8 @@ msgstr ""
 #: src/screens/Settings/Settings.tsx:200
 #: src/view/screens/Notifications.tsx:128
 #: src/view/shell/bottom-bar/BottomBar.tsx:261
-#: src/view/shell/desktop/LeftNav.tsx:751
-#: src/view/shell/Drawer.tsx:579
+#: src/view/shell/desktop/LeftNav.tsx:746
+#: src/view/shell/Drawer.tsx:580
 msgid "Notifications"
 msgstr ""
 
@@ -8931,10 +8936,6 @@ msgstr "Only admins can accept join requests."
 #: src/screens/Messages/JoinRequests.tsx:233
 msgid "Only admins can ignore join requests."
 msgstr "Only admins can ignore join requests."
-
-#: src/screens/AgentHub/index.tsx:92
-msgid "Only an agent’s owner can chat with and manage it here."
-msgstr "Only an agent’s owner can chat with and manage it here."
 
 #: src/components/intents/GroupChatJoinDialog.tsx:145
 msgid "Only followers can join this group chat."
@@ -9243,7 +9244,7 @@ msgstr "Opens the find and invite friends settings"
 msgid "Opens the GIF picker dialog"
 msgstr "Opens the GIF picker dialog"
 
-#: src/view/shell/Drawer.tsx:130
+#: src/view/shell/Drawer.tsx:131
 msgid "Opens the invite friends sheet to share your profile"
 msgstr "Opens the invite friends sheet to share your profile"
 
@@ -9255,10 +9256,6 @@ msgstr ""
 #: src/view/com/composer/videos/SelectVideoBtn.tsx:59
 msgid "Opens the video library to select a single video."
 msgstr "Opens the video library to select a single video."
-
-#: src/screens/Chats/ChatListScreen.tsx:236
-msgid "Opens this agent's chat and management hub"
-msgstr "Opens this agent's chat and management hub"
 
 #: src/screens/Settings/MyAgents.tsx:177
 msgid "Opens this agent's persona settings"
@@ -9417,7 +9414,7 @@ msgstr ""
 
 #: src/components/Post/Embed/VideoEmbed/VideoEmbedInner/VideoEmbedInnerNative.tsx:155
 #: src/components/Post/Embed/VideoEmbed/VideoEmbedInner/web-controls/VideoControls.tsx:395
-#: src/screens/AgentHub/index.tsx:428
+#: src/screens/AgentHub/index.tsx:982
 #: src/screens/Settings/MyAgents.tsx:212
 msgid "Pause"
 msgstr ""
@@ -9434,8 +9431,7 @@ msgstr ""
 msgid "Pause video"
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:471
-#: src/screens/Chats/ChatListScreen.tsx:284
+#: src/screens/AgentHub/index.tsx:1025
 #: src/screens/Settings/MyAgents.tsx:232
 msgid "Paused"
 msgstr "Paused"
@@ -9509,7 +9505,7 @@ msgstr ""
 msgid "Persona"
 msgstr "Persona"
 
-#: src/screens/AgentHub/index.tsx:408
+#: src/screens/AgentHub/index.tsx:962
 msgid "Persona settings"
 msgstr "Persona settings"
 
@@ -9973,7 +9969,7 @@ msgstr "Posting..."
 
 #: src/components/activity-notifications/SubscribeProfileDialog.tsx:257
 #: src/components/activity-notifications/SubscribeProfileDialog.tsx:269
-#: src/screens/AgentHub/index.tsx:210
+#: src/screens/AgentHub/index.tsx:251
 #: src/screens/ProfileList/index.tsx:167
 #: src/screens/StarterPack/StarterPackScreen.tsx:197
 #: src/view/screens/Profile.tsx:234
@@ -10068,8 +10064,8 @@ msgstr ""
 #: src/screens/Settings/AboutSettings.tsx:99
 #: src/screens/Settings/AboutSettings.tsx:102
 #: src/view/screens/PrivacyPolicy.tsx:26
-#: src/view/shell/Drawer.tsx:864
-#: src/view/shell/Drawer.tsx:865
+#: src/view/shell/Drawer.tsx:860
+#: src/view/shell/Drawer.tsx:861
 msgid "Privacy Policy"
 msgstr ""
 
@@ -10100,13 +10096,13 @@ msgstr ""
 msgid "profile"
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:211
+#: src/screens/AgentHub/index.tsx:252
 #: src/screens/Settings/PersonaSettings/AgentProfileDialog.tsx:190
 #: src/screens/Settings/PersonaSettings/index.tsx:133
 #: src/view/shell/bottom-bar/BottomBar.tsx:304
-#: src/view/shell/desktop/LeftNav.tsx:809
-#: src/view/shell/Drawer.tsx:98
-#: src/view/shell/Drawer.tsx:756
+#: src/view/shell/desktop/LeftNav.tsx:804
+#: src/view/shell/Drawer.tsx:99
+#: src/view/shell/Drawer.tsx:752
 msgid "Profile"
 msgstr ""
 
@@ -10988,7 +10984,7 @@ msgstr ""
 msgid "Reset password"
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:428
+#: src/screens/AgentHub/index.tsx:982
 #: src/screens/Settings/MyAgents.tsx:212
 msgid "Resume"
 msgstr "Resume"
@@ -11171,8 +11167,8 @@ msgstr ""
 msgid "Save to my feeds"
 msgstr ""
 
-#: src/view/shell/desktop/LeftNav.tsx:796
-#: src/view/shell/Drawer.tsx:731
+#: src/view/shell/desktop/LeftNav.tsx:791
+#: src/view/shell/Drawer.tsx:727
 msgctxt "link to bookmarks screen"
 msgid "Saved"
 msgstr ""
@@ -11639,7 +11635,7 @@ msgstr ""
 msgid "Send error report"
 msgstr "Send error report"
 
-#: src/view/shell/Drawer.tsx:447
+#: src/view/shell/Drawer.tsx:448
 msgid "Send feedback"
 msgstr ""
 
@@ -11728,10 +11724,10 @@ msgid "Sets email for password reset"
 msgstr ""
 
 #: src/Navigation.tsx:266
-#: src/screens/AgentHub/index.tsx:212
+#: src/screens/AgentHub/index.tsx:255
 #: src/screens/Settings/Settings.tsx:98
-#: src/view/shell/desktop/LeftNav.tsx:819
-#: src/view/shell/Drawer.tsx:769
+#: src/view/shell/desktop/LeftNav.tsx:814
+#: src/view/shell/Drawer.tsx:765
 msgid "Settings"
 msgstr ""
 
@@ -12203,7 +12199,7 @@ msgid "So many thoughts, you should post one"
 msgstr ""
 
 #: src/Navigation.tsx:465
-#: src/screens/AgentHub/index.tsx:414
+#: src/screens/AgentHub/index.tsx:968
 #: src/screens/Settings/PersonaSettings/index.tsx:141
 #: src/screens/Settings/PersonaSettings/index.tsx:151
 #: src/screens/Settings/SocialAutonomySettings/index.tsx:91
@@ -12765,8 +12761,8 @@ msgstr ""
 #: src/screens/Settings/AboutSettings.tsx:94
 #: src/screens/Takendown.tsx:214
 #: src/view/screens/TermsOfService.tsx:26
-#: src/view/shell/Drawer.tsx:857
-#: src/view/shell/Drawer.tsx:859
+#: src/view/shell/Drawer.tsx:853
+#: src/view/shell/Drawer.tsx:855
 msgid "Terms of Service"
 msgstr ""
 
@@ -12799,7 +12795,7 @@ msgid "That agent isn't linked to your account."
 msgstr "That agent isn't linked to your account."
 
 #: src/components/PostControls/PostMenu/PostMenuItems.tsx:262
-#: src/screens/AgentHub/index.tsx:396
+#: src/screens/AgentHub/index.tsx:950
 #: src/screens/Settings/KnowledgeBaseSettings/index.tsx:104
 #: src/screens/Settings/MyAgents.tsx:50
 #: src/screens/Settings/SocialAutonomySettings/index.tsx:75
@@ -13136,9 +13132,9 @@ msgstr ""
 msgid "This action can be undone at any time."
 msgstr ""
 
-#: src/screens/AgentHub/index.tsx:88
-msgid "This agent isn’t linked to your account"
-msgstr "This agent isn’t linked to your account"
+#: src/screens/AgentHub/index.tsx:112
+msgid "This agent is unavailable right now"
+msgstr "This agent is unavailable right now"
 
 #: src/screens/Settings/KnowledgeBaseSettings/index.tsx:133
 msgid "This agent isn’t linked to your account, so its knowledge base can’t be managed from here. Pick one of your own agents from My Agents."
@@ -14611,6 +14607,10 @@ msgstr ""
 msgid "View details"
 msgstr ""
 
+#: src/screens/AgentHub/index.tsx:905
+msgid "View full profile"
+msgstr "View full profile"
+
 #: src/view/com/posts/ViewFullThread.tsx:31
 #: src/view/com/posts/ViewFullThread.tsx:64
 msgid "View full thread"
@@ -15788,13 +15788,11 @@ msgid "your agent"
 msgstr "your agent"
 
 #: src/Navigation.tsx:195
-#: src/screens/AgentHub/index.tsx:73
-#: src/screens/AgentHub/index.tsx:82
 msgid "Your agent"
 msgstr "Your agent"
 
 #: src/components/dialogs/SwitchAccount.tsx:104
-#: src/screens/Chats/ChatListScreen.tsx:173
+#: src/screens/Chats/ChatListScreen.tsx:189
 msgid "Your agents"
 msgstr "Your agents"
 
@@ -15802,11 +15800,7 @@ msgstr "Your agents"
 msgid "Your agents appear here once you're signed in and the agent runtime is reachable."
 msgstr "Your agents appear here once you're signed in and the agent runtime is reachable."
 
-#: src/screens/AgentHub/index.tsx:86
-msgid "Your agents are unavailable right now"
-msgstr "Your agents are unavailable right now"
-
-#: src/screens/Chats/ChatListScreen.tsx:195
+#: src/screens/Chats/ChatListScreen.tsx:200
 msgid "Your agents are unavailable right now."
 msgstr "Your agents are unavailable right now."
 
@@ -15850,6 +15844,10 @@ msgstr ""
 #: src/screens/Moderation/index.tsx:232
 msgid "Your declared age is under 18. Some settings below may be disabled. If this was a mistake, you may edit your birthdate in your <0>account settings</0>."
 msgstr ""
+
+#: src/screens/AgentHub/index.tsx:647
+msgid "Your direct conversation"
+msgstr "Your direct conversation"
 
 #: src/components/ageAssurance/AgeAssuranceInitDialog.tsx:252
 #: src/components/ageAssurance/AgeAssuranceInitDialog.tsx:256
