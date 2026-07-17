@@ -22,6 +22,18 @@ export {
 } from './agentsClient'
 export {postApprovalDecision} from './approvals'
 export {
+  type AgentAsset,
+  type AgentAssetsPage,
+  type AssetProvenance,
+  type AssetsQuery,
+  type AssetType,
+  fetchAgentAssets,
+  normalizeAsset,
+  normalizeAssets,
+  normalizeProvenance,
+  provenanceSummary,
+} from './assetsClient'
+export {
   getSupabaseAccessToken,
   setSupabaseTokenProvider,
   type TokenProvider,

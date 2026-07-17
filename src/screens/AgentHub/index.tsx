@@ -53,10 +53,11 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {AgentAvatar} from '#/features/agentGrid/AgentAvatar'
 import {LiveBadge} from '#/features/agentGrid/LiveBadge'
+import {AssetGalleryTab} from './AssetGalleryTab'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'AgentHub'>
 
-type HubTab = 'messages' | 'posts' | 'profile' | 'settings'
+type HubTab = 'messages' | 'gallery' | 'posts' | 'profile' | 'settings'
 
 /**
  * The per-agent hub: ONE place per agent with a top tab strip
@@ -178,7 +179,9 @@ function AgentHubInner({agentRef}: {agentRef: string}) {
       <HubTabBar tab={tab} onSelect={setTab} showSettings={owned} />
 
       <View style={[a.flex_1]}>
-        {tab === 'messages' ? (
+        {tab === 'gallery' && owned ? (
+          <AssetGalleryTab agentHandle={handle} displayName={displayName} />
+        ) : tab === 'messages' ? (
           <MessagesTab
             identity={identity}
             displayName={displayName}
@@ -248,9 +251,14 @@ function HubTabBar({
   const {t: l} = useLingui()
   const tabs: {key: HubTab; label: string}[] = [
     {key: 'messages', label: l`Messages`},
-    {key: 'posts', label: l`Posts`},
-    {key: 'profile', label: l`Profile`},
   ]
+  // Gallery + Settings are owner-only surfaces (the asset ledger is behind the
+  // same ownership gate as conversations), so they only show for owned agents.
+  if (showSettings) {
+    tabs.push({key: 'gallery', label: l`Gallery`})
+  }
+  tabs.push({key: 'posts', label: l`Posts`})
+  tabs.push({key: 'profile', label: l`Profile`})
   if (showSettings) {
     tabs.push({key: 'settings', label: l`Settings`})
   }

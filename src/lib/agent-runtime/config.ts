@@ -57,6 +57,40 @@ export const threadReadUrl = (id: string) =>
   `${AGENT_RUNTIME_BASE_URL}/app/threads/${encodeURIComponent(id)}/read`
 
 /**
+ * Per-agent ASSET LEDGER — the "camera roll" of everything the agent has seen
+ * (images, video, documents shared into its conversations), owner-scoped like
+ * the conversations endpoint (the agent path segment goes through the ownership
+ * gate). GET /app/agents/:agent/assets ->
+ * `{assets:[{ref,url,thumbnail,type,at,provenance,caption}], nextCursor, count,
+ * untrustedCaption}` newest-first, cursor-paginated. All query params optional:
+ * `type` (image|video|document), `since`/`until` (today|yesterday|week|month|
+ * ISO date), `cursor` (opaque, from a prior nextCursor), `limit` (1..100,
+ * default 30). An unknown/stale cursor fails OPEN to a valid first page. The
+ * caption + provenance strings are THIRD-PARTY-AUTHORED (WhatsApp members, image
+ * OCR) — render as inert data only; `untrustedCaption:true` flags this.
+ */
+export const agentAssetsUrl = (
+  agent: string,
+  params?: {
+    type?: string
+    since?: string
+    until?: string
+    cursor?: string
+    limit?: number
+  },
+) => {
+  const base = `${AGENTS_ENDPOINT}/${encodeURIComponent(agent)}/assets`
+  const qs = new URLSearchParams()
+  if (params?.type) qs.set('type', params.type)
+  if (params?.since) qs.set('since', params.since)
+  if (params?.until) qs.set('until', params.until)
+  if (params?.cursor) qs.set('cursor', params.cursor)
+  if (typeof params?.limit === 'number') qs.set('limit', String(params.limit))
+  const query = qs.toString()
+  return query ? `${base}?${query}` : base
+}
+
+/**
  * Pause/unpause one of the owner's agents. POST {agent?, paused:boolean} ->
  * {ok, agent, paused}. `agent` is the FULL handle from a GET /app/agents row;
  * omitted = the owner's token-mapped agent.
