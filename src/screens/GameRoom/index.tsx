@@ -11,15 +11,21 @@ import {LEFT_NAV_MINIMAL_WIDTH} from '#/view/shell/desktop/LeftNav'
 import {atoms as a, useLayoutBreakpoints, useTheme, web} from '#/alf'
 import * as Layout from '#/components/Layout'
 import {CENTER_COLUMN_WIDTH, SCROLLBAR_OFFSET} from '#/components/Layout'
+import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
 import {Board} from './components/Board'
 import {ChatLane} from './components/ChatLane'
+import {ScenePane} from './components/ScenePane'
 import {
   createGameClient,
+  FORCE_MOCK_TRANSPORT,
   type GameChatMsg,
   type GameClient,
+  type GameConnectionStatus,
   type GameCtx,
+  type GameTransport,
   type PlayerInfo,
+  type SceneFrame,
 } from './gameClient'
 import {initialG, type TicTacToeG} from './tictactoe'
 
@@ -28,6 +34,9 @@ type Props = NativeStackScreenProps<CommonNavigatorParams, 'GameRoom'>
 /** Width of the chat column in the wide (TV / landscape) split. */
 const CHAT_COLUMN_WIDTH = 360
 
+/** How long a server rejection (invalid move etc) stays on screen. */
+const ERROR_TOAST_MS = 2500
+
 /**
  * GameRoom — one responsive screen, two orientations, chat ALWAYS visible
  * (the agent + community chat are part of gameplay, not a separate surface):
@@ -35,37 +44,57 @@ const CHAT_COLUMN_WIDTH = 360
  *   narrow (phone / portrait): game pane TOP, chat lane BOTTOM
  *   wide (TV / desktop / landscape): game pane LEFT, chat lane RIGHT
  *
- * Orientation is pure layout, driven off the measured window width — same
- * component either way. On web the fixed desktop side navs consume horizontal
- * room, so the wide split engages at the same >=1100px media point the shell
- * uses for its side columns (and GameRoom gets the Messages-style immersive
- * treatment: minimal left nav, no right nav); on native, width >= 900 (a
- * tablet/TV in landscape) is enough. All game/chat traffic flows through the
- * GameClient seam (gameClient.ts) — swapping the local mock for the live
- * GameMatchDO WebSocket touches that module only.
+ * TWO game-pane modes share that layout engine:
+ *   board — the tic-tac-toe board (mock hot-seat, or the LIVE GameMatchDO)
+ *   story — the narrative ScenePane (illustration + text + choice buttons),
+ *           where the chat lane is the primary play surface (agent GM)
+ *
+ * Transport is decided by the ROUTE: `/game` runs the local mock,
+ * `/game?mode=story` the canned story mock, and `/game/<matchID>` joins the
+ * LIVE match over WebSocket (matchID is the capability UUID from match
+ * create). A live server can also flip the pane to story by sending scene
+ * frames. All traffic flows through the GameClient seam (gameClient.ts).
  */
 export function GameRoomScreen({route}: Props) {
-  // A fresh mount per match id keeps game + chat state from leaking between
-  // rooms (same pattern as AgentChat's per-thread keying).
+  // A fresh mount per room identity keeps game + chat state from leaking
+  // between rooms (same pattern as AgentChat's per-thread keying).
   const matchId = route.params?.matchId ?? 'lobby'
-  return <GameRoomInner key={matchId} matchId={matchId} />
+  const live = !!route.params?.matchId && !FORCE_MOCK_TRANSPORT
+  const storyRoute = route.params?.mode === 'story'
+  const requestedSeat = route.params?.seat === '1' ? '1' : '0'
+  return (
+    <GameRoomInner
+      key={`${matchId}:${storyRoute ? 'story' : 'board'}`}
+      matchId={matchId}
+      live={live}
+      storyRoute={storyRoute}
+      requestedSeat={requestedSeat}
+    />
+  )
 }
 
-function GameRoomInner({matchId}: {matchId: string}) {
+function GameRoomInner({
+  matchId,
+  live,
+  storyRoute,
+  requestedSeat,
+}: {
+  matchId: string
+  live: boolean
+  storyRoute: boolean
+  requestedSeat: string
+}) {
   const t = useTheme()
   const {width, height} = useWindowDimensions()
   const {centerColumnOffset} = useLayoutBreakpoints()
   const {currentAccount} = useSession()
 
-  // The viewer is always player '0' in the mock hot-seat match. The live
-  // transport will assign real seats at join time.
-  const playerID = '0'
   const playerName =
     currentAccount?.handle?.split('.')[0] ?? currentAccount?.handle ?? 'You'
 
   // "New game" recreates the client against a fresh match generation — the
-  // contract-clean reset (a live match id is minted by the server; the mock
-  // just starts a fresh board).
+  // contract-clean reset for the LOCAL mock only (a live match id is minted
+  // by the server, so live rooms hide the control instead).
   const [generation, setGeneration] = useState(0)
   const matchID = generation === 0 ? matchId : `${matchId}~${generation}`
 
@@ -73,9 +102,25 @@ function GameRoomInner({matchId}: {matchId: string}) {
   const [ctx, setCtx] = useState<GameCtx>({currentPlayer: '0'})
   const [players, setPlayers] = useState<PlayerInfo[]>([])
   const [chat, setChat] = useState<ChatMessage[]>([])
+  // The seat this client actually holds (live join may fall back to the other
+  // seat or spectator); drives tap identity + chat attribution.
+  const [seat, setSeat] = useState<string | null>(requestedSeat)
+  const [scene, setScene] = useState<SceneFrame | null>(null)
+  const [sceneChosenId, setSceneChosenId] = useState<string | null>(null)
+  const [errorText, setErrorText] = useState<string | null>(null)
+  const [connection, setConnection] = useState<GameConnectionStatus | null>(
+    null,
+  )
 
   const clientRef = useRef<GameClient | null>(null)
   const chatSeq = useRef(0)
+  const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const transport: GameTransport = live
+    ? 'live'
+    : storyRoute
+      ? 'mock-story'
+      : 'mock'
 
   useEffect(() => {
     const toChatMessage = (m: GameChatMsg): ChatMessage => ({
@@ -88,8 +133,9 @@ function GameRoomInner({matchId}: {matchId: string}) {
     })
     const client = createGameClient({
       matchID,
-      playerID,
+      playerID: requestedSeat,
       name: playerName,
+      transport,
       callbacks: {
         onState: (g, c, p) => {
           setG(g)
@@ -102,6 +148,21 @@ function GameRoomInner({matchId}: {matchId: string}) {
         // the board status line); nothing extra to do on the dedicated event
         // yet — the live room will use it for recap/social triggers.
         onGameover: () => {},
+        onSeat: setSeat,
+        onScene: s => {
+          setScene(s)
+          setSceneChosenId(null)
+        },
+        onError: err => {
+          // Gentle surface: a transient line in the game pane, never a crash.
+          setErrorText(err.message || err.code)
+          if (errorTimer.current) clearTimeout(errorTimer.current)
+          errorTimer.current = setTimeout(
+            () => setErrorText(null),
+            ERROR_TOAST_MS,
+          )
+        },
+        onConnection: setConnection,
       },
     })
     clientRef.current = client
@@ -109,13 +170,21 @@ function GameRoomInner({matchId}: {matchId: string}) {
     return () => {
       client.disconnect()
       clientRef.current = null
+      if (errorTimer.current) {
+        clearTimeout(errorTimer.current)
+        errorTimer.current = null
+      }
     }
-  }, [matchID, playerID, playerName])
+  }, [matchID, requestedSeat, playerName, transport])
 
   // Pure width-driven orientation (see docblock).
   const wide = width >= (IS_WEB ? 1100 : 900)
 
-  const selfIds = new Set([playerID])
+  // Story pane engages from the route (mock demo) or the moment a live server
+  // sends a scene frame — a scene with no board is a valid match.
+  const storyMode = storyRoute || scene !== null
+
+  const selfIds = new Set(seat !== null ? [seat] : [])
   const participants =
     players.length > 0 ? players.map(p => p.name).join(' vs ') : null
 
@@ -125,7 +194,17 @@ function GameRoomInner({matchId}: {matchId: string}) {
   const onSendChat = (text: string) => {
     clientRef.current?.sendChat(text)
   }
+  const onChoose = (id: string) => {
+    setSceneChosenId(id)
+    clientRef.current?.sendChoice(id)
+  }
   const onNewGame = () => setGeneration(g => g + 1)
+
+  const subtitle = storyMode
+    ? (scene?.title ?? 'Story')
+    : participants
+      ? `Tic-tac-toe — ${participants}`
+      : null
 
   const header = (
     <Layout.Header.Outer>
@@ -134,15 +213,58 @@ function GameRoomInner({matchId}: {matchId: string}) {
         {/* Plain literals: custom (non-Bluesky) surface, never rides the
             compiled Lingui catalog. */}
         <Layout.Header.TitleText>Game Room</Layout.Header.TitleText>
-        {participants ? (
-          <Layout.Header.SubtitleText>
-            {`Tic-tac-toe — ${participants}`}
-          </Layout.Header.SubtitleText>
+        {subtitle ? (
+          <Layout.Header.SubtitleText>{subtitle}</Layout.Header.SubtitleText>
         ) : null}
       </Layout.Header.Content>
       <Layout.Header.Slot />
     </Layout.Header.Outer>
   )
+
+  // Status strip shared by both layouts: reconnect indicator + gentle server
+  // rejections (invalid move etc). Absent almost always.
+  const statusStrip =
+    connection === 'reconnecting' ||
+    connection === 'connecting' ||
+    errorText ? (
+      <View style={[a.align_center, a.gap_2xs, a.pt_sm]}>
+        {connection === 'reconnecting' || connection === 'connecting' ? (
+          <Text
+            style={[a.text_sm, t.atoms.text_contrast_medium]}
+            accessibilityLiveRegion="polite">
+            {connection === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+          </Text>
+        ) : null}
+        {errorText ? (
+          <Text
+            testID="gameErrorText"
+            style={[a.text_sm, {color: t.palette.negative_500}]}
+            accessibilityLiveRegion="polite">
+            {errorText}
+          </Text>
+        ) : null}
+      </View>
+    ) : null
+
+  const gamePane = (boardSize: number) =>
+    storyMode ? (
+      <View style={[a.flex_1, a.w_full]}>
+        {statusStrip}
+        <ScenePane scene={scene} chosenId={sceneChosenId} onChoose={onChoose} />
+      </View>
+    ) : (
+      <View style={[a.align_center, a.gap_sm]}>
+        {statusStrip}
+        <Board
+          G={G}
+          ctx={ctx}
+          players={players}
+          boardSize={boardSize}
+          onCellPress={onCellPress}
+          onNewGame={live ? undefined : onNewGame}
+        />
+      </View>
+    )
 
   if (wide) {
     // TV / desktop split: game LEFT, chat RIGHT. On web this mirrors the
@@ -181,21 +303,14 @@ function GameRoomInner({matchId}: {matchId: string}) {
           <View
             style={[
               a.flex_1,
-              a.align_center,
-              a.justify_center,
-              a.px_xl,
+              storyMode ? undefined : a.align_center,
+              storyMode ? undefined : a.justify_center,
+              storyMode ? undefined : a.px_xl,
               a.border_l,
               t.atoms.border_contrast_low,
               t.atoms.bg,
             ]}>
-            <Board
-              G={G}
-              ctx={ctx}
-              players={players}
-              boardSize={Math.max(boardSize, 240)}
-              onCellPress={onCellPress}
-              onNewGame={onNewGame}
-            />
+            {gamePane(Math.max(boardSize, 240))}
           </View>
           <View
             style={[
@@ -213,7 +328,8 @@ function GameRoomInner({matchId}: {matchId: string}) {
   }
 
   // Phone / portrait split: game pane TOP, chat lane BOTTOM. Board caps at a
-  // size that always leaves the chat lane a workable share of the screen.
+  // size that always leaves the chat lane a workable share of the screen; the
+  // story pane takes a fixed share for the same reason.
   const boardSize = Math.max(Math.min(width - 64, height * 0.36, 340), 200)
 
   return (
@@ -226,16 +342,13 @@ function GameRoomInner({matchId}: {matchId: string}) {
           a.mx_auto,
           {maxWidth: CENTER_COLUMN_WIDTH},
         ]}>
-        <View style={[a.py_lg, a.align_center]}>
-          <Board
-            G={G}
-            ctx={ctx}
-            players={players}
-            boardSize={boardSize}
-            onCellPress={onCellPress}
-            onNewGame={onNewGame}
-          />
-        </View>
+        {storyMode ? (
+          <View style={[{height: Math.max(height * 0.45, 300)}]}>
+            {gamePane(boardSize)}
+          </View>
+        ) : (
+          <View style={[a.py_lg, a.align_center]}>{gamePane(boardSize)}</View>
+        )}
         <View style={[a.flex_1, a.border_t, t.atoms.border_contrast_low]}>
           <ChatLane messages={chat} selfIds={selfIds} onSend={onSendChat} />
         </View>

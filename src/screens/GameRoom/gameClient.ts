@@ -1,102 +1,74 @@
 /**
  * GameClient — the SINGLE wiring point between the GameRoom screen and a
- * match transport. The screen only ever talks to this interface; swapping the
- * mock for the live GameMatchDO WebSocket happens in `createGameClient` below
- * and nowhere else.
+ * match transport. The screen only ever talks to this interface; the factory
+ * below picks between the LIVE GameMatchDO WebSocket (liveGameClient.ts) and
+ * the local mocks, and nowhere else.
  *
- * WIRE CONTRACT (agreed with the runtime session building the GameMatchDO —
- * one Durable Object per match, WebSocket per player):
+ * WIRE CONTRACT (v1, per pilot-agent-runtime/GAMES.md — the DO is live):
  *
  *   Client → server:
- *     {t: 'join', matchID: string, playerID: string, name: string}
+ *     {t: 'join', matchID: string, playerID: '0'|'1'|null, name: string}  // null = spectator
  *     {t: 'move', move: {type: string, args: object}}   // tic-tac-toe: {type:'place', args:{cell:0-8}}
  *     {t: 'chat', text: string}
+ *     {t: 'choice', id: string}          // STORY MODE: pick an authored branch (proposed v1 story ext)
  *
  *   Server → client:
- *     {t: 'state', G, ctx, players}      // authoritative snapshot after every accepted move
- *     {t: 'chat', from, name, text, ts}  // fan-out of every chat line (incl. the agent's)
+ *     {t: 'state', G, ctx, players}      // authoritative snapshot; wire G={cells:[9]}, players is an
+ *                                        // OBJECT keyed by playerID {name, connected} — the live client
+ *                                        // maps both to the app shapes in types.ts
+ *     {t: 'chat', from, name, text, ts}  // from: '0'|'1'|'agent'|null (spectator)
  *     {t: 'players', players}            // presence roster changes
  *     {t: 'gameover', winner}            // winning playerID, or null for a draw
- *
- * TODO(game-runtime): when the GameMatchDO endpoint lands, add a
- * WebSocket-backed implementation here (open `wss://<runtime>/game/<matchID>`,
- * send the join frame, JSON.parse incoming frames into the ServerMsg union
- * below, and re-dispatch to the same callbacks) and return it from
- * `createGameClient` instead of the mock. Reconnection/backoff lives inside
- * that implementation — the screen stays transport-blind.
+ *     {t: 'error', code, message}        // invalid move / bad frame etc — sent to the offender only
+ *     {t: 'scene', image?, title?, text, choices?: [{id, label}]}
+ *                                        // STORY MODE (proposed v1 story ext): replaces the current
+ *                                        // scene wholesale; no choices = free-text (chat) beat
  */
-import {applyPlace, gameoverOf, initialG, type TicTacToeG} from './tictactoe'
+import {createLiveGameClient} from './liveGameClient'
+import {createMockStoryClient} from './mockStoryClient'
+import {applyPlace, gameoverOf, initialG} from './tictactoe'
+import {
+  type GameClient,
+  type GameClientOptions,
+  type GameCtx,
+  type GameMove,
+  type PlayerInfo,
+} from './types'
 
-/** A move envelope. Tic-tac-toe uses {type:'place', args:{cell: 0-8}}. */
-export interface GameMove {
-  type: string
-  args?: Record<string, unknown>
-}
+export * from './types'
 
-export interface PlayerInfo {
-  id: string
-  name: string
-}
+/** Which transport a room runs on. The SCREEN decides (live iff it navigated
+ *  in with a real server matchID), the factory just routes. */
+export type GameTransport = 'live' | 'mock' | 'mock-story'
 
-/** boardgame.io-style turn context echoed by the server with every state. */
-export interface GameCtx {
-  currentPlayer: string
-  gameover?: {winner: string | null} | null
-}
-
-export interface GameChatMsg {
-  from: string
-  name: string
-  text: string
-  ts: number
-}
-
-/** Client → server frames (documentation of the wire shape; the mock never serializes). */
-export type ClientMsg =
-  | {t: 'join'; matchID: string; playerID: string; name: string}
-  | {t: 'move'; move: GameMove}
-  | {t: 'chat'; text: string}
-
-/** Server → client frames. */
-export type ServerMsg =
-  | {t: 'state'; G: TicTacToeG; ctx: GameCtx; players: PlayerInfo[]}
-  | {t: 'chat'; from: string; name: string; text: string; ts: number}
-  | {t: 'players'; players: PlayerInfo[]}
-  | {t: 'gameover'; winner: string | null}
-
-export interface GameCallbacks {
-  onState: (G: TicTacToeG, ctx: GameCtx, players: PlayerInfo[]) => void
-  onChat: (msg: GameChatMsg) => void
-  onPlayers: (players: PlayerInfo[]) => void
-  onGameover: (winner: string | null) => void
-}
-
-export interface GameClientOptions {
-  matchID: string
-  playerID: string
-  name: string
-  callbacks: GameCallbacks
-}
-
-export interface GameClient {
-  connect: () => void
-  disconnect: () => void
-  sendMove: (move: GameMove) => void
-  sendChat: (text: string) => void
-}
+/** Build-time escape hatch: EXPO_PUBLIC_GAME_TRANSPORT=mock forces every room
+ *  onto the local mocks (offline dev / demos with no worker reachable). */
+export const FORCE_MOCK_TRANSPORT =
+  String(process.env.EXPO_PUBLIC_GAME_TRANSPORT ?? '')
+    .trim()
+    .toLowerCase() === 'mock'
 
 /**
- * Transport factory — the ONE swap point. Today every match runs on the local
- * mock (fully playable, hot-seat, with canned agent commentary) so the screen
- * is functional standalone. TODO(game-runtime): route to the WebSocket client
- * once the GameMatchDO contract above is live.
+ * Transport factory — the ONE swap point. `live` opens a WebSocket into the
+ * deployed GameMatchDO (capability-URL matchID); the mocks keep the screen
+ * fully functional standalone (board hot-seat / canned story).
  */
-export function createGameClient(opts: GameClientOptions): GameClient {
+export function createGameClient(
+  opts: GameClientOptions & {transport?: GameTransport},
+): GameClient {
+  const transport =
+    FORCE_MOCK_TRANSPORT && opts.transport === 'live' ? 'mock' : opts.transport
+  if (transport === 'live') {
+    return createLiveGameClient(opts)
+  }
+  if (transport === 'mock-story') {
+    return createMockStoryClient(opts)
+  }
   return createMockGameClient(opts)
 }
 
 /** The agent commentator's sender id on the chat lane (mock). The live match
- *  will carry the real agent identity (handle/DID) in `from`. */
+ *  carries `from: 'agent'` for the real commentator. */
 export const MOCK_AGENT_ID = 'agent:bob'
 export const MOCK_AGENT_NAME = 'Bob'
 
@@ -176,6 +148,7 @@ export function createMockGameClient(opts: GameClientOptions): GameClient {
       // Async like a real socket: the roster and first snapshot arrive after
       // connect() returns, never re-entrantly.
       later(0, () => {
+        callbacks.onConnection?.('online')
         callbacks.onPlayers(players)
         callbacks.onState(G, ctx(), players)
         agentSay(OPENERS[Math.floor(Math.random() * OPENERS.length)], 900)
@@ -238,5 +211,8 @@ export function createMockGameClient(opts: GameClientOptions): GameClient {
         )
       }
     },
+
+    // Board matches have no branch points; only the story transports act on this.
+    sendChoice() {},
   }
 }

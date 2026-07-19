@@ -33,7 +33,9 @@ export function Board({
   /** Rendered edge length of the square board, in px. */
   boardSize: number
   onCellPress: (cell: number) => void
-  onNewGame: () => void
+  /** Absent on transports with no local reset (a live match is created
+   *  server-side) — the new-game/restart control is hidden. */
+  onNewGame?: () => void
 }) {
   const t = useTheme()
   const over = ctx.gameover ?? null
@@ -117,7 +119,7 @@ export function Board({
         ))}
       </View>
 
-      {over ? (
+      {onNewGame == null ? null : over ? (
         <Button
           testID="newGameBtn"
           label="New game"

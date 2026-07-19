@@ -25,7 +25,16 @@ export type CommonNavigatorParams = {
   // Authority One: Game Room — split game + chat screen (tic-tac-toe first).
   // matchId omitted = the local lobby match; a live match id once the
   // GameMatchDO runtime lands.
-  GameRoom: {matchId?: string} | undefined
+  GameRoom:
+    | {
+        /** Live GameMatchDO matchID (capability UUID from match create). Absent = local mock room. */
+        matchId?: string
+        /** 'story' opens the narrative scene pane instead of the board. */
+        mode?: string
+        /** Requested seat for a live match ('0' default, '1' second player). */
+        seat?: string
+      }
+    | undefined
   NewGroup: undefined
   // Authority One: create a new agent under the logged-in owner (POST /app/agents).
   NewAgent: undefined
