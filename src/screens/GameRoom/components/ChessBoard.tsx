@@ -16,6 +16,7 @@ import {
   sqToAlg,
 } from '../chess'
 import {type GameCtx, type PlayerInfo} from '../gameClient'
+import {useFlashHint} from './useFlashHint'
 
 /** Fixed board colors (independent of app theme) so the glyphs always read. */
 const DARK_SQUARE = '#739552'
@@ -96,6 +97,7 @@ export function ChessBoard({
 }) {
   const t = useTheme()
   const [selected, setSelected] = useState<number | null>(null)
+  const {hint, flashHint} = useFlashHint()
   const [promotionChoice, setPromotionChoice] = useState<{
     from: string
     to: string
@@ -136,10 +138,24 @@ export function ChessBoard({
         ? 'You win!'
         : `${nameOf(over.winner)} wins!`
       : "It's a draw."
-    : `${isYou(ctx.currentPlayer) ? 'Your turn' : `${nameOf(ctx.currentPlayer)}'s turn`} — ${active === 'w' ? 'white' : 'black'}${G.check ? ' — check!' : ''}`
+    : `${
+        isYou(ctx.currentPlayer)
+          ? 'Your turn'
+          : seat !== null && !myTurn
+            ? `${nameOf(ctx.currentPlayer)} is thinking…`
+            : `${nameOf(ctx.currentPlayer)}'s turn`
+      } — ${active === 'w' ? 'white' : 'black'}${G.check ? ' — check!' : ''}`
 
   const onSquarePress = (i: number) => {
-    if (!interactive) return
+    if (over !== null) return
+    if (!myTurn) {
+      flashHint(
+        seat === null
+          ? 'You’re watching this match'
+          : `Waiting for ${nameOf(ctx.currentPlayer)} — it’s their turn`,
+      )
+      return
+    }
     setPromotionChoice(null)
     const alg = sqToAlg(i)
     const dests = destinations.filter(m => m.to === alg)
@@ -156,6 +172,17 @@ export function ChessBoard({
     }
     const piece = squares[i]
     if (piece && piece.color === actingColor) {
+      // A piece with zero entries in legalMoves (blocked, or pinned on the
+      // live server) must not fail silently — say why the tap did nothing.
+      if (!G.legalMoves.some(m => m.from === alg)) {
+        flashHint(
+          G.check
+            ? 'That piece can’t help — you must get out of check'
+            : 'That piece has no legal moves right now',
+        )
+        setSelected(null)
+        return
+      }
       setSelected(i === selected ? null : i)
     } else {
       setSelected(null)
@@ -171,13 +198,25 @@ export function ChessBoard({
   const cellSize = Math.floor(boardSize / 8)
 
   return (
-    <View style={[a.align_center, a.gap_md]}>
+    <View style={[a.align_center, a.gap_sm]}>
       <Text
         testID="gameStatus"
         style={[a.text_lg, a.font_bold, t.atoms.text]}
         accessibilityLiveRegion="polite">
         {status}
       </Text>
+
+      {/* Fixed-height subline so hints never shift the board mid-play. */}
+      <View style={[a.align_center, a.justify_center, {minHeight: 20}]}>
+        {hint ? (
+          <Text
+            testID="boardHint"
+            style={[a.text_sm, a.font_bold, {color: t.palette.negative_500}]}
+            accessibilityLiveRegion="polite">
+            {hint}
+          </Text>
+        ) : null}
+      </View>
 
       <View
         style={[
@@ -215,7 +254,7 @@ export function ChessBoard({
                       : `${alg}, empty`
                   }
                   accessibilityHint="Selects a piece or moves the selected piece here"
-                  disabled={!interactive}
+                  disabled={over !== null}
                   onPress={() => onSquarePress(i)}
                   style={[
                     a.align_center,

@@ -2,12 +2,14 @@ import {describe, expect, it} from '@jest/globals'
 
 import {
   applyCheckersMove,
+  capturesAreForced,
   type CheckersCell,
   type CheckersG,
   checkersGameover,
   checkersLegalMoves,
   initialCheckersG,
   isDarkSquare,
+  movableFroms,
 } from '../checkers'
 
 const empty = (): CheckersCell[] => Array(64).fill(null)
@@ -77,6 +79,81 @@ describe('checkersLegalMoves', () => {
     const moves = checkersLegalMoves(g(board, {mustContinueFrom: 6 * 8 + 1}))
     expect(moves.every(m => m.from === 6 * 8 + 1)).toBe(true)
     expect(moves.every(m => m.captures?.length === 1)).toBe(true)
+  })
+})
+
+describe('movableFroms', () => {
+  it('is empty for no moves', () => {
+    expect(movableFroms([])).toEqual([])
+  })
+
+  it('deduplicates squares with several destinations', () => {
+    const moves = checkersLegalMoves(
+      g(
+        (() => {
+          const board = empty()
+          board[4 * 8 + 3] = man(0) // two forward steps → one distinct from
+          return board
+        })(),
+      ),
+    )
+    expect(moves).toHaveLength(2)
+    expect(movableFroms(moves)).toEqual([4 * 8 + 3])
+  })
+
+  it('in the opening, only the front row can move', () => {
+    const G = initialCheckersG()
+    const froms = movableFroms(checkersLegalMoves(G))
+    // Player 0's front row is row 5 (dark squares 40/42/44/46).
+    expect(froms.sort((x, y) => x - y)).toEqual([40, 42, 44, 46])
+  })
+
+  it('narrows to the capturing piece when a capture is forced', () => {
+    const board = empty()
+    board[4 * 8 + 3] = man(0) // can capture
+    board[3 * 8 + 4] = man(1) // the victim; landing (2,5) empty
+    board[6 * 8 + 1] = man(0) // has plain steps, but captures are forced
+    const moves = checkersLegalMoves(g(board))
+    expect(movableFroms(moves)).toEqual([4 * 8 + 3])
+  })
+
+  it('mid multi-jump only the continuing piece is movable', () => {
+    const board = empty()
+    board[6 * 8 + 1] = man(0)
+    board[5 * 8 + 2] = man(1)
+    board[3 * 8 + 4] = man(1)
+    const moves = checkersLegalMoves(g(board, {mustContinueFrom: 6 * 8 + 1}))
+    expect(movableFroms(moves)).toEqual([6 * 8 + 1])
+  })
+})
+
+describe('capturesAreForced', () => {
+  it('is false for no moves and for plain-step positions', () => {
+    expect(capturesAreForced([])).toBe(false)
+    expect(capturesAreForced(checkersLegalMoves(initialCheckersG()))).toBe(
+      false,
+    )
+  })
+
+  it('is true when the rules return only captures', () => {
+    const board = empty()
+    board[4 * 8 + 3] = man(0)
+    board[3 * 8 + 4] = man(1)
+    board[6 * 8 + 1] = man(0) // its plain steps are suppressed by the rule
+    expect(capturesAreForced(checkersLegalMoves(g(board)))).toBe(true)
+  })
+
+  it('is true mid multi-jump (continuation hops are captures)', () => {
+    const board = empty()
+    board[6 * 8 + 1] = man(0)
+    board[5 * 8 + 2] = man(1)
+    board[3 * 8 + 4] = man(1)
+    const moves = checkersLegalMoves(g(board, {mustContinueFrom: 6 * 8 + 1}))
+    expect(capturesAreForced(moves)).toBe(true)
+  })
+
+  it('treats an empty captures array as not a capture', () => {
+    expect(capturesAreForced([{from: 40, to: 33, captures: []}])).toBe(false)
   })
 })
 

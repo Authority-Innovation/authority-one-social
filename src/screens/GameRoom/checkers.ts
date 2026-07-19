@@ -130,6 +130,32 @@ export function checkersLegalMoves(G: CheckersG): CheckersMove[] {
 }
 
 /**
+ * The distinct squares that have at least one legal move — i.e. the pieces
+ * the side to move may actually pick up. With forced captures this is often
+ * a small subset of their pieces; the board dims everything else so the
+ * player can see at a glance what is playable. PURE.
+ */
+export function movableFroms(legalMoves: CheckersMove[]): number[] {
+  const froms: number[] = []
+  for (const m of legalMoves) {
+    if (!froms.includes(m.from)) froms.push(m.from)
+  }
+  return froms
+}
+
+/**
+ * True when every legal move is a capture (and there is at least one move) —
+ * the forced-capture rule in effect. The UI must SAY so: a player whose
+ * tapped piece has no moves otherwise reads the board as frozen. PURE.
+ */
+export function capturesAreForced(legalMoves: CheckersMove[]): boolean {
+  return (
+    legalMoves.length > 0 &&
+    legalMoves.every(m => (m.captures?.length ?? 0) > 0)
+  )
+}
+
+/**
  * Apply a from/to hop for the side to move. Returns the next G, or null when
  * the hop is not among the current legal moves — the caller drops invalid
  * moves exactly like the authoritative server will. Handles kinging (which
