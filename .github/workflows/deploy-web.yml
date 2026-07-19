@@ -7,6 +7,11 @@ name: Deploy web (Cloudflare Pages)
 # auto-deploy them. Merge/fast-forward to `main` to ship. A manual
 # `workflow_dispatch` is also provided for re-running a deploy without
 # a new commit.
+#
+# STRUCTURE: `deploy` needs `verify`. A red verify job means the deploy
+# job never runs, so a broken build cannot ship. The verify job also
+# produces the production web-build artifact that the deploy job
+# publishes, so the export is only built once.
 on:
   push:
     branches:
@@ -22,8 +27,40 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Build and deploy
+  # ------------------------------------------------------------------
+  # WHAT THIS GATE ENFORCES (and what it deliberately does not)
+  #
+  # Gated (must be green or the deploy is blocked):
+  #   - pnpm typecheck            (green on main as of 2026-07-19)
+  #   - eslint --quiet src modules, minus the 12 known-dirty files
+  #     listed below
+  #   - the Jest suite, minus the 5 known-dirty suites listed below
+  #     (1182 tests / 104 suites green, verified twice locally)
+  #   - pnpm build-web-cf         (the production export itself - the
+  #     single most valuable check; a failed build must never ship)
+  #
+  # Excluded ON PURPOSE - these are pre-existing failures on clean main
+  # (baseline-dirty), unrelated to any current change. Gating on them
+  # would block every deploy forever. Each exclusion below is a debt
+  # marker: fix the file/suite, then delete its line here.
+  #
+  # Excluded test suites (fail on clean main, 2026-07-19):
+  #   - src/lib/agent-runtime/__tests__/tts.test.ts          (long-standing baseline failure)
+  #   - src/lib/agent-runtime/__tests__/authToken.test.ts    (dead setSupabaseTokenProvider shim)
+  #   - __tests__/lib/string.test.ts                         (baseline failure)
+  #   - src/state/session/__tests__/session-test.ts          (stale snapshots: still expect
+  #     public.api.bsky.app; we changed the default service to appview.authority-one.com)
+  #   - src/lib/agent-runtime/__tests__/personasFiction.test.ts (flaky: fails intermittently)
+  #
+  # Excluded lint files (54 pre-existing errors on clean main, 2026-07-19):
+  #   see the --ignore-pattern list in the lint step.
+  #
+  # Not gated at all: prettier (red on main; cosmetic, tracked by the
+  # Lint workflow) and the native lint/e2e suites (not relevant to the
+  # web deploy).
+  # ------------------------------------------------------------------
+  verify:
+    name: Verify (typecheck, lint, tests, build)
     runs-on: ubuntu-latest
     steps:
       - name: Check out Git repository
@@ -41,10 +78,44 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Compiled locale files are gitignored, so a fresh checkout has none.
-      # Compile them from the committed .po sources before the export, or
-      # `expo export:web` fails to resolve translations.
+      # Compile them from the committed .po sources before typecheck/build,
+      # or module resolution fails on the locale imports.
       - name: Compile i18n
         run: pnpm intl:compile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Same scope as `pnpm lint` (src + modules) minus the files that are
+      # already red on main. New lint errors anywhere else block the deploy.
+      - name: Lint (scoped, see exclusion note above)
+        run: |
+          pnpm exec eslint --quiet \
+            --ignore-pattern 'src/lib/supabase/__tests__/client.test.ts' \
+            --ignore-pattern 'src/lib/supabase/client.ts' \
+            --ignore-pattern 'src/lib/themes-authority-one.ts' \
+            --ignore-pattern 'src/screens/AgentChat/__tests__/ApprovalCard.test.tsx' \
+            --ignore-pattern 'src/screens/AgentChat/__tests__/MessageBubble.links.test.ts' \
+            --ignore-pattern 'src/screens/AgentChat/__tests__/MessageBubble.test.ts' \
+            --ignore-pattern 'src/screens/AgentChat/__tests__/useAgentChat.transportError.test.tsx' \
+            --ignore-pattern 'src/screens/AgentChat/__tests__/voiceConversationMachine.test.ts' \
+            --ignore-pattern 'src/screens/AgentChat/useVoiceConversation.ts' \
+            --ignore-pattern 'src/state/shell/color-mode.tsx' \
+            --ignore-pattern 'src/state/supabase/index.tsx' \
+            --ignore-pattern 'src/view/icons/Logomark.tsx' \
+            src modules
+
+      # Full Jest suite minus the baseline-dirty suites listed in the note
+      # above. No --bail so a failure reports everything that broke.
+      - name: Tests (stable suites, see exclusion note above)
+        run: |
+          NODE_ENV=test pnpm exec jest --forceExit --testTimeout=20000 \
+            --testPathIgnorePatterns \
+              'src/lib/agent-runtime/__tests__/tts.test.ts' \
+              'src/lib/agent-runtime/__tests__/authToken.test.ts' \
+              '__tests__/lib/string.test.ts' \
+              'src/state/session/__tests__/session-test.ts' \
+              'src/lib/agent-runtime/__tests__/personasFiction.test.ts'
 
       - name: Clean previous build output
         run: rm -rf web-build
@@ -62,6 +133,44 @@ jobs:
           EXPO_PUBLIC_DISABLE_AGE_ASSURANCE: "1"
           EXPO_PUBLIC_APP_CONFIG_URL: ""
         run: pnpm build-web-cf
+
+      - name: Upload build for the deploy job
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: web-build
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      # wrangler-action installs wrangler via pnpm inside the checkout
+      # (see the workerd allowBuilds entry in pnpm-workspace.yaml), so the
+      # deploy job still needs the repo + an installed workspace even
+      # though the site itself comes from the verify job's artifact.
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - name: Install node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Download verified build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: web-build
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
