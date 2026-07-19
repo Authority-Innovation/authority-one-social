@@ -23,7 +23,7 @@ import {ChatLane} from './components/ChatLane'
 import {CheckersBoard} from './components/CheckersBoard'
 import {ChessBoard} from './components/ChessBoard'
 import {ScenePane} from './components/ScenePane'
-import {createLiveMatch} from './createMatch'
+import {createLiveMatch, type LaunchableGame} from './createMatch'
 import {
   createGameClient,
   FORCE_MOCK_TRANSPORT,
@@ -53,6 +53,13 @@ const GAME_TITLES: Record<GameKind, string> = {
   chess: 'Chess',
 }
 const GAME_KINDS: GameKind[] = ['tic-tac-toe', 'checkers', 'chess']
+/** What the "Start a live match" launcher offers: boards + the mystery (the
+ *  runtime seats the owner's own agent as opponent/GM — see createMatch.ts). */
+const LAUNCH_KINDS: LaunchableGame[] = [...GAME_KINDS, 'mystery']
+const LAUNCH_TITLES: Record<LaunchableGame, string> = {
+  ...GAME_TITLES,
+  mystery: 'Mystery',
+}
 
 function asGameKind(v: unknown): GameKind {
   return v === 'checkers' || v === 'chess' ? v : 'tic-tac-toe'
@@ -183,7 +190,7 @@ function GameRoomInner({
   // the game — rendering a guessed board first would flash the wrong one.
   const [hasState, setHasState] = useState(!live)
   // "New game" launcher: which game is mid-create (disables the row).
-  const [creating, setCreating] = useState<GameKind | null>(null)
+  const [creating, setCreating] = useState<LaunchableGame | null>(null)
 
   const clientRef = useRef<GameClient | null>(null)
   const chatSeq = useRef(0)
@@ -290,7 +297,7 @@ function GameRoomInner({
   }
   const onNewGame = () => setGeneration(g => g + 1)
 
-  const onCreateMatch = async (kind: GameKind) => {
+  const onCreateMatch = async (kind: LaunchableGame) => {
     if (creating) return
     setCreating(kind)
     const res = await createLiveMatch(kind)
@@ -425,18 +432,18 @@ function GameRoomInner({
           {creating ? 'Creating match…' : 'Start a live match'}
         </Text>
         <View style={[a.flex_row, a.gap_sm]}>
-          {GAME_KINDS.map(kind => (
+          {LAUNCH_KINDS.map(kind => (
             <Button
               key={kind}
               testID={`newMatch-${kind}`}
-              label={`New live ${GAME_TITLES[kind]} match`}
+              label={`New live ${LAUNCH_TITLES[kind]} match`}
               color="secondary"
               size="small"
               disabled={creating !== null}
               onPress={() => {
                 void onCreateMatch(kind)
               }}>
-              <ButtonText>{GAME_TITLES[kind]}</ButtonText>
+              <ButtonText>{LAUNCH_TITLES[kind]}</ButtonText>
             </Button>
           ))}
         </View>

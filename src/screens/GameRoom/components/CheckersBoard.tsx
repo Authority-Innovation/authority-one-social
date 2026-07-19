@@ -59,7 +59,11 @@ export function CheckersBoard({
   const [selected, setSelected] = useState<number | null>(null)
   const {hint, flashHint} = useFlashHint()
   const over = ctx.gameover ?? null
-  const nameOf = (id: string) => players.find(p => p.id === id)?.name ?? id
+  // NEVER render a raw seat id ("1 is thinking…"): an unfilled seat gets its
+  // own truthful status below; any other unnamed seat reads as "Player N".
+  const seatFilled = (id: string) => players.some(p => p.id === id)
+  const nameOf = (id: string) =>
+    players.find(p => p.id === id)?.name ?? `Player ${Number(id) + 1}`
 
   const myTurn = hotSeat || (seat !== null && seat === ctx.currentPlayer)
   const interactive = over === null && myTurn
@@ -89,11 +93,15 @@ export function CheckersBoard({
       : "It's a draw."
     : G.mustContinueFrom !== null && myTurn
       ? 'Keep jumping!'
-      : isYou(ctx.currentPlayer)
-        ? 'Your turn'
-        : seat !== null && !myTurn
-          ? `${nameOf(ctx.currentPlayer)} is thinking…`
-          : `${nameOf(ctx.currentPlayer)}'s turn`
+      : !seatFilled(ctx.currentPlayer)
+        ? // The turn sits on a seat NOBODY holds — say so; implying a
+          // nonexistent opponent is "thinking" hides a hung match.
+          'Waiting for a player to join…'
+        : isYou(ctx.currentPlayer)
+          ? 'Your turn'
+          : seat !== null && !myTurn
+            ? `${nameOf(ctx.currentPlayer)} is thinking…`
+            : `${nameOf(ctx.currentPlayer)}'s turn`
 
   // Persistent one-line guidance under the status; a transient tap hint
   // (why the tap did nothing) takes precedence while it is up. "You" flips
@@ -116,7 +124,9 @@ export function CheckersBoard({
       flashHint(
         seat === null
           ? 'You’re watching this match'
-          : `Waiting for ${nameOf(ctx.currentPlayer)} — it’s their turn`,
+          : !seatFilled(ctx.currentPlayer)
+            ? 'No opponent yet — waiting for someone to join'
+            : `Waiting for ${nameOf(ctx.currentPlayer)} — it’s their turn`,
       )
       return
     }

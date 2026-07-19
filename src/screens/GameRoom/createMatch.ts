@@ -17,8 +17,18 @@ export interface CreateMatchResult {
   error?: string
 }
 
+/** What the in-app launcher can start: the board games plus the mystery. */
+export type LaunchableGame = GameKind | 'mystery'
+
+/**
+ * The body deliberately carries NO `agent`: the runtime seats the caller's
+ * OWN agent as opponent/GM by default (resolved server-side from the owner
+ * bearer — the client never guesses names or personas) and wires the match
+ * to report its result back to the owner. Sending `agent: null` would
+ * instead create a 2-human match with an open second seat.
+ */
 export async function createLiveMatch(
-  game: GameKind,
+  game: LaunchableGame,
   baseUrl = GAME_SERVER_BASE_URL,
 ): Promise<CreateMatchResult> {
   try {

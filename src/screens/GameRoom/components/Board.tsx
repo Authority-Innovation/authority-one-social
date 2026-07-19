@@ -39,7 +39,11 @@ export function Board({
 }) {
   const t = useTheme()
   const over = ctx.gameover ?? null
-  const nameOf = (id: string) => players.find(p => p.id === id)?.name ?? id
+  // NEVER render a raw seat id: an unfilled seat gets its own truthful status
+  // below; any other unnamed seat reads as "Player N".
+  const seatFilled = (id: string) => players.some(p => p.id === id)
+  const nameOf = (id: string) =>
+    players.find(p => p.id === id)?.name ?? `Player ${Number(id) + 1}`
 
   // "You" gets its own grammar ("Your turn", "You win") — the viewer's row in
   // the mock roster is literally named that when signed out.
@@ -49,9 +53,11 @@ export function Board({
         ? `You win! (${markOf(over.winner as Cell)})`
         : `${nameOf(over.winner)} (${markOf(over.winner as Cell)}) wins!`
       : "It's a draw."
-    : nameOf(ctx.currentPlayer) === 'You'
-      ? `Your turn — ${markOf(ctx.currentPlayer as Cell)}`
-      : `${nameOf(ctx.currentPlayer)}'s turn — ${markOf(ctx.currentPlayer as Cell)}`
+    : !seatFilled(ctx.currentPlayer)
+      ? 'Waiting for a player to join…'
+      : nameOf(ctx.currentPlayer) === 'You'
+        ? `Your turn — ${markOf(ctx.currentPlayer as Cell)}`
+        : `${nameOf(ctx.currentPlayer)}'s turn — ${markOf(ctx.currentPlayer as Cell)}`
 
   const cellSize = Math.floor(boardSize / 3)
 
