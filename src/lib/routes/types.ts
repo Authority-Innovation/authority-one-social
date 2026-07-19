@@ -22,6 +22,10 @@ export type CommonNavigatorParams = {
   ForYou: undefined
   // Authority One: multi-chat (threads + groups).
   ChatList: undefined
+  // Authority One: Game Room — split game + chat screen (tic-tac-toe first).
+  // matchId omitted = the local lobby match; a live match id once the
+  // GameMatchDO runtime lands.
+  GameRoom: {matchId?: string} | undefined
   NewGroup: undefined
   // Authority One: create a new agent under the logged-in owner (POST /app/agents).
   NewAgent: undefined

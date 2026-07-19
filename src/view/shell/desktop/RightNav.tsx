@@ -54,7 +54,10 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
   const kawaii = useKawaiiMode()
   const gutters = useGutters(['base', 0, 'base', 'wide'])
   const isSearchScreen = routeName === 'Search'
-  const isMessagesRelatedScreen = routeName.startsWith('Messages')
+  // GameRoom gets the same immersive treatment as Messages: its wide split
+  // occupies the right column's room (see LeftNav's isWideSplitScreen).
+  const isWideSplitScreen =
+    routeName.startsWith('Messages') || routeName === 'GameRoom'
   const webqueryParams = useWebQueryParams()
   const searchQuery = webqueryParams?.q
   const showExploreScreenDuplicatedContent =
@@ -62,7 +65,7 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
   const {rightNavVisible, centerColumnOffset, leftNavMinimal} =
     useLayoutBreakpoints()
 
-  if (!rightNavVisible || isMessagesRelatedScreen) {
+  if (!rightNavVisible || isWideSplitScreen) {
     return null
   }
 

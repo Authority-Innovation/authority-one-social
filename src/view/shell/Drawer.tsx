@@ -45,6 +45,7 @@ import {
 } from '#/components/icons/Bell'
 import {Bookmark, BookmarkFilled} from '#/components/icons/Bookmark'
 import {BulletList_Stroke2_Corner0_Rounded as List} from '#/components/icons/BulletList'
+import {GameController_Stroke2_Corner0_Rounded as GameController} from '#/components/icons/GameController'
 import {
   Hashtag_Filled_Corner0_Rounded as HashtagFilled,
   Hashtag_Stroke2_Corner0_Rounded as Hashtag,
@@ -298,6 +299,11 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     setDrawerOpen(false)
   }, [navigation, setDrawerOpen])
 
+  const onPressGameRoom = useCallback(() => {
+    navigation.navigate('GameRoom')
+    setDrawerOpen(false)
+  }, [navigation, setDrawerOpen])
+
   const onPressBookmarks = useCallback(() => {
     ax.metric('nav:click', {item: 'saved', surface: 'drawer'})
     navigation.navigate('Bookmarks')
@@ -371,6 +377,7 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
             <YourAgentsMenuItems />
             <ChatsMenuItem onPress={onPressChats} />
             <ForYouMenuItem onPress={onPressForYou} />
+            <GameRoomMenuItem onPress={onPressGameRoom} />
             <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
             <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
             <ChatMenuItem isActive={isAtMessages} onPress={onPressMessages} />
@@ -397,6 +404,7 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
             <YourAgentsMenuItems />
             <ChatsMenuItem onPress={onPressChats} />
             <ForYouMenuItem onPress={onPressForYou} />
+            <GameRoomMenuItem onPress={onPressGameRoom} />
             <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
             <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
             <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
@@ -704,6 +712,20 @@ let ForYouMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
   )
 }
 ForYouMenuItem = memo(ForYouMenuItem)
+
+let GameRoomMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
+  const t = useTheme()
+  // Custom (non-Bluesky) item: plain literal so it never depends on the compiled
+  // Lingui catalog (which would otherwise render as a raw message ID).
+  return (
+    <MenuItem
+      icon={<GameController style={[t.atoms.text]} width={iconWidth} />}
+      label="Game Room"
+      onPress={onPress}
+    />
+  )
+}
+GameRoomMenuItem = memo(GameRoomMenuItem)
 
 let BookmarksMenuItem = ({
   isActive,

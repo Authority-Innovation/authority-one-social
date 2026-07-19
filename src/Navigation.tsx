@@ -83,6 +83,7 @@ import {NewGroupScreen} from '#/screens/Chats/NewGroupScreen'
 import {SharedPreferencesTesterScreen} from '#/screens/E2E/SharedPreferencesTesterScreen'
 import {FindContactsFlowScreen} from '#/screens/FindContactsFlowScreen'
 import {ForYouScreen} from '#/screens/ForYou'
+import {GameRoomScreen} from '#/screens/GameRoom'
 import HashtagScreen from '#/screens/Hashtag'
 import {LogScreen} from '#/screens/Log'
 import {MessagesScreen} from '#/screens/Messages/ChatList'
@@ -218,6 +219,11 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="ForYou"
         getComponent={() => ForYouScreen}
         options={{title: title(msg`For You`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="GameRoom"
+        getComponent={() => GameRoomScreen}
+        options={{title: title(msg`Game Room`), requireAuth: true}}
       />
       <Stack.Screen
         name="Lists"

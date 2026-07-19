@@ -66,6 +66,9 @@ export const router = new Router<AllNavigatableRoutes>({
   GroupConversations: '/settings/agents/groups',
   AgentHub: '/agents/:agent',
   ChatList: '/chats',
+  // Plain path FIRST (same pattern as PersonaSettings): URL building picks the
+  // first form; a match id rides the second.
+  GameRoom: ['/game', '/game/:matchId'],
   NewGroup: '/chats/new-group',
   NewAgent: '/chats/new-agent',
   GroupManage: '/chats/group/:threadId',

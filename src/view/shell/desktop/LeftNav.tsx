@@ -55,6 +55,7 @@ import {
 import {type Props as SVGIconProps} from '#/components/icons/common'
 import {DotGrid3x1_Stroke2_Corner0_Rounded as EllipsisIcon} from '#/components/icons/DotGrid'
 import {EditBig_Stroke2_Corner2_Rounded as EditBigIcon} from '#/components/icons/EditBig'
+import {GameController_Stroke2_Corner0_Rounded as GameControllerIcon} from '#/components/icons/GameController'
 import {
   Hashtag_Filled_Corner0_Rounded as HashtagFilledIcon,
   Hashtag_Stroke2_Corner0_Rounded as HashtagIcon,
@@ -645,12 +646,16 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
   // way to thread this data through because of the view hierarchy, so just check the route name
   const isMessagesRelatedScreen =
     routeName.startsWith('Messages') && aa.state.access === aa.Access.Full
+  // GameRoom's wide split needs the same immersive treatment as the Messages
+  // split view: minimal left nav (and the extra left shift below) so its
+  // two-column layout has room beside the fixed nav.
+  const isWideSplitScreen = isMessagesRelatedScreen || routeName === 'GameRoom'
   const {leftNavMinimal: leftNavMinimalBreakpoint, centerColumnOffset} =
     useLayoutBreakpoints()
   const numUnreadNotifications = useUnreadNotifications()
   const numUnreadMessages = useUnreadMessageCount()
 
-  const leftNavMinimal = isMessagesRelatedScreen || leftNavMinimalBreakpoint
+  const leftNavMinimal = isWideSplitScreen || leftNavMinimalBreakpoint
 
   if (!hasSession && !gtMobile) {
     return null
@@ -677,7 +682,7 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
               translateX:
                 -(CENTER_COLUMN_WIDTH / 2) +
                 (centerColumnOffset ? CENTER_COLUMN_OFFSET : 0) +
-                (isMessagesRelatedScreen && !leftNavMinimalBreakpoint
+                (isWideSplitScreen && !leftNavMinimalBreakpoint
                   ? LEFT_NAV_MINIMAL_WIDTH - LEFT_NAV_STANDARD_WIDTH
                   : 0),
             },
@@ -717,6 +722,15 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
             icons={{
               inactive: HashtagIcon,
               active: HashtagFilledIcon,
+            }}
+          />
+          <NavItem
+            label="Game Room"
+            href="/game"
+            minimal={leftNavMinimal}
+            icons={{
+              inactive: GameControllerIcon,
+              active: GameControllerIcon,
             }}
           />
           <View style={[a.py_sm]}>
