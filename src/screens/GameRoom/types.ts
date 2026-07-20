@@ -5,16 +5,26 @@
  */
 import {type CheckersG, type CheckersMove, type CheckersPiece} from './checkers'
 import {type ChessG, type ChessMove} from './chess'
+import {type ConnectFourG, type ConnectFourMove} from './connectFour'
 import {type TicTacToeG} from './tictactoe'
 
-export type {CheckersG, CheckersMove, CheckersPiece, ChessG, ChessMove}
+export type {
+  CheckersG,
+  CheckersMove,
+  CheckersPiece,
+  ChessG,
+  ChessMove,
+  ConnectFourG,
+  ConnectFourMove,
+}
 
 /** Which board game a match plays. Story matches never carry a board G. */
-export type GameKind = 'tic-tac-toe' | 'checkers' | 'chess'
+export type GameKind = 'tic-tac-toe' | 'checkers' | 'chess' | 'connect-four'
 
 /** A move envelope. Tic-tac-toe uses {type:'place', args:{cell: 0-8}};
  *  checkers {type:'move', args:{from,to}} (board indices); chess
- *  {type:'move', args:{from:'e2', to:'e4', promotion?}}. */
+ *  {type:'move', args:{from:'e2', to:'e4', promotion?}}; connect four
+ *  {type:'drop', args:{col: 0-6}}. */
 export interface GameMove {
   type: string
   args?: Record<string, unknown>
@@ -29,6 +39,7 @@ export type GameG =
   | ({kind: 'tic-tac-toe'} & TicTacToeG)
   | ({kind: 'checkers'; legalMoves: CheckersMove[]} & CheckersG)
   | ({kind: 'chess'; legalMoves: ChessMove[]} & ChessG)
+  | ({kind: 'connect-four'; legalMoves: ConnectFourMove[]} & ConnectFourG)
 
 export interface PlayerInfo {
   id: string

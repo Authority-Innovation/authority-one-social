@@ -13,6 +13,8 @@
  *     {t: 'move', move: {type: string, args: object}}   // tic-tac-toe: {type:'place', args:{cell:0-8}}
  *                                        // checkers: {type:'move', args:{from,to}} (board indices 0-63)
  *                                        // chess:    {type:'move', args:{from:'e2', to:'e4', promotion?}}
+ *                                        // connect four: {type:'drop', args:{col:0-6}} (the server
+ *                                        //               decides which row the disc lands in)
  *     {t: 'chat', text: string}
  *     {t: 'choice', id: string}          // STORY MODE: pick an authored branch (proposed v1 story ext)
  *
@@ -27,9 +29,13 @@
  *                                        //                 [{from,to,captures?}] for the side to move
  *                                        //   chess:       {fen, check?, lastMove?} + legalMoves
  *                                        //                 [{from,to,promotion?}] (algebraic squares)
+ *                                        //   connect four: {board:[42 x (null|0|1)], row 0 at the TOP
+ *                                        //                 (idx = row*7+col), lastMove?: {row,col},
+ *                                        //                 winningLine?: [i,i,i,i]} + legalMoves
+ *                                        //                 [{col}] for the side to move
  *                                        // `game` names the match's game; when absent the client
  *                                        // infers it from the G shape (fen → chess, 64 board →
- *                                        // checkers, else tic-tac-toe)
+ *                                        // checkers, 42 board → connect four, else tic-tac-toe)
  *     {t: 'chat', from, name, text, ts}  // from: '0'|'1'|'agent'|null (spectator)
  *     {t: 'players', players}            // presence roster changes
  *     {t: 'gameover', winner}            // winning playerID, or null for a draw
@@ -42,6 +48,7 @@ import {createLiveGameClient} from './liveGameClient'
 import {MOCK_AGENT_ID, MOCK_AGENT_NAME} from './mockAgent'
 import {createMockCheckersClient} from './mockCheckersClient'
 import {createMockChessClient} from './mockChessClient'
+import {createMockConnectFourClient} from './mockConnectFourClient'
 import {createMockStoryClient} from './mockStoryClient'
 import {applyPlace, gameoverOf, initialG} from './tictactoe'
 import {
@@ -88,6 +95,9 @@ export function createGameClient(
   }
   if (opts.game === 'chess') {
     return createMockChessClient(opts)
+  }
+  if (opts.game === 'connect-four') {
+    return createMockConnectFourClient(opts)
   }
   return createMockGameClient(opts)
 }

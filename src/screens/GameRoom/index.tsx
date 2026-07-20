@@ -22,7 +22,9 @@ import {Board} from './components/Board'
 import {ChatLane} from './components/ChatLane'
 import {CheckersBoard} from './components/CheckersBoard'
 import {ChessBoard} from './components/ChessBoard'
+import {ConnectFourBoard} from './components/ConnectFourBoard'
 import {ScenePane} from './components/ScenePane'
+import {initialConnectFourG} from './connectFour'
 import {createLiveMatch, type LaunchableGame} from './createMatch'
 import {
   createGameClient,
@@ -51,8 +53,14 @@ const GAME_TITLES: Record<GameKind, string> = {
   'tic-tac-toe': 'Tic-tac-toe',
   checkers: 'Checkers',
   chess: 'Chess',
+  'connect-four': 'Connect Four',
 }
-const GAME_KINDS: GameKind[] = ['tic-tac-toe', 'checkers', 'chess']
+const GAME_KINDS: GameKind[] = [
+  'tic-tac-toe',
+  'checkers',
+  'chess',
+  'connect-four',
+]
 /** What the "Start a live match" launcher offers: boards + the mystery (the
  *  runtime seats the owner's own agent as opponent/GM — see createMatch.ts). */
 const LAUNCH_KINDS: LaunchableGame[] = [...GAME_KINDS, 'mystery']
@@ -62,7 +70,9 @@ const LAUNCH_TITLES: Record<LaunchableGame, string> = {
 }
 
 function asGameKind(v: unknown): GameKind {
-  return v === 'checkers' || v === 'chess' ? v : 'tic-tac-toe'
+  return v === 'checkers' || v === 'chess' || v === 'connect-four'
+    ? v
+    : 'tic-tac-toe'
 }
 
 /** The pre-first-frame state for a room of this game (the mocks and the live
@@ -79,6 +89,9 @@ function initialAppG(kind: GameKind): GameG {
       lastMove: null,
       legalMoves: [],
     }
+  }
+  if (kind === 'connect-four') {
+    return {kind, ...initialConnectFourG(), legalMoves: []}
   }
   return {kind, ...initialG()}
 }
@@ -377,6 +390,20 @@ function GameRoomInner({
           hotSeat={!live}
           boardSize={boardSize}
           onMove={(from, to) => sendMove({type: 'move', args: {from, to}})}
+          onNewGame={live ? undefined : onNewGame}
+        />
+      )
+    }
+    if (G.kind === 'connect-four') {
+      return (
+        <ConnectFourBoard
+          G={G}
+          ctx={ctx}
+          players={players}
+          seat={seat}
+          hotSeat={!live}
+          boardSize={boardSize}
+          onDrop={col => sendMove({type: 'drop', args: {col}})}
           onNewGame={live ? undefined : onNewGame}
         />
       )

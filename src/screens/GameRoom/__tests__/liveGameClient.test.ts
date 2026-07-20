@@ -5,6 +5,7 @@ import {
   gameWsUrl,
   mapWireCheckers,
   mapWireChess,
+  mapWireConnectFour,
   mapWireGameFrame,
   mapWireGameover,
   mapWirePlayers,
@@ -169,8 +170,12 @@ describe('per-game wire mapping', () => {
   it('detects the game from an explicit game field or the G shape', () => {
     expect(wireGameKind({game: 'chess'})).toBe('chess')
     expect(wireGameKind({game: 'checkers'})).toBe('checkers')
+    expect(wireGameKind({game: 'connect-four'})).toBe('connect-four')
     expect(wireGameKind({G: {fen: 'x'}})).toBe('chess')
     expect(wireGameKind({G: {board: CHECKERS_BOARD}})).toBe('checkers')
+    expect(wireGameKind({G: {board: Array(42).fill(null)}})).toBe(
+      'connect-four',
+    )
     expect(wireGameKind({G: {cells: Array(9).fill(null)}})).toBe('tic-tac-toe')
     expect(wireGameKind({})).toBe('tic-tac-toe')
   })
@@ -235,6 +240,65 @@ describe('per-game wire mapping', () => {
     expect(ctx.gameover).toEqual({winner: '0'})
   })
 
+  it('maps a connect-four state frame (board, lastMove, winningLine, legalMoves)', () => {
+    const board = Array(42).fill(null)
+    board[5 * 7 + 3] = 0
+    board[4 * 7 + 3] = 1
+    const {G, ctx} = mapWireConnectFour(
+      {board, lastMove: {row: 4, col: 3}, winningLine: null},
+      [
+        {col: 0},
+        {col: 6},
+        {col: -1}, // out of range — dropped
+        {col: 'x'}, // malformed — dropped
+      ],
+      {currentPlayer: '0'},
+    )
+    if (G.kind !== 'connect-four') throw new Error('expected connect-four G')
+    expect(G.board).toHaveLength(42)
+    expect(G.board[5 * 7 + 3]).toBe(0)
+    expect(G.board[4 * 7 + 3]).toBe(1)
+    expect(G.lastMove).toEqual({row: 4, col: 3})
+    expect(G.winningLine).toBeNull()
+    expect(G.legalMoves).toEqual([{col: 0}, {col: 6}])
+    expect(ctx.currentPlayer).toBe('0')
+    expect(ctx.gameover).toBeNull()
+  })
+
+  it('normalizes malformed connect-four cells, lastMove, and winningLine', () => {
+    const {G} = mapWireConnectFour(
+      {
+        board: [2, '0', 1, 'junk', 0],
+        lastMove: {row: 'x', col: 1},
+        winningLine: [38, 39, 40], // not four cells — dropped
+      },
+      undefined,
+      {},
+    )
+    if (G.kind !== 'connect-four') throw new Error('expected connect-four G')
+    expect(G.board[0]).toBeNull()
+    expect(G.board[1]).toBeNull()
+    expect(G.board[2]).toBe(1)
+    expect(G.board[3]).toBeNull()
+    expect(G.board[4]).toBe(0)
+    expect(G.lastMove).toBeNull()
+    expect(G.winningLine).toBeNull()
+    expect(G.legalMoves).toEqual([])
+  })
+
+  it('maps a winning connect-four frame with the four cells', () => {
+    const board = Array(42).fill(null)
+    for (const i of [38, 39, 40, 41]) board[i] = 1
+    const {G, ctx} = mapWireConnectFour(
+      {board, lastMove: {row: 5, col: 6}, winningLine: [38, 39, 40, 41]},
+      [],
+      {currentPlayer: '0', gameover: {winner: '1'}},
+    )
+    if (G.kind !== 'connect-four') throw new Error('expected connect-four G')
+    expect(G.winningLine).toEqual([38, 39, 40, 41])
+    expect(ctx.gameover).toEqual({winner: '1'})
+  })
+
   it('mapWireGameFrame routes to the right mapper and tags the kind', () => {
     expect(
       mapWireGameFrame({G: {cells: Array(9).fill(null)}, ctx: {}}).G.kind,
@@ -243,6 +307,12 @@ describe('per-game wire mapping', () => {
       mapWireGameFrame({game: 'checkers', G: {board: []}, ctx: {}}).G.kind,
     ).toBe('checkers')
     expect(mapWireGameFrame({G: {fen: 'x'}, ctx: {}}).G.kind).toBe('chess')
+    expect(
+      mapWireGameFrame({G: {board: Array(42).fill(null)}, ctx: {}}).G.kind,
+    ).toBe('connect-four')
+    expect(
+      mapWireGameFrame({game: 'connect-four', G: {board: []}, ctx: {}}).G.kind,
+    ).toBe('connect-four')
   })
 })
 
@@ -504,6 +574,31 @@ describe('createLiveGameClient', () => {
     expect(ws.sent[ws.sent.length - 1]).toEqual({
       t: 'move',
       move: {type: 'move', args: {from: 42, to: 33}},
+    })
+  })
+
+  it('handles a live connect-four state frame and serializes drop moves', () => {
+    const h = connect()
+    const ws = FakeWebSocket.latest()
+    ws.serverOpen()
+    const board = Array(42).fill(null)
+    board[5 * 7 + 3] = 0
+    ws.serverSend({
+      t: 'state',
+      game: 'connect-four',
+      G: {board, lastMove: {row: 5, col: 3}, winningLine: null},
+      ctx: {currentPlayer: '1'},
+      legalMoves: [{col: 0}, {col: 3}],
+      players: {'0': {name: 'Austin', connected: true}},
+    })
+    const state = h.states[h.states.length - 1]
+    const G = state.G as {kind: string; legalMoves: unknown[]}
+    expect(G.kind).toBe('connect-four')
+    expect(G.legalMoves).toEqual([{col: 0}, {col: 3}])
+    client!.sendMove({type: 'drop', args: {col: 3}})
+    expect(ws.sent[ws.sent.length - 1]).toEqual({
+      t: 'move',
+      move: {type: 'drop', args: {col: 3}},
     })
   })
 

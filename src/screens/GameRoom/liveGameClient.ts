@@ -21,10 +21,16 @@ import {AGENT_RUNTIME_BASE_URL} from '#/lib/agent-runtime'
 import {logger} from '#/logger'
 import {CHECKERS_BOARD_SIZE, type CheckersCell} from './checkers'
 import {INITIAL_FEN} from './chess'
+import {
+  C4_COLS,
+  CONNECT_FOUR_BOARD_SIZE,
+  type ConnectFourCell,
+} from './connectFour'
 import {type Cell, type TicTacToeG} from './tictactoe'
 import {
   type CheckersMove,
   type ChessMove,
+  type ConnectFourMove,
   type GameChatMsg,
   type GameClient,
   type GameClientOptions,
@@ -60,6 +66,7 @@ export function wireGameKind(frame: {game?: unknown; G?: unknown}): GameKind {
   if (
     frame.game === 'chess' ||
     frame.game === 'checkers' ||
+    frame.game === 'connect-four' ||
     frame.game === 'tic-tac-toe'
   ) {
     return frame.game
@@ -68,6 +75,9 @@ export function wireGameKind(frame: {game?: unknown; G?: unknown}): GameKind {
   if (typeof G.fen === 'string') return 'chess'
   if (Array.isArray(G.board) && G.board.length === CHECKERS_BOARD_SIZE) {
     return 'checkers'
+  }
+  if (Array.isArray(G.board) && G.board.length === CONNECT_FOUR_BOARD_SIZE) {
+    return 'connect-four'
   }
   return 'tic-tac-toe'
 }
@@ -163,6 +173,60 @@ export function mapWireChess(
   }
 }
 
+/** Wire connect-four `G` ({board:[42 x (null|0|1)], lastMove?, winningLine?})
+ *  + frame legalMoves ([{col}]) + ctx → the app shape. PURE, defensive. */
+export function mapWireConnectFour(
+  G: unknown,
+  legalMoves: unknown,
+  ctx: unknown,
+): {G: GameG; ctx: GameCtx} {
+  const wire = (G ?? {}) as {
+    board?: unknown
+    lastMove?: unknown
+    winningLine?: unknown
+  }
+  const raw = Array.isArray(wire.board) ? wire.board : []
+  const board: ConnectFourCell[] = Array.from(
+    {length: CONNECT_FOUR_BOARD_SIZE},
+    (_, i) => (raw[i] === 0 || raw[i] === 1 ? (raw[i] as 0 | 1) : null),
+  )
+  const moves: ConnectFourMove[] = Array.isArray(legalMoves)
+    ? (legalMoves as Array<{col?: unknown}>)
+        .filter(
+          m =>
+            Number.isInteger(m?.col) &&
+            (m.col as number) >= 0 &&
+            (m.col as number) < C4_COLS,
+        )
+        .map(m => ({col: m.col as number}))
+    : []
+  const last = wire.lastMove as {row?: unknown; col?: unknown} | null
+  const line = Array.isArray(wire.winningLine)
+    ? wire.winningLine.filter(
+        (i): i is number =>
+          Number.isInteger(i) &&
+          (i as number) >= 0 &&
+          (i as number) < CONNECT_FOUR_BOARD_SIZE,
+      )
+    : []
+  const c = (ctx ?? {}) as {currentPlayer?: unknown; gameover?: unknown}
+  const currentPlayer = c.currentPlayer === '1' ? '1' : '0'
+  return {
+    G: {
+      kind: 'connect-four',
+      board,
+      currentPlayer,
+      lastMove:
+        last && Number.isInteger(last.row) && Number.isInteger(last.col)
+          ? {row: last.row as number, col: last.col as number}
+          : null,
+      winningLine: line.length === 4 ? line : null,
+      legalMoves: moves,
+    },
+    ctx: {currentPlayer, gameover: mapWireGameover(c.gameover)},
+  }
+}
+
 /** One wire state frame → the app's tagged GameG + ctx, whatever the game. */
 export function mapWireGameFrame(frame: {
   game?: unknown
@@ -177,6 +241,9 @@ export function mapWireGameFrame(frame: {
   }
   if (kind === 'checkers') {
     return mapWireCheckers(frame.G, frame.legalMoves, frame.ctx)
+  }
+  if (kind === 'connect-four') {
+    return mapWireConnectFour(frame.G, frame.legalMoves, frame.ctx)
   }
   const {G, ctx} = mapWireState(frame.G, frame.ctx)
   return {G: {kind: 'tic-tac-toe', ...G}, ctx}
