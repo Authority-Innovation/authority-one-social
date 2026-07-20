@@ -261,7 +261,13 @@ function GameRoomInner({
         },
         onError: err => {
           // Gentle surface: a transient line in the game pane, never a crash.
-          setErrorText(err.message || err.code)
+          // A refused rematch gets a human line (the raw code would read as
+          // debug output); the server's own message wins when it sends one.
+          setErrorText(
+            err.code === 'rematch-not-allowed'
+              ? err.message || 'A rematch can only start once the game is over.'
+              : err.message || err.code,
+          )
           if (errorTimer.current) clearTimeout(errorTimer.current)
           // A rejected guest token means this link cannot join AT ALL
           // (tampered or, more likely, expired) — keep that on screen
@@ -440,46 +446,32 @@ function GameRoomInner({
     )
   }
 
-  // HONEST endgame affordance for LIVE board rooms: the server has no reset,
-  // so a finished match is final — the agent cannot restart it from chat, and
-  // the UI must not imply anyone can. State that plainly, then offer only what
-  // is real: signed-in viewers can start a FRESH match (same create path as
-  // the lobby launcher); a guest's token is scoped to this one match, so their
-  // truthful next step is a fresh link from their host.
+  // Endgame affordance for LIVE board rooms: the server supports a REAL
+  // in-place rematch ({t:'rematch'} — same matchID, same guest token, fresh
+  // state frame), so game over shows one obvious Play again button. A big
+  // deliberate button, NOT tap-anywhere-to-restart: a finished board is a
+  // result people are still reading, and a stray tap must not wipe it. The
+  // fresh state frame clears the board + highlights by replacing G/ctx
+  // wholesale; a refused rematch surfaces through the onError line above.
   const panelMode = gameoverPanelMode({
     live,
     storyMode,
     hasState,
     gameover: !!ctx.gameover,
-    isGuest,
+    seated: seat !== null,
   })
   const gameoverPanel =
-    panelMode === 'none' ? null : (
-      <View style={[a.align_center, a.gap_xs, a.pt_sm, a.px_lg]}>
-        <Text
-          testID="gameoverFinalText"
-          style={[a.text_sm, a.text_center, t.atoms.text_contrast_medium]}>
-          {panelMode === 'guest-hint'
-            ? 'This match is over — it can’t be restarted. Ask for a fresh link to play again.'
-            : 'This match is over — it can’t be restarted.'}
-        </Text>
-        {panelMode === 'new-match' ? (
-          <Button
-            testID="gameoverNewMatchBtn"
-            label={`Start a new ${GAME_TITLES[G.kind]} match`}
-            color="primary"
-            size="small"
-            disabled={creating !== null}
-            onPress={() => {
-              void onCreateMatch(G.kind)
-            }}>
-            <ButtonText>
-              {creating
-                ? 'Creating match…'
-                : `New ${GAME_TITLES[G.kind]} match`}
-            </ButtonText>
-          </Button>
-        ) : null}
+    panelMode !== 'rematch' ? null : (
+      <View style={[a.align_center, a.gap_xs, a.pt_sm, a.px_lg, a.w_full]}>
+        <Button
+          testID="gameoverRematchBtn"
+          label="Play again — rematch on this board"
+          color="primary"
+          size="large"
+          style={[a.w_full, {maxWidth: 320}]}
+          onPress={() => clientRef.current?.sendRematch?.()}>
+          <ButtonText>Play again</ButtonText>
+        </Button>
       </View>
     )
 

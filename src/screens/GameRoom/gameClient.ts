@@ -17,6 +17,10 @@
  *                                        //               decides which row the disc lands in)
  *     {t: 'chat', text: string}
  *     {t: 'choice', id: string}          // STORY MODE: pick an authored branch (proposed v1 story ext)
+ *     {t: 'rematch'}                     // reset THIS match in place (only when the game is over);
+ *                                        // same matchID + guest token, server broadcasts a fresh
+ *                                        // state frame (first mover alternates) or answers the
+ *                                        // sender with {t:'error', code:'rematch-not-allowed'}
  *
  *   Server → client:
  *     {t: 'state', G, ctx, players, legalMoves?, game?}

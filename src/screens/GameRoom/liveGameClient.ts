@@ -549,5 +549,12 @@ export function createLiveGameClient(opts: LiveGameClientOptions): GameClient {
     sendChoice(id: string) {
       send({t: 'choice', id})
     },
+
+    sendRematch() {
+      // Reset-in-place: same matchID (so a guest's match-scoped token stays
+      // valid), no navigation — the server answers with a fresh state frame
+      // (or a rematch-not-allowed error, surfaced via the onError path).
+      send({t: 'rematch'})
+    },
   }
 }

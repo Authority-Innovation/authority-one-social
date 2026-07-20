@@ -102,6 +102,7 @@ export type ClientMsg =
   | {t: 'move'; move: GameMove}
   | {t: 'chat'; text: string}
   | {t: 'choice'; id: string}
+  | {t: 'rematch'}
 
 /** Server → client frames (app-side shapes; the live client maps wire G /
  *  legalMoves / players). */
@@ -153,4 +154,9 @@ export interface GameClient {
   sendMove: (move: GameMove) => void
   sendChat: (text: string) => void
   sendChoice: (id: string) => void
+  /** Ask the server to reset THIS match in place ({t:'rematch'}) — same
+   *  matchID, same guest token, fresh {t:'state'} broadcast on success,
+   *  {code:'rematch-not-allowed'} error unless the game is over. LIVE
+   *  transport only; the mocks reset via their local new-game control. */
+  sendRematch?: () => void
 }

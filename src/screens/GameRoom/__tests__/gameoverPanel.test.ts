@@ -5,16 +5,21 @@ const base = {
   storyMode: false,
   hasState: true,
   gameover: true,
-  isGuest: false,
+  seated: true,
 }
 
 describe('gameoverPanelMode', () => {
-  it('offers a real new-match create to a signed-in viewer of a finished live match', () => {
-    expect(gameoverPanelMode(base)).toBe('new-match')
+  it('offers the Play again rematch to a seated player of a finished live match', () => {
+    expect(gameoverPanelMode(base)).toBe('rematch')
   })
 
-  it('offers only the fresh-link hint to a guest (token is scoped to this one match)', () => {
-    expect(gameoverPanelMode({...base, isGuest: true})).toBe('guest-hint')
+  it('offers the rematch to guests too — their token survives a reset-in-place', () => {
+    // Guests hold seats like anyone else; only seatedness matters.
+    expect(gameoverPanelMode({...base, seated: true})).toBe('rematch')
+  })
+
+  it('shows nothing to spectators — a watcher must not wipe the players’ board', () => {
+    expect(gameoverPanelMode({...base, seated: false})).toBe('none')
   })
 
   it('shows nothing while the match is still running', () => {

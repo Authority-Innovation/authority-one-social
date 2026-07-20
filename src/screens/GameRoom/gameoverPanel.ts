@@ -1,32 +1,31 @@
 /**
- * What the game-over panel under a LIVE board can TRUTHFULLY offer. The live
- * server has no reset — a finished match is final, and the agent cannot
- * restart it from chat (asking produced confabulated "fresh board" replies,
- * found live 2026-07-20). So the panel states that plainly and offers only
- * real capabilities:
+ * What the game-over panel under a LIVE board offers. The server supports a
+ * REAL in-place rematch ({t:'rematch'} — same matchID, same guest token,
+ * fresh state frame, first mover alternates), so the panel's job is one
+ * obvious "Play again" button:
  *
- *   'new-match'  — signed-in viewers can CREATE a fresh live match (the same
- *                  POST /app/games the lobby launcher uses) and jump to it
- *   'guest-hint' — a guest's token is scoped to this one match; the only
- *                  honest next step is asking their host for a fresh link
- *   'none'       — nothing to show: match still running, no authoritative
- *                  state yet, a mock room (those have a real local reset via
- *                  the boards' own New game button), or story mode (the scene
- *                  pane owns its endgame flow)
+ *   'rematch' — the viewer holds a seat in a finished live board match;
+ *               show the prominent Play again button (guests included —
+ *               their match-scoped token survives a reset-in-place)
+ *   'none'    — nothing to show: match still running, no authoritative
+ *               state yet, spectating (a watcher shouldn't wipe the
+ *               players' finished board), a mock room (those have a real
+ *               local reset via the boards' own New game button), or story
+ *               mode (the scene pane owns its endgame flow)
  */
 export function gameoverPanelMode({
   live,
   storyMode,
   hasState,
   gameover,
-  isGuest,
+  seated,
 }: {
   live: boolean
   storyMode: boolean
   hasState: boolean
   gameover: boolean
-  isGuest: boolean
-}): 'none' | 'new-match' | 'guest-hint' {
-  if (!live || storyMode || !hasState || !gameover) return 'none'
-  return isGuest ? 'guest-hint' : 'new-match'
+  seated: boolean
+}): 'none' | 'rematch' {
+  if (!live || storyMode || !hasState || !gameover || !seated) return 'none'
+  return 'rematch'
 }

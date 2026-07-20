@@ -363,18 +363,55 @@ describe('createLiveGameClient', () => {
     expect(h.connections[h.connections.length - 1]).toBe('online')
   })
 
-  it('serializes move, chat, and choice frames per the contract', () => {
+  it('serializes move, chat, choice, and rematch frames per the contract', () => {
     connect()
     const ws = FakeWebSocket.latest()
     ws.serverOpen()
     client!.sendMove({type: 'place', args: {cell: 4}})
     client!.sendChat('  gg  ')
     client!.sendChoice('question-guests')
+    client!.sendRematch!()
     expect(ws.sent.slice(1)).toEqual([
       {t: 'move', move: {type: 'place', args: {cell: 4}}},
       {t: 'chat', text: 'gg'},
       {t: 'choice', id: 'question-guests'},
+      {t: 'rematch'},
     ])
+  })
+
+  it('a rematch resets in place: the fresh state frame clears gameover and highlights', () => {
+    const h = connect()
+    const ws = FakeWebSocket.latest()
+    ws.serverOpen()
+    // Finished connect-four board with a winning line…
+    ws.serverSend({
+      t: 'state',
+      game: 'connect-four',
+      G: {
+        board: Array.from({length: 42}, (_, i) => (i >= 38 ? 0 : null)),
+        lastMove: {row: 5, col: 3},
+        winningLine: [38, 39, 40, 41],
+      },
+      ctx: {currentPlayer: '0', gameover: {winner: '0'}},
+      players: {'0': {name: 'Elliott'}, '1': {name: 'Ada'}},
+      legalMoves: [],
+    })
+    expect(h.states[0].ctx.gameover).toEqual({winner: '0'})
+    // …then the post-rematch broadcast: empty board, no gameover, no highlights.
+    client!.sendRematch!()
+    ws.serverSend({
+      t: 'state',
+      game: 'connect-four',
+      G: {board: Array.from({length: 42}, () => null)},
+      ctx: {currentPlayer: '1'},
+      players: {'0': {name: 'Elliott'}, '1': {name: 'Ada'}},
+      legalMoves: [{col: 0}, {col: 1}],
+    })
+    const fresh = h.states[1]
+    expect(fresh.ctx.gameover).toBeNull()
+    expect(fresh.G).toMatchObject({lastMove: null, winningLine: null})
+    // First mover alternates server-side; the client just reflects ctx.
+    expect(fresh.ctx.currentPlayer).toBe('1')
   })
 
   it('re-dispatches chat, gameover, scene, and error frames', () => {
