@@ -35,11 +35,13 @@ import {
   type GameCtx,
   type GameG,
   type GameKind,
+  type GameSeries,
   type GameTransport,
   type PlayerInfo,
   type SceneFrame,
 } from './gameClient'
 import {gameoverPanelMode} from './gameoverPanel'
+import {seriesLine} from './series'
 import {initialG} from './tictactoe'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'GameRoom'>
@@ -195,6 +197,9 @@ function GameRoomInner({
   // seat or spectator); drives tap identity + chat attribution.
   const [seat, setSeat] = useState<string | null>(requestedSeat)
   const [scene, setScene] = useState<SceneFrame | null>(null)
+  // Rematch series (post-rematch state frames carry it): keeps the running
+  // score across games on this board.
+  const [series, setSeries] = useState<GameSeries | null>(null)
   const [sceneChosenId, setSceneChosenId] = useState<string | null>(null)
   const [errorText, setErrorText] = useState<string | null>(null)
   const [connection, setConnection] = useState<GameConnectionStatus | null>(
@@ -255,6 +260,7 @@ function GameRoomInner({
         // yet — the live room will use it for recap/social triggers.
         onGameover: () => {},
         onSeat: setSeat,
+        onSeries: setSeries,
         onScene: s => {
           setScene(s)
           setSceneChosenId(null)
@@ -536,6 +542,9 @@ function GameRoomInner({
     />
   )
 
+  // "Elliott 2 – 1 Bob · game 3" once a rematch has happened (round >= 2).
+  const seriesText = seriesLine(series, players)
+
   const gamePane = (boardSize: number) =>
     storyMode ? (
       <View style={[a.flex_1, a.w_full]}>
@@ -545,6 +554,13 @@ function GameRoomInner({
     ) : (
       <View style={[a.align_center, a.gap_sm]}>
         {statusStrip}
+        {seriesText ? (
+          <Text
+            testID="seriesLine"
+            style={[a.text_sm, t.atoms.text_contrast_medium]}>
+            {seriesText}
+          </Text>
+        ) : null}
         {board(boardSize)}
         {gameoverPanel}
         {guestDone}

@@ -39,6 +39,7 @@ import {
   type GameG,
   type GameKind,
   type GameMove,
+  type GameSeries,
   type PlayerInfo,
   type SceneFrame,
 } from './types'
@@ -268,6 +269,25 @@ export function mapWireState(
   }
 }
 
+/** Wire `series` ({round, firstMover?, score}) → GameSeries, or null when
+ *  absent/malformed. PURE, defensive — non-numeric score entries dropped. */
+export function mapWireSeries(series: unknown): GameSeries | null {
+  if (!series || typeof series !== 'object') return null
+  const s = series as {round?: unknown; firstMover?: unknown; score?: unknown}
+  if (!Number.isInteger(s.round) || (s.round as number) < 1) return null
+  const score: Record<string, number> = {}
+  if (s.score && typeof s.score === 'object' && !Array.isArray(s.score)) {
+    for (const [k, v] of Object.entries(s.score as Record<string, unknown>)) {
+      if (typeof v === 'number' && Number.isFinite(v)) score[k] = v
+    }
+  }
+  return {
+    round: s.round as number,
+    ...(typeof s.firstMover === 'string' ? {firstMover: s.firstMover} : {}),
+    score,
+  }
+}
+
 /** Wire ctx.gameover ({winner:"0"} | {draw:true}) → {winner|null}. PURE. */
 export function mapWireGameover(
   gameover: unknown,
@@ -397,6 +417,8 @@ export function createLiveGameClient(opts: LiveGameClientOptions): GameClient {
         reconnectAttempt = 0
         callbacks.onConnection?.('online')
         callbacks.onState(G, ctx, mapWirePlayers(frame.players))
+        const series = mapWireSeries(frame.series)
+        if (series) callbacks.onSeries?.(series)
         for (const text of pendingChat.splice(0)) {
           send({t: 'chat', text})
         }

@@ -78,6 +78,16 @@ export interface SceneFrame {
   choices?: SceneChoice[]
 }
 
+/** Running rematch series ({t:'state'} frames carry it after a rematch):
+ *  `round` counts games on this board (1 = the original match), `firstMover`
+ *  is the seat opening the current round (alternates), `score` is wins keyed
+ *  by playerID. */
+export interface GameSeries {
+  round: number
+  firstMover?: string
+  score: Record<string, number>
+}
+
 /** Server error frame payload (invalid move, bad seat, …). */
 export interface GameErrorMsg {
   code: string
@@ -131,6 +141,10 @@ export interface GameCallbacks {
   /** The seat this client actually holds (may differ from the requested one
    *  after a seat-taken fallback; null = spectating). */
   onSeat?: (playerID: string | null) => void
+  /** Rematch series update — fired only when a state frame carries `series`
+   *  (the post-rematch broadcast); between those frames the last value
+   *  stands. */
+  onSeries?: (series: GameSeries) => void
   /** Live transport connectivity, for a subtle "reconnecting" indicator. */
   onConnection?: (status: GameConnectionStatus) => void
 }
