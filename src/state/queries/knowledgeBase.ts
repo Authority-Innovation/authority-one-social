@@ -6,6 +6,8 @@ import {
   type KnowledgeDeleteResult,
   type KnowledgeFile,
   type KnowledgeFileToUpload,
+  type KnowledgeToggleResult,
+  setKnowledgeFileEnabled,
   uploadKnowledgeFile,
 } from '#/lib/agent-runtime'
 import {STALE} from '#/state/queries'
@@ -95,6 +97,57 @@ export function useUploadKnowledgeFileMutation(agent?: string) {
       return res
     },
     onSuccess: () => qc.invalidateQueries({queryKey}),
+  })
+}
+
+/**
+ * Switch one knowledge-base item on or off (PATCH /app/knowledge/{id}).
+ * Optimistic: the row flips immediately and is reverted if the call fails (the
+ * screen toasts the failure — never a silent no-op). Idempotent on the server:
+ * a `changed:false` response is a SUCCESS (the item was already in that state),
+ * not an error. The resolved result carries the runtime's user-displayable
+ * `message`, which the screen shows verbatim. A 409 code 'deleted' throws so
+ * the screen can say the item was deleted, not merely off.
+ */
+export function useSetKnowledgeEnabledMutation(agent?: string) {
+  const qc = useQueryClient()
+  const queryKey = createKnowledgeQueryKey(agent)
+  return useMutation<
+    KnowledgeToggleResult,
+    Error,
+    {id: string; enabled: boolean},
+    {previous?: KnowledgeFile[]}
+  >({
+    mutationFn: async ({id, enabled}) => {
+      const res = await setKnowledgeFileEnabled(id, enabled, agent)
+      if (!res.ok) {
+        if (res.signedOut)
+          throw new KnowledgeError(
+            'Please sign in to manage the knowledge base.',
+          )
+        throw new KnowledgeError(
+          res.error ?? 'Could not update the file.',
+          res.code,
+        )
+      }
+      return res
+    },
+    onMutate: async ({id, enabled}) => {
+      await qc.cancelQueries({queryKey})
+      const previous = qc.getQueryData<KnowledgeFile[] | undefined>(queryKey)
+      if (previous) {
+        qc.setQueryData(
+          queryKey,
+          previous.map(f => (f.id === id ? {...f, enabled} : f)),
+        )
+      }
+      return {previous}
+    },
+    onError: (_err, _vars, ctx) => {
+      // Revert the optimistic flip visibly; the screen toasts the reason.
+      if (ctx?.previous) qc.setQueryData(queryKey, ctx.previous)
+    },
+    onSettled: () => qc.invalidateQueries({queryKey}),
   })
 }
 

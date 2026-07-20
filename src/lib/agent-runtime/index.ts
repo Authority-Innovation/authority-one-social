@@ -119,8 +119,10 @@ export {
   type KnowledgeFileToUpload,
   type KnowledgeListResult,
   knowledgeRemovalMessage,
+  type KnowledgeToggleResult,
   type KnowledgeUploadResult,
   type KnowledgeUpstreamOutcome,
+  setKnowledgeFileEnabled,
   uploadKnowledgeFile,
 } from './knowledgeClient'
 export {

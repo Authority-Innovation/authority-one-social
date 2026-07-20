@@ -40,6 +40,8 @@ export interface KnowledgeFile {
   provisional: boolean
   /** True when the runtime truncated an oversize file (not used by the app path today). */
   truncated: boolean
+  /** False when the item is switched off (no recall/injection). Legacy rows read true. */
+  enabled: boolean
   /** Honest reason for a blocked/failed file (e.g. the PII-guard message); null when saved. */
   reason: string | null
   /** The created Mnemonic artifact id when the runtime surfaces one; may be null. */
@@ -96,6 +98,29 @@ export interface KnowledgeDeleteResult {
   error?: string
 }
 
+export interface KnowledgeToggleResult {
+  ok: boolean
+  /** The toggled slot id, echoed by the runtime. */
+  id?: string
+  /** The item's state AFTER the call, as the runtime reports it. */
+  enabled?: boolean
+  /** False when the item was already in the requested state (idempotent success). */
+  changed?: boolean
+  /** The slot's file name, echoed by the runtime. */
+  name?: string
+  /**
+   * The runtime's user-displayable outcome sentence — written to be shown
+   * VERBATIM. It is deliberately honest about what disabling does and doesn't
+   * do (some underlying events can't be hidden upstream), so the UI must show
+   * it rather than composing its own success copy.
+   */
+  message?: string
+  signedOut?: boolean
+  /** 'deleted' (409): the item was deleted, not merely off — surface clearly. */
+  code?: string
+  error?: string
+}
+
 function errorMessage(e: unknown): string | undefined {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
@@ -127,6 +152,7 @@ function normalizeFile(raw: unknown): KnowledgeFile | null {
     status,
     provisional: r.provisional === true,
     truncated: r.truncated === true,
+    enabled: r.enabled !== false,
     reason: str(r.reason) ?? null,
     artifactId: str(r.artifactId) ?? null,
   }
@@ -304,6 +330,68 @@ export async function deleteKnowledgeFile(
     }
   } catch (e) {
     logger.warn('knowledge: delete failed', {safeMessage: String(e)})
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
+  }
+}
+
+/**
+ * PATCH /app/knowledge/{id} — switch one slot on or off for the agent. Same
+ * auth/scoping as the other knowledge routes (`?agent=` optional). Idempotent:
+ * re-sending the current state resolves ok with `changed:false` — treat as
+ * success, not an error. A 409 with code 'deleted' means the item was deleted
+ * (not merely off). Typed result, never throws.
+ */
+export async function setKnowledgeFileEnabled(
+  id: string,
+  enabled: boolean,
+  agent?: string,
+): Promise<KnowledgeToggleResult> {
+  if (!id) return {ok: false, code: 'not-found', error: 'Missing file id.'}
+  let headers: Record<string, string> | null
+  try {
+    headers = await authHeaders()
+  } catch (e) {
+    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'auth error'}
+  }
+  if (!headers) return {ok: false, signedOut: true}
+  try {
+    const base = `${KNOWLEDGE_ENDPOINT}/${encodeURIComponent(id)}`
+    const url = agent ? `${base}?agent=${encodeURIComponent(agent)}` : base
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {...headers, 'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled}),
+    })
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok) {
+      const code = str(body.code)
+      if ((res.status === 401 || res.status === 403) && !code) {
+        return {ok: false, signedOut: true}
+      }
+      return {
+        ok: false,
+        signedOut: false,
+        code: code ?? (res.status === 404 ? 'not-found' : undefined),
+        error:
+          str(body.error) ?? str(body.message) ?? `Runtime error ${res.status}`,
+      }
+    }
+    return {
+      ok: body.ok === true,
+      signedOut: false,
+      id: str(body.id) ?? id,
+      enabled: typeof body.enabled === 'boolean' ? body.enabled : enabled,
+      changed: body.changed === true,
+      name: str(body.name),
+      message: str(body.message),
+      ...(body.ok === true ? {} : {error: str(body.error) ?? 'toggle failed'}),
+    }
+  } catch (e) {
+    logger.warn('knowledge: toggle failed', {safeMessage: String(e)})
     return {
       ok: false,
       signedOut: false,

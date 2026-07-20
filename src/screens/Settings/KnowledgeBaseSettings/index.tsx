@@ -17,11 +17,13 @@ import {
   KnowledgeError,
   useDeleteKnowledgeFileMutation,
   useKnowledgeFilesQuery,
+  useSetKnowledgeEnabledMutation,
   useUploadKnowledgeFileMutation,
 } from '#/state/queries/knowledgeBase'
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
+import * as Toggle from '#/components/forms/Toggle'
 import {CircleCheck_Stroke2_Corner0_Rounded as CircleCheckIcon} from '#/components/icons/CircleCheck'
 import {CircleInfo_Stroke2_Corner0_Rounded as CircleInfoIcon} from '#/components/icons/CircleInfo'
 import {type Props as IconProps} from '#/components/icons/common'
@@ -65,6 +67,7 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
   const {data, isLoading, error} = useKnowledgeFilesQuery(agent)
   const upload = useUploadKnowledgeFileMutation(agent)
   const del = useDeleteKnowledgeFileMutation(agent)
+  const setEnabled = useSetKnowledgeEnabledMutation(agent)
   const deletePrompt = Prompt.usePromptControl()
   const [pendingDelete, setPendingDelete] = useState<KnowledgeFile | null>(null)
   const ownerAgents = useOwnerAgentsQuery()
@@ -122,6 +125,47 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
         )
       },
     })
+  }
+
+  // No confirmation for toggling — it's reversible. The flip is optimistic
+  // (reverted by the mutation on failure) and never a silent no-op: success
+  // shows the runtime's own message, failure an honest error toast.
+  const onToggle = (file: KnowledgeFile, enabled: boolean) => {
+    setEnabled.mutate(
+      {id: file.id, enabled},
+      {
+        onSuccess: res => {
+          // The runtime's `message` is written to be shown VERBATIM — it is
+          // deliberately honest about what disabling does and doesn't do
+          // (including partial cases), so we never compose our own success
+          // copy over it. Idempotent `changed:false` responses land here too:
+          // already-in-that-state is a success, not an error.
+          Toast.show(
+            res.message ??
+              (enabled
+                ? `“${file.name}” is on — ${agentLabel} can use it again.`
+                : `“${file.name}” is off — ${agentLabel} won’t use it.`),
+            {type: 'success'},
+          )
+        },
+        onError: err => {
+          // The optimistic flip has already been reverted; say why it failed.
+          const code = err instanceof KnowledgeError ? err.code : undefined
+          Toast.show(
+            code === 'deleted'
+              ? `“${file.name}” was deleted from the knowledge base, so it can’t be switched on or off.`
+              : code === 'not-found'
+                ? l`That file is no longer in the knowledge base.`
+                : code === 'not-your-agent'
+                  ? l`That agent isn’t linked to your account.`
+                  : err instanceof Error && err.message
+                    ? err.message
+                    : l`Could not update the file.`,
+            {type: 'error'},
+          )
+        },
+      },
+    )
   }
 
   const confirmDelete = (file: KnowledgeFile) => {
@@ -217,6 +261,9 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
                   <FileRow
                     key={file.id || file.name}
                     file={file}
+                    onToggle={
+                      file.id ? enabled => onToggle(file, enabled) : undefined
+                    }
                     onDelete={file.id ? () => confirmDelete(file) : undefined}
                   />
                 ))
@@ -308,18 +355,23 @@ function UploadRow({
 }
 
 /**
- * One uploaded file slot: name, size + timestamp, an honest status badge, and a
- * trash button (both platforms — same inline affordance as PersonaSettings rows).
+ * One uploaded file slot: name, size + timestamp, an honest status badge, an
+ * on/off switch (no confirmation — toggling is reversible), and a trash button
+ * (both platforms — same inline affordance as PersonaSettings rows). A switched-
+ * off item reads as clearly inactive: dimmed content plus an "Off" badge in
+ * place of the status pill.
  */
 function FileRow({
   file,
+  onToggle,
   onDelete,
 }: {
   file: KnowledgeFile
+  onToggle?: (enabled: boolean) => void
   onDelete?: () => void
 }) {
   const t = useTheme()
-  const {i18n} = useLingui()
+  const {i18n, t: l} = useLingui()
   const when = file.uploadedAt ? new Date(file.uploadedAt) : null
   const meta = [
     humanBytes(file.size),
@@ -329,32 +381,64 @@ function FileRow({
   ]
     .filter(Boolean)
     .join(' · ')
+  const inactive = !file.enabled
   return (
     <SettingsList.Item>
-      <SettingsList.ItemIcon icon={PageTextIcon} />
-      <View style={[a.flex_1, a.gap_2xs]}>
-        <Text
-          style={[a.text_md, a.font_bold, t.atoms.text]}
-          numberOfLines={1}
-          emoji>
-          {file.name}
-        </Text>
-        {meta ? (
+      <View
+        style={[
+          a.flex_row,
+          a.flex_1,
+          a.align_center,
+          a.gap_sm,
+          inactive && {opacity: 0.5},
+        ]}>
+        <SettingsList.ItemIcon icon={PageTextIcon} />
+        <View style={[a.flex_1, a.gap_2xs]}>
           <Text
-            style={[a.text_xs, t.atoms.text_contrast_medium]}
-            numberOfLines={1}>
-            {meta}
+            style={[a.text_md, a.font_bold, t.atoms.text]}
+            numberOfLines={1}
+            emoji>
+            {file.name}
           </Text>
-        ) : null}
-        {file.status !== 'saved' && file.reason ? (
-          <Text
-            style={[a.text_xs, t.atoms.text_contrast_medium]}
-            numberOfLines={2}>
-            {file.reason}
-          </Text>
-        ) : null}
+          {meta ? (
+            <Text
+              style={[a.text_xs, t.atoms.text_contrast_medium]}
+              numberOfLines={1}>
+              {meta}
+            </Text>
+          ) : null}
+          {file.status !== 'saved' && file.reason ? (
+            <Text
+              style={[a.text_xs, t.atoms.text_contrast_medium]}
+              numberOfLines={2}>
+              {file.reason}
+            </Text>
+          ) : null}
+        </View>
+        {inactive ? (
+          <Badge
+            icon={CircleInfoIcon}
+            label={l`Off`}
+            bg={t.palette.contrast_100}
+            fg={t.palette.contrast_600}
+          />
+        ) : (
+          <StatusBadge file={file} />
+        )}
       </View>
-      <StatusBadge file={file} />
+      {onToggle ? (
+        <Toggle.Item
+          name={`knowledge-enabled-${file.id}`}
+          label={
+            file.enabled
+              ? `Turn off ${file.name} in the knowledge base`
+              : `Turn on ${file.name} in the knowledge base`
+          }
+          value={file.enabled}
+          onChange={onToggle}>
+          <Toggle.Switch />
+        </Toggle.Item>
+      ) : null}
       {onDelete ? (
         <Button
           label={`Remove ${file.name} from the knowledge base`}
