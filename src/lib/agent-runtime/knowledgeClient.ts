@@ -72,6 +72,30 @@ export interface KnowledgeUploadResult {
   error?: string
 }
 
+/**
+ * What actually happened to the raw data UPSTREAM when a slot was removed. The
+ * runtime's memory layer may be append-only: removal always unlists the item from
+ * the agent (no more recall/injection), but only 'purged' means the raw data was
+ * destroyed. 'retained' = upstream copy still exists; 'unsupported' = upstream
+ * can't purge at all. The UI must not claim deletion unless this is 'purged'.
+ */
+export type KnowledgeUpstreamOutcome = 'purged' | 'retained' | 'unsupported'
+
+export interface KnowledgeDeleteResult {
+  ok: boolean
+  /** The removed slot id, echoed by the runtime on success. */
+  id?: string
+  /** True when the item is no longer listed/recalled/injected for this agent. */
+  removed?: boolean
+  /** Missing/unknown values are treated as NOT purged by the message helper. */
+  upstream?: KnowledgeUpstreamOutcome
+  /** The runtime's own human-readable outcome sentence, when it sends one. */
+  message?: string
+  signedOut?: boolean
+  code?: string
+  error?: string
+}
+
 function errorMessage(e: unknown): string | undefined {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
@@ -224,4 +248,92 @@ export async function uploadKnowledgeFile(
       error: errorMessage(e) ?? 'network error',
     }
   }
+}
+
+/**
+ * DELETE /app/knowledge/{id} — remove one slot from the agent's knowledge base.
+ * Removal is guaranteed at the agent level (unlisted, no recall, no injection);
+ * whether the raw data was destroyed upstream comes back in `upstream` and MUST
+ * drive the success copy (see knowledgeRemovalMessage). Same auth/scoping as the
+ * other knowledge routes (`?agent=` optional). Typed result, never throws.
+ */
+export async function deleteKnowledgeFile(
+  id: string,
+  agent?: string,
+): Promise<KnowledgeDeleteResult> {
+  if (!id) return {ok: false, code: 'not-found', error: 'Missing file id.'}
+  let headers: Record<string, string> | null
+  try {
+    headers = await authHeaders()
+  } catch (e) {
+    return {ok: false, signedOut: false, error: errorMessage(e) ?? 'auth error'}
+  }
+  if (!headers) return {ok: false, signedOut: true}
+  try {
+    const base = `${KNOWLEDGE_ENDPOINT}/${encodeURIComponent(id)}`
+    const url = agent ? `${base}?agent=${encodeURIComponent(agent)}` : base
+    const res = await fetch(url, {method: 'DELETE', headers})
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok) {
+      const code = str(body.code)
+      if ((res.status === 401 || res.status === 403) && !code) {
+        return {ok: false, signedOut: true}
+      }
+      return {
+        ok: false,
+        signedOut: false,
+        code: code ?? (res.status === 404 ? 'not-found' : undefined),
+        error:
+          str(body.error) ?? str(body.message) ?? `Runtime error ${res.status}`,
+      }
+    }
+    const upstream =
+      body.upstream === 'purged' ||
+      body.upstream === 'retained' ||
+      body.upstream === 'unsupported'
+        ? body.upstream
+        : undefined
+    return {
+      ok: body.ok === true,
+      signedOut: false,
+      id: str(body.id) ?? id,
+      removed: body.removed === true,
+      upstream,
+      message: str(body.message),
+      ...(body.ok === true ? {} : {error: str(body.error) ?? 'delete failed'}),
+    }
+  } catch (e) {
+    logger.warn('knowledge: delete failed', {safeMessage: String(e)})
+    return {
+      ok: false,
+      signedOut: false,
+      error: errorMessage(e) ?? 'network error',
+    }
+  }
+}
+
+/**
+ * The honest success message for a removal, keyed off the runtime's `upstream`
+ * outcome. Only 'purged' may claim the file was deleted; anything else (including
+ * a missing/unknown value — fail honest) says removed-from-the-agent only: the
+ * agent can no longer read or recall it, with no claim the data was destroyed.
+ * The runtime's own `message` is appended when it adds detail beyond our line.
+ */
+export function knowledgeRemovalMessage(input: {
+  upstream?: KnowledgeUpstreamOutcome
+  fileName: string
+  agentLabel: string
+  runtimeMessage?: string
+}): string {
+  const {upstream, fileName, agentLabel, runtimeMessage} = input
+  const line =
+    upstream === 'purged'
+      ? `Deleted “${fileName}” from ${agentLabel}’s knowledge base.`
+      : `Removed “${fileName}” from ${agentLabel}’s knowledge base — ${agentLabel} can no longer read or recall it.`
+  // Surface the runtime's fuller detail (e.g. why the upstream copy persists)
+  // without repeating ourselves.
+  if (runtimeMessage && runtimeMessage.trim() && runtimeMessage !== line) {
+    return `${line} ${runtimeMessage.trim()}`
+  }
+  return line
 }

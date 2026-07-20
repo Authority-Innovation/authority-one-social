@@ -1,7 +1,9 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {
+  deleteKnowledgeFile,
   fetchKnowledgeFiles,
+  type KnowledgeDeleteResult,
   type KnowledgeFile,
   type KnowledgeFileToUpload,
   uploadKnowledgeFile,
@@ -45,7 +47,16 @@ export function useKnowledgeFilesQuery(agent?: string) {
         )
       }
       if (result.signedOut) return undefined
-      return result.files ?? []
+      // A transport/runtime failure must NOT masquerade as an empty knowledge
+      // base ("No files yet") — throw so the screen keeps cached data (e.g. a
+      // reverted optimistic delete) or shows the unavailable notice.
+      if (!result.files) {
+        throw new KnowledgeError(
+          result.error ?? 'Knowledge base unreachable.',
+          result.code,
+        )
+      }
+      return result.files
     },
     staleTime: STALE.MINUTES.ONE,
     retry: (failureCount, error) =>
@@ -71,7 +82,9 @@ export function useUploadKnowledgeFileMutation(agent?: string) {
       // Ownership / auth / transport failures are real errors the screen toasts.
       if (!res.ok && !res.file) {
         if (res.signedOut)
-          throw new KnowledgeError('Please sign in to manage the knowledge base.')
+          throw new KnowledgeError(
+            'Please sign in to manage the knowledge base.',
+          )
         throw new KnowledgeError(
           res.error ?? 'Could not upload the file.',
           res.code,
@@ -82,5 +95,54 @@ export function useUploadKnowledgeFileMutation(agent?: string) {
       return res
     },
     onSuccess: () => qc.invalidateQueries({queryKey}),
+  })
+}
+
+/**
+ * Remove one slot from the agent's knowledge base (DELETE /app/knowledge/{id}).
+ * Optimistic: the row leaves the list immediately and is restored if the call
+ * fails (the screen also toasts the failure — never a silent no-op). The resolved
+ * KnowledgeDeleteResult carries `upstream`, which the screen MUST use for its
+ * success copy: only 'purged' may claim the data was destroyed.
+ */
+export function useDeleteKnowledgeFileMutation(agent?: string) {
+  const qc = useQueryClient()
+  const queryKey = createKnowledgeQueryKey(agent)
+  return useMutation<
+    KnowledgeDeleteResult,
+    Error,
+    {id: string},
+    {previous?: KnowledgeFile[]}
+  >({
+    mutationFn: async ({id}) => {
+      const res = await deleteKnowledgeFile(id, agent)
+      if (!res.ok) {
+        if (res.signedOut)
+          throw new KnowledgeError(
+            'Please sign in to manage the knowledge base.',
+          )
+        throw new KnowledgeError(
+          res.error ?? 'Could not remove the file.',
+          res.code,
+        )
+      }
+      return res
+    },
+    onMutate: async ({id}) => {
+      await qc.cancelQueries({queryKey})
+      const previous = qc.getQueryData<KnowledgeFile[] | undefined>(queryKey)
+      if (previous) {
+        qc.setQueryData(
+          queryKey,
+          previous.filter(f => f.id !== id),
+        )
+      }
+      return {previous}
+    },
+    onError: (_err, _vars, ctx) => {
+      // Revert the optimistic removal visibly; the screen toasts the reason.
+      if (ctx?.previous) qc.setQueryData(queryKey, ctx.previous)
+    },
+    onSettled: () => qc.invalidateQueries({queryKey}),
   })
 }

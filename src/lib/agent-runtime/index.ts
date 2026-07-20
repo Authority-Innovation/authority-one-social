@@ -112,11 +112,15 @@ export {
 export {fetchHistory, type HistoryResult} from './historyClient'
 export {type ChatImageToUpload, uploadChatImage} from './imageUploadClient'
 export {
+  deleteKnowledgeFile,
   fetchKnowledgeFiles,
+  type KnowledgeDeleteResult,
   type KnowledgeFile,
   type KnowledgeFileToUpload,
   type KnowledgeListResult,
+  knowledgeRemovalMessage,
   type KnowledgeUploadResult,
+  type KnowledgeUpstreamOutcome,
   uploadKnowledgeFile,
 } from './knowledgeClient'
 export {

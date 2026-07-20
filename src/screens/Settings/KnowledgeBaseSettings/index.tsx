@@ -1,9 +1,11 @@
+import {useState} from 'react'
 import {ActivityIndicator, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {
   type KnowledgeFile,
   type KnowledgeFileToUpload,
+  knowledgeRemovalMessage,
 } from '#/lib/agent-runtime'
 import {
   type CommonNavigatorParams,
@@ -13,6 +15,7 @@ import {sanitizeHandle} from '#/lib/strings/handles'
 import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {
   KnowledgeError,
+  useDeleteKnowledgeFileMutation,
   useKnowledgeFilesQuery,
   useUploadKnowledgeFileMutation,
 } from '#/state/queries/knowledgeBase'
@@ -24,8 +27,10 @@ import {CircleInfo_Stroke2_Corner0_Rounded as CircleInfoIcon} from '#/components
 import {type Props as IconProps} from '#/components/icons/common'
 import {PageText_Stroke2_Corner0_Rounded as PageTextIcon} from '#/components/icons/PageText'
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
+import {Trash_Stroke2_Corner0_Rounded as TrashIcon} from '#/components/icons/Trash'
 import {Warning_Stroke2_Corner0_Rounded as WarningIcon} from '#/components/icons/Warning'
 import * as Layout from '#/components/Layout'
+import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {KNOWLEDGE_PICKER_SUPPORTED, pickTextFile} from './pickTextFile'
@@ -47,13 +52,21 @@ type Props = NativeStackScreenProps<
  * file containing a real email/phone/secret is BLOCKED by the PII guard and shown as a
  * blocked slot with the real reason (never a fake save); docx is "not supported yet".
  * PDFs upload as raw binary and route to Mnemonic's document-extraction pipeline.
- * Read-only list for v1 (no delete). FOLLOW-UP: delete a slot + native picker.
+ *
+ * Removing a slot (trash button + confirm, same pattern as PersonaSettings) is
+ * optimistic with a visible revert on failure. The success copy is keyed off the
+ * runtime's `upstream` outcome: only 'purged' claims deletion; otherwise the item
+ * is honestly described as removed-from-the-agent (no more recall) with no claim
+ * the raw data was destroyed. FOLLOW-UP: native picker.
  */
 export function KnowledgeBaseSettingsScreen({route}: Props) {
   const {t: l} = useLingui()
   const agent = route.params?.agent
   const {data, isLoading, error} = useKnowledgeFilesQuery(agent)
   const upload = useUploadKnowledgeFileMutation(agent)
+  const del = useDeleteKnowledgeFileMutation(agent)
+  const deletePrompt = Prompt.usePromptControl()
+  const [pendingDelete, setPendingDelete] = useState<KnowledgeFile | null>(null)
   const ownerAgents = useOwnerAgentsQuery()
 
   const agentRow = agent
@@ -111,6 +124,50 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
     })
   }
 
+  const confirmDelete = (file: KnowledgeFile) => {
+    setPendingDelete(file)
+    deletePrompt.open()
+  }
+
+  const onConfirmDelete = () => {
+    const file = pendingDelete
+    if (!file) return
+    del.mutate(
+      {id: file.id},
+      {
+        onSuccess: res => {
+          // Honest outcome: only upstream 'purged' claims deletion; otherwise the
+          // copy says removed-from-the-agent (no recall) without claiming the raw
+          // data was destroyed. Plain template strings, not l`` — see the upload
+          // toast note above about uncompiled interpolated messages.
+          Toast.show(
+            knowledgeRemovalMessage({
+              upstream: res.upstream,
+              fileName: file.name,
+              agentLabel,
+              runtimeMessage: res.message,
+            }),
+            {type: 'success'},
+          )
+        },
+        onError: err => {
+          // The optimistic removal has already been reverted; say why it failed.
+          const code = err instanceof KnowledgeError ? err.code : undefined
+          Toast.show(
+            code === 'not-your-agent'
+              ? l`That agent isn’t linked to your account.`
+              : code === 'not-found'
+                ? l`That file is no longer in the knowledge base.`
+                : err instanceof Error && err.message
+                  ? err.message
+                  : l`Could not remove the file.`,
+            {type: 'error'},
+          )
+        },
+      },
+    )
+  }
+
   return (
     <Layout.Screen testID="knowledgeBaseSettingsScreen">
       <Layout.Header.Outer>
@@ -157,13 +214,30 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
                 />
               ) : (
                 files.map(file => (
-                  <FileRow key={file.id || file.name} file={file} />
+                  <FileRow
+                    key={file.id || file.name}
+                    file={file}
+                    onDelete={file.id ? () => confirmDelete(file) : undefined}
+                  />
                 ))
               )}
             </>
           )}
         </SettingsList.Container>
       </Layout.Content>
+
+      <Prompt.Basic
+        control={deletePrompt}
+        title="Remove this file?"
+        description={
+          pendingDelete
+            ? `“${pendingDelete.name}” will be removed from ${agentLabel}’s knowledge base — ${agentLabel} will no longer be able to read or recall it.`
+            : ''
+        }
+        confirmButtonCta="Remove"
+        confirmButtonColor="negative"
+        onConfirm={onConfirmDelete}
+      />
     </Layout.Screen>
   )
 }
@@ -233,8 +307,17 @@ function UploadRow({
   )
 }
 
-/** One uploaded file slot: name, size + timestamp, and an honest status badge. */
-function FileRow({file}: {file: KnowledgeFile}) {
+/**
+ * One uploaded file slot: name, size + timestamp, an honest status badge, and a
+ * trash button (both platforms — same inline affordance as PersonaSettings rows).
+ */
+function FileRow({
+  file,
+  onDelete,
+}: {
+  file: KnowledgeFile
+  onDelete?: () => void
+}) {
   const t = useTheme()
   const {i18n} = useLingui()
   const when = file.uploadedAt ? new Date(file.uploadedAt) : null
@@ -272,6 +355,17 @@ function FileRow({file}: {file: KnowledgeFile}) {
         ) : null}
       </View>
       <StatusBadge file={file} />
+      {onDelete ? (
+        <Button
+          label={`Remove ${file.name} from the knowledge base`}
+          size="small"
+          variant="ghost"
+          color="negative"
+          shape="round"
+          onPress={onDelete}>
+          <ButtonIcon icon={TrashIcon} />
+        </Button>
+      ) : null}
     </SettingsList.Item>
   )
 }
