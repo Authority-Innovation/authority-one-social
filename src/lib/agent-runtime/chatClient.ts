@@ -108,6 +108,23 @@ export const SIGNED_OUT_MESSAGE = 'Sign in at /account to chat with your agent.'
 export const TOKEN_REJECTED_MESSAGE =
   'The agent runtime rejected your account session. The runtime may not be deployed with Supabase verification yet.'
 
+/**
+ * Device IANA timezone (e.g. "Pacific/Auckland") sent with every owner chat
+ * request. The runtime persists it per-session so greetings and reminder
+ * scheduling track where the owner actually is; it validates and only writes on
+ * change, so no client-side caching is needed. Returns undefined when the
+ * environment can't resolve a zone, so callers omit the field entirely rather
+ * than send null/garbage.
+ */
+export function getDeviceTimeZone(): string | undefined {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return typeof tz === 'string' && tz.length > 0 ? tz : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Best-effort message extraction from an `unknown` caught error. */
 function errorMessage(e: unknown): string | undefined {
   if (e instanceof Error) return e.message
@@ -145,6 +162,10 @@ export function streamChat(
       return
     }
 
+    // Resolved fresh per request so a device that changes zones (travel, DST)
+    // reports the new one on its next turn.
+    const timezone = getDeviceTimeZone()
+
     try {
       const res = await expoFetch(CHAT_ENDPOINT, {
         method: 'POST',
@@ -170,6 +191,9 @@ export function streamChat(
           ...(req.images && req.images.length > 0
             ? {imageUrls: req.images, imageUrl: req.images[0]}
             : {}),
+          // Device timezone: sent on every turn when resolvable; the runtime
+          // only persists it on change. Omitted (not null) when unresolvable.
+          ...(timezone ? {timezone} : {}),
         }),
         signal: controller.signal,
       })

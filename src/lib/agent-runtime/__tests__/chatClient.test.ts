@@ -20,6 +20,7 @@ jest.mock('../authToken', () => ({getSupabaseAccessToken: jest.fn()}))
 
 import {getSupabaseAccessToken} from '../authToken'
 import {
+  getDeviceTimeZone,
   SIGNED_OUT_MESSAGE,
   streamChat,
   type StreamHandlers,
@@ -181,6 +182,57 @@ describe('streamChat auth/bearer wiring', () => {
       expect(result.message).not.toMatch(/not wired/i)
       expect(result.message).not.toMatch(/TODO/i)
     }
+  })
+})
+
+describe('streamChat device timezone', () => {
+  beforeEach(() => {
+    mockExpoFetch.mockReset()
+    jest.restoreAllMocks()
+  })
+
+  it('sends the resolved IANA zone as `timezone` on every request', async () => {
+    mockExpoFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      body: null,
+    } as never)
+
+    await runTurn('TOKEN_ABC')
+
+    const [, init] = mockExpoFetch.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    // The IANA name (e.g. "Pacific/Auckland" or the test env's "UTC"), never an offset.
+    expect(body.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    expect(typeof body.timezone).toBe('string')
+    expect((body.timezone as string).length).toBeGreaterThan(0)
+  })
+
+  it('omits the field cleanly when the zone cannot be resolved', async () => {
+    jest.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+      throw new Error('Intl unavailable')
+    })
+    mockExpoFetch.mockResolvedValue({
+      status: 200,
+      ok: true,
+      body: null,
+    } as never)
+
+    await runTurn('TOKEN_ABC')
+
+    const [, init] = mockExpoFetch.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect('timezone' in body).toBe(false)
+  })
+
+  it('getDeviceTimeZone returns undefined for an empty/undefined resolved zone', () => {
+    jest.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+      () =>
+        ({
+          resolvedOptions: () => ({timeZone: undefined}),
+        }) as unknown as Intl.DateTimeFormat,
+    )
+    expect(getDeviceTimeZone()).toBeUndefined()
   })
 })
 

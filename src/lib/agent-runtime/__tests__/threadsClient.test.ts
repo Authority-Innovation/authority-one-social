@@ -477,6 +477,36 @@ describe('sendToThread', () => {
     expect(res.data?.mediaUrls).toEqual(['https://r2/x.png'])
   })
 
+  it('sends the device IANA `timezone` on the thread lane too', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = okJson({message: 'ok'})
+    await sendToThread('t1', {message: 'hi'})
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0]
+    const body = JSON.parse(String((call[1] as {body: string}).body)) as {
+      timezone?: string
+    }
+    expect(body.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+  })
+
+  it('omits `timezone` when the zone cannot be resolved', async () => {
+    mockToken.mockResolvedValue('tok')
+    global.fetch = okJson({message: 'ok'})
+    const spy = jest.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+      throw new Error('Intl unavailable')
+    })
+    try {
+      await sendToThread('t1', {message: 'hi'})
+    } finally {
+      spy.mockRestore()
+    }
+    const call = (global.fetch as unknown as jest.Mock).mock.calls[0]
+    const body = JSON.parse(String((call[1] as {body: string}).body)) as Record<
+      string,
+      unknown
+    >
+    expect('timezone' in body).toBe(false)
+  })
+
   it('reads reply text from `text` first, falling back to `message`', async () => {
     mockToken.mockResolvedValue('tok')
     // Runtime now sends the reply under both fields; `text` wins.

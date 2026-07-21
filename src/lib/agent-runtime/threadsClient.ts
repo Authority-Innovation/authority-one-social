@@ -5,7 +5,11 @@ import {
 } from '#/lib/agent-runtime/types'
 import {logger} from '#/logger'
 import {getSupabaseAccessToken} from './authToken'
-import {SIGNED_OUT_MESSAGE, type StreamHandlers} from './chatClient'
+import {
+  getDeviceTimeZone,
+  SIGNED_OUT_MESSAGE,
+  type StreamHandlers,
+} from './chatClient'
 import {
   threadDeleteUrl,
   threadGroupUrl,
@@ -511,6 +515,11 @@ export async function sendToThread(
       body.imageUrls = input.imageUrls
       body.imageUrl = input.imageUrls[0] // tolerate both shapes
     }
+    // Device timezone, same contract as /app/chat: the runtime persists it
+    // per-session for greetings/reminders and only writes on change. Omitted
+    // when the environment can't resolve a zone.
+    const timezone = getDeviceTimeZone()
+    if (timezone) body.timezone = timezone
     const res = await fetch(threadSendUrl(threadId), {
       method: 'POST',
       headers: {...headers, 'Content-Type': 'application/json'},
