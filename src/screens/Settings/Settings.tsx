@@ -234,10 +234,10 @@ export function SettingsScreen({}: Props) {
               <Trans>My Agents</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
-          <SettingsList.LinkItem to="/settings/persona" label={l`Persona`}>
+          <SettingsList.LinkItem to="/settings/persona" label={l`Your agent`}>
             <SettingsList.ItemIcon icon={PersonIcon} />
             <SettingsList.ItemText>
-              <Trans>Persona</Trans>
+              <Trans>Your agent</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
           {/* Context Engine is the single hub for location, photo context, and saved

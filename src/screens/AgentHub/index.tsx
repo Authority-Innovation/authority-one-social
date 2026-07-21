@@ -967,7 +967,7 @@ function SettingsTab({
   return (
     <View style={[a.px_lg, a.py_lg, a.gap_md]}>
       <SettingsLink
-        label={l`Persona settings`}
+        label={l`Agent settings`}
         onPress={() =>
           navigation.navigate('PersonaSettings', {agent: agent.handle})
         }

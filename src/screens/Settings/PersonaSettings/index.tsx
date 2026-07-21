@@ -4,6 +4,7 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
 import {
+  type OwnerAgent,
   type Persona,
   voiceDisplayLabel,
   voicePickOptions,
@@ -14,57 +15,63 @@ import {
   type NavigationProp,
 } from '#/lib/routes/types'
 import {sanitizeHandle} from '#/lib/strings/handles'
-import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {
-  PersonaWriteError,
-  useDeletePersonaMutation,
-  usePersonasQuery,
-  useSetActivePersonaMutation,
-} from '#/state/queries/personas'
+  useOwnerAgentsQuery,
+  usePauseOwnerAgentMutation,
+} from '#/state/queries/agents'
+import {PersonaWriteError, usePersonasQuery} from '#/state/queries/personas'
 import {useVoiceRegistryQuery} from '#/state/queries/voices'
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
 import {atoms as a, useTheme} from '#/alf'
-import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
-import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Check'
 import {PageText_Stroke2_Corner0_Rounded as PageTextIcon} from '#/components/icons/PageText'
+import {Pause_Stroke2_Corner0_Rounded as PauseIcon} from '#/components/icons/Pause'
 import {PencilLine_Stroke2_Corner0_Rounded as PencilIcon} from '#/components/icons/Pencil'
-import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
+import {Person_Stroke2_Corner0_Rounded as PersonIcon} from '#/components/icons/Person'
+import {Phone_Stroke2_Corner0_Rounded as PhoneIcon} from '#/components/icons/Phone'
+import {Play_Stroke2_Corner0_Rounded as PlayIcon} from '#/components/icons/Play'
 import {Sparkle_Stroke2_Corner0_Rounded as SparkleIcon} from '#/components/icons/Sparkle'
 import {SpeakerVolumeFull_Stroke2_Corner0_Rounded as SpeakerIcon} from '#/components/icons/Speaker'
-import {Trash_Stroke2_Corner0_Rounded as TrashIcon} from '#/components/icons/Trash'
+import {Ticket_Stroke2_Corner0_Rounded as TicketIcon} from '#/components/icons/Ticket'
 import * as Layout from '#/components/Layout'
-import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {AgentProfileDialog} from './AgentProfileDialog'
+import {personaEditTarget} from './editTarget'
 import {PersonaEditorDialog} from './PersonaEditorDialog'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'PersonaSettings'>
 
 /**
- * Persona / Avatar selector + editor. SEPARATE from the skin picker — persona is
- * the agent's identity (name + voice + personality), skin is the app's look. Lists
- * personas, shows the active one, switches active, and supports full CRUD. Degrades
- * gracefully when the runtime persona endpoints aren't reachable yet.
+ * The per-agent settings hub, organized into four buckets:
+ *   1. Who they are - identity (name/personality/reference images), public
+ *      profile, voice
+ *   2. What they know - knowledge base
+ *   3. How they reach you - phone line, social autonomy
+ *   4. Danger zone - billing, pause
  *
- * Optionally SCOPED to one of the owner's agents via route param `agent` (the FULL
- * handle from My Agents); without it, this manages the owner's token-mapped agent
- * exactly as before.
+ * The multi-persona switcher (persona list / create / switch-active) is HIDDEN,
+ * not deleted: the agent presents as ONE identity, edited in place via the
+ * ACTIVE persona (personaEditTarget - some live agents' active persona is not
+ * their first record, so "active" is the only safe edit target). The persona
+ * data model, runtime CRUD, and any extra stored personas are untouched and the
+ * switcher can be restored by reverting this screen.
+ *
+ * Optionally SCOPED to one of the owner's agents via route param `agent` (the
+ * FULL handle from My Agents); without it, this manages the owner's
+ * token-mapped agent exactly as before.
  */
 export function PersonaSettingsScreen({route}: Props) {
   const {t: l} = useLingui()
+  const t = useTheme()
   const agent = route.params?.agent
   const navigation = useNavigation<NavigationProp>()
   const {data, isLoading, error} = usePersonasQuery(agent)
   const ownerAgents = useOwnerAgentsQuery()
-  const setActive = useSetActivePersonaMutation(agent)
-  const del = useDeletePersonaMutation(agent)
+  const pause = usePauseOwnerAgentMutation()
   const editorControl = Dialog.useDialogControl()
   const profileControl = Dialog.useDialogControl()
-  const deletePrompt = Prompt.usePromptControl()
   const [editing, setEditing] = useState<Persona | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<Persona | null>(null)
 
   const personas = data?.personas ?? []
   const voices = data?.voices ?? []
@@ -75,14 +82,14 @@ export function PersonaSettingsScreen({route}: Props) {
     ? voicePickOptions(voiceRegistry.data)
     : []
   const activeId = data?.activePersonaId
-  // The Voice row shows what the agent sounds like right now — resolved from the
+  // The ONE identity this screen edits: the active persona, in place.
+  const identity = personaEditTarget(personas, activeId)
+  // The Voice row shows what the agent sounds like right now - resolved from the
   // active persona's stored voiceId across all three stored forms.
-  const activeStoredVoiceId =
-    personas.find(p => p.id === activeId)?.voiceId ?? data?.activeVoiceId
+  const activeStoredVoiceId = identity?.voiceId ?? data?.activeVoiceId
   const activeVoiceName =
     voiceDisplayLabel(registryOptions, activeStoredVoiceId) ??
     voices.find(v => v.voiceId === activeStoredVoiceId)?.name
-  const canDelete = personas.length > 1
   const agentRow = agent
     ? ownerAgents.data?.agents.find(
         a2 => a2.handle.toLowerCase() === agent.toLowerCase(),
@@ -91,17 +98,26 @@ export function PersonaSettingsScreen({route}: Props) {
   const notYourAgent =
     error instanceof PersonaWriteError && error.code === 'not-your-agent'
 
-  const openCreate = () => {
-    setEditing(null)
+  const openIdentityEditor = () => {
+    setEditing(identity)
     editorControl.open()
   }
-  const openEdit = (p: Persona) => {
-    setEditing(p)
-    editorControl.open()
-  }
-  const confirmDelete = (p: Persona) => {
-    setPendingDelete(p)
-    deletePrompt.open()
+
+  const onTogglePause = (row: OwnerAgent) => {
+    pause.mutate(
+      {agent: row.handle, paused: row.paused !== true},
+      {
+        onSuccess: res => {
+          if (res.ok) return
+          Toast.show(
+            res.code === 'not-your-agent'
+              ? l`That agent isn’t linked to your account.`
+              : (res.error ?? l`Could not update the agent.`),
+            {type: 'error'},
+          )
+        },
+      },
+    )
   }
 
   return (
@@ -113,7 +129,7 @@ export function PersonaSettingsScreen({route}: Props) {
             {agent ? (
               (agentRow?.displayName ?? sanitizeHandle(agent, '@'))
             ) : (
-              <Trans>Persona</Trans>
+              <Trans>Your agent</Trans>
             )}
           </Layout.Header.TitleText>
         </Layout.Header.Content>
@@ -122,44 +138,53 @@ export function PersonaSettingsScreen({route}: Props) {
 
       <Layout.Content>
         <SettingsList.Container>
-          {agent ? (
-            <AgentInfo
-              handle={agent}
-              displayName={agentRow?.displayName}
-              number={agentRow?.number}
-            />
-          ) : null}
-          {agent && !notYourAgent ? (
-            // Profile editor needs an explicit agent target (handle/DID), so it's
-            // only offered on the scoped editor opened from My Agents.
-            <SettingsList.PressableItem
-              label={l`Agent profile`}
-              accessibilityHint={l`Edit this agent's public profile`}
-              onPress={() => profileControl.open()}>
-              <SettingsList.ItemIcon icon={PencilIcon} />
-              <SettingsList.ItemText>
-                <Trans>Profile</Trans>
-              </SettingsList.ItemText>
-              <SettingsList.Chevron />
-            </SettingsList.PressableItem>
-          ) : null}
-          {!notYourAgent ? (
+          {agent ? <AgentInfo handle={agent} /> : null}
+
+          {isLoading ? (
+            <View style={[a.py_2xl, a.align_center]}>
+              <ActivityIndicator />
+            </View>
+          ) : notYourAgent ? (
+            <NotYourAgentNotice />
+          ) : (
             <>
-              <SettingsList.PressableItem
-                label={l`Social autonomy`}
-                accessibilityHint={l`Opens this agent's social autonomy settings`}
-                onPress={() =>
-                  navigation.navigate(
-                    'SocialAutonomySettings',
-                    agent ? {agent} : undefined,
-                  )
-                }>
-                <SettingsList.ItemIcon icon={SparkleIcon} />
-                <SettingsList.ItemText>
-                  <Trans>Social autonomy</Trans>
-                </SettingsList.ItemText>
-                <SettingsList.Chevron />
-              </SettingsList.PressableItem>
+              {/* 1 - WHO THEY ARE */}
+              <SectionHeaderText>
+                <Trans>Who they are</Trans>
+              </SectionHeaderText>
+              {data ? (
+                <SettingsList.PressableItem
+                  label={l`Name & personality`}
+                  accessibilityHint={l`Edit this agent's name, personality, and reference images`}
+                  onPress={openIdentityEditor}>
+                  <SettingsList.ItemIcon icon={PersonIcon} />
+                  <SettingsList.ItemText>
+                    <Trans>Name & personality</Trans>
+                  </SettingsList.ItemText>
+                  {identity ? (
+                    <SettingsList.BadgeText>
+                      {identity.name}
+                    </SettingsList.BadgeText>
+                  ) : null}
+                  <SettingsList.Chevron />
+                </SettingsList.PressableItem>
+              ) : (
+                <UnavailableNotice />
+              )}
+              {agent ? (
+                // Profile editor needs an explicit agent target (handle/DID), so
+                // it's only offered on the scoped editor opened from My Agents.
+                <SettingsList.PressableItem
+                  label={l`Public profile`}
+                  accessibilityHint={l`Edit this agent's public profile`}
+                  onPress={() => profileControl.open()}>
+                  <SettingsList.ItemIcon icon={PencilIcon} />
+                  <SettingsList.ItemText>
+                    <Trans>Public profile</Trans>
+                  </SettingsList.ItemText>
+                  <SettingsList.Chevron />
+                </SettingsList.PressableItem>
+              ) : null}
               <SettingsList.PressableItem
                 label={l`Voice`}
                 accessibilityHint={l`Pick the voice this agent speaks with`}
@@ -180,6 +205,12 @@ export function PersonaSettingsScreen({route}: Props) {
                 ) : null}
                 <SettingsList.Chevron />
               </SettingsList.PressableItem>
+
+              {/* 2 - WHAT THEY KNOW */}
+              <SettingsList.Divider />
+              <SectionHeaderText>
+                <Trans>What they know</Trans>
+              </SectionHeaderText>
               <SettingsList.PressableItem
                 label={l`Knowledge base`}
                 accessibilityHint={l`Upload files into this agent's long-term memory`}
@@ -195,236 +226,146 @@ export function PersonaSettingsScreen({route}: Props) {
                 </SettingsList.ItemText>
                 <SettingsList.Chevron />
               </SettingsList.PressableItem>
+
+              {/* 3 - HOW THEY REACH YOU */}
               <SettingsList.Divider />
-            </>
-          ) : null}
-          {isLoading ? (
-            <View style={[a.py_2xl, a.align_center]}>
-              <ActivityIndicator />
-            </View>
-          ) : notYourAgent ? (
-            <NotYourAgentNotice />
-          ) : !data ? (
-            <UnavailableNotice />
-          ) : personas.length === 0 ? (
-            <EmptyNotice />
-          ) : (
-            personas.map(p => (
-              <PersonaRow
-                key={p.id}
-                persona={p}
-                active={p.id === activeId}
-                voiceName={
-                  voiceDisplayLabel(registryOptions, p.voiceId) ??
-                  voices.find(v => v.voiceId === p.voiceId)?.name ??
-                  p.voiceId
-                }
-                switching={setActive.isPending}
-                onSetActive={() =>
-                  setActive.mutate(
-                    {id: p.id},
-                    {
-                      onError: () =>
-                        Toast.show(l`Could not switch persona.`, {
-                          type: 'error',
-                        }),
-                    },
+              <SectionHeaderText>
+                <Trans>How they reach you</Trans>
+              </SectionHeaderText>
+              {agentRow?.number ? (
+                <SettingsList.Item>
+                  <SettingsList.ItemIcon icon={PhoneIcon} />
+                  <SettingsList.ItemText>
+                    <Trans>Phone number</Trans>
+                  </SettingsList.ItemText>
+                  <SettingsList.BadgeText>
+                    {agentRow.number}
+                  </SettingsList.BadgeText>
+                </SettingsList.Item>
+              ) : null}
+              <SettingsList.PressableItem
+                label={l`Social autonomy`}
+                accessibilityHint={l`Opens this agent's social autonomy settings`}
+                onPress={() =>
+                  navigation.navigate(
+                    'SocialAutonomySettings',
+                    agent ? {agent} : undefined,
                   )
-                }
-                onEdit={() => openEdit(p)}
-                onDelete={canDelete ? () => confirmDelete(p) : undefined}
-              />
-            ))
-          )}
+                }>
+                <SettingsList.ItemIcon icon={SparkleIcon} />
+                <SettingsList.ItemText>
+                  <Trans>Social autonomy</Trans>
+                </SettingsList.ItemText>
+                <SettingsList.Chevron />
+              </SettingsList.PressableItem>
 
-          {error && data ? (
-            <Text style={[a.px_lg, a.pt_sm, a.text_sm, {color: '#cc2827'}]}>
-              <Trans>
-                Couldn’t refresh personas. Showing the last known list.
-              </Trans>
-            </Text>
-          ) : null}
-
-          {!notYourAgent ? (
-            <>
+              {/* 4 - DANGER ZONE */}
               <SettingsList.Divider />
-              <View style={[a.px_lg, a.py_sm]}>
-                <Button
-                  label="Create persona"
-                  size="large"
-                  variant="solid"
-                  color="primary"
-                  onPress={openCreate}>
-                  <ButtonIcon icon={PlusIcon} />
-                  <ButtonText>
-                    <Trans>Create persona</Trans>
-                  </ButtonText>
-                </Button>
-              </View>
+              <SectionHeaderText destructive>
+                <Trans>Danger zone</Trans>
+              </SectionHeaderText>
+              <SettingsList.PressableItem
+                label={l`Plan and billing`}
+                accessibilityHint={l`Opens your agent plan and billing`}
+                onPress={() => navigation.navigate('AgentBilling')}>
+                <SettingsList.ItemIcon icon={TicketIcon} />
+                <SettingsList.ItemText>
+                  <Trans>Plan & billing</Trans>
+                </SettingsList.ItemText>
+                <SettingsList.Chevron />
+              </SettingsList.PressableItem>
+              {agentRow ? (
+                <SettingsList.PressableItem
+                  label={
+                    agentRow.paused === true
+                      ? l`Resume this agent`
+                      : l`Pause this agent`
+                  }
+                  accessibilityHint={l`Pauses or resumes this agent everywhere`}
+                  disabled={pause.isPending}
+                  onPress={() => onTogglePause(agentRow)}>
+                  <SettingsList.ItemIcon
+                    icon={agentRow.paused === true ? PlayIcon : PauseIcon}
+                  />
+                  <SettingsList.ItemText>
+                    {agentRow.paused === true ? (
+                      <Trans>Resume this agent</Trans>
+                    ) : (
+                      <Trans>Pause this agent</Trans>
+                    )}
+                  </SettingsList.ItemText>
+                  <SettingsList.BadgeText>
+                    {agentRow.paused === true ? l`Paused` : l`Live`}
+                  </SettingsList.BadgeText>
+                </SettingsList.PressableItem>
+              ) : null}
+
+              {error && data ? (
+                <Text
+                  style={[
+                    a.px_lg,
+                    a.pt_sm,
+                    a.text_sm,
+                    {color: t.palette.negative_500},
+                  ]}>
+                  <Trans>
+                    Couldn’t refresh this agent’s settings. Showing the last
+                    known state.
+                  </Trans>
+                </Text>
+              ) : null}
             </>
-          ) : null}
+          )}
         </SettingsList.Container>
       </Layout.Content>
 
       <PersonaEditorDialog
         control={editorControl}
         persona={editing}
-        voices={voices}
         agent={agent}
       />
 
       {agent ? (
         <AgentProfileDialog control={profileControl} agent={agent} />
       ) : null}
-
-      <Prompt.Basic
-        control={deletePrompt}
-        title="Delete persona?"
-        description={
-          pendingDelete
-            ? `“${pendingDelete.name}” will be removed. This can’t be undone.`
-            : ''
-        }
-        confirmButtonCta="Delete"
-        confirmButtonColor="negative"
-        onConfirm={() => {
-          if (pendingDelete)
-            del.mutate(
-              {id: pendingDelete.id},
-              {
-                onError: () =>
-                  Toast.show(l`Could not delete the persona.`, {type: 'error'}),
-              },
-            )
-        }}
-      />
     </Layout.Screen>
   )
 }
 
-function PersonaRow({
-  persona,
-  active,
-  voiceName,
-  switching,
-  onSetActive,
-  onEdit,
-  onDelete,
+/** Bucket header. `destructive` tints the label for the danger zone. */
+function SectionHeaderText({
+  children,
+  destructive = false,
 }: {
-  persona: Persona
-  active: boolean
-  voiceName?: string
-  switching: boolean
-  onSetActive: () => void
-  onEdit: () => void
-  onDelete?: () => void
+  children: React.ReactNode
+  destructive?: boolean
 }) {
   const t = useTheme()
   return (
-    <SettingsList.Item>
-      <View style={[a.flex_1, a.gap_2xs]}>
-        <View style={[a.flex_row, a.align_center, a.gap_sm]}>
-          <Text emoji style={[a.text_md, a.font_bold, t.atoms.text]}>
-            {persona.name}
-          </Text>
-          {active ? (
-            <View
-              style={[
-                a.flex_row,
-                a.align_center,
-                a.gap_2xs,
-                a.rounded_full,
-                a.px_sm,
-                {paddingVertical: 2, backgroundColor: t.palette.primary_50},
-              ]}>
-              <CheckIcon size="xs" fill={t.palette.primary_600} />
-              <Text
-                style={[
-                  a.text_xs,
-                  a.font_bold,
-                  {color: t.palette.primary_700},
-                ]}>
-                <Trans>Active</Trans>
-              </Text>
-            </View>
-          ) : null}
-        </View>
-        {voiceName ? (
-          <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-            <Trans>Voice: {voiceName}</Trans>
-          </Text>
-        ) : null}
-        {persona.personality ? (
-          <Text
-            numberOfLines={2}
-            style={[a.text_xs, t.atoms.text_contrast_medium]}>
-            {persona.personality}
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={[a.flex_row, a.align_center, a.gap_xs]}>
-        {!active ? (
-          <Button
-            label={`Switch to ${persona.name}`}
-            size="small"
-            variant="solid"
-            color="secondary"
-            disabled={switching}
-            onPress={onSetActive}>
-            <ButtonText>
-              <Trans>Use</Trans>
-            </ButtonText>
-          </Button>
-        ) : null}
-        <Button
-          label={`Edit ${persona.name}`}
-          size="small"
-          variant="ghost"
-          color="secondary"
-          shape="round"
-          onPress={onEdit}>
-          <ButtonIcon icon={PencilIcon} />
-        </Button>
-        {onDelete ? (
-          <Button
-            label={`Delete ${persona.name}`}
-            size="small"
-            variant="ghost"
-            color="negative"
-            shape="round"
-            onPress={onDelete}>
-            <ButtonIcon icon={TrashIcon} />
-          </Button>
-        ) : null}
-      </View>
-    </SettingsList.Item>
+    <Text
+      style={[
+        a.px_lg,
+        a.pt_lg,
+        a.pb_xs,
+        a.text_sm,
+        a.font_bold,
+        destructive
+          ? {color: t.palette.negative_500}
+          : t.atoms.text_contrast_medium,
+      ]}>
+      {children}
+    </Text>
   )
 }
 
-/** Which agent this screen is editing (scoped mode): handle + its SMS line. */
-function AgentInfo({
-  handle,
-  displayName,
-  number,
-}: {
-  handle: string
-  displayName?: string
-  number?: string
-}) {
+/** Which agent this screen is editing (scoped mode). */
+function AgentInfo({handle}: {handle: string}) {
   const t = useTheme()
   return (
-    <View style={[a.px_lg, a.pb_sm, a.gap_2xs]}>
-      {displayName ? (
-        <Text emoji style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          {sanitizeHandle(handle, '@')}
-        </Text>
-      ) : null}
-      {number ? (
-        <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          <Trans>Phone: {number}</Trans>
-        </Text>
-      ) : null}
+    <View style={[a.px_lg, a.pb_sm]}>
+      <Text emoji style={[a.text_sm, t.atoms.text_contrast_medium]}>
+        {sanitizeHandle(handle, '@')}
+      </Text>
     </View>
   )
 }
@@ -438,8 +379,8 @@ function NotYourAgentNotice() {
       </Text>
       <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
         <Trans>
-          This agent isn’t linked to your account, so its persona can’t be
-          managed from here. Pick one of your own agents from My Agents.
+          This agent isn’t linked to your account, so it can’t be managed from
+          here. Pick one of your own agents from My Agents.
         </Trans>
       </Text>
     </View>
@@ -449,30 +390,14 @@ function NotYourAgentNotice() {
 function UnavailableNotice() {
   const t = useTheme()
   return (
-    <View style={[a.px_lg, a.py_2xl, a.gap_sm]}>
+    <View style={[a.px_lg, a.py_lg, a.gap_sm]}>
       <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
-        <Trans>Personas unavailable</Trans>
+        <Trans>Identity unavailable</Trans>
       </Text>
       <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
         <Trans>
           Make sure you're signed in and the agent runtime is reachable. Your
-          agent keeps working with its default name and voice in the meantime.
-        </Trans>
-      </Text>
-    </View>
-  )
-}
-
-function EmptyNotice() {
-  const t = useTheme()
-  return (
-    <View style={[a.px_lg, a.py_2xl, a.gap_sm]}>
-      <Text style={[a.text_md, a.font_bold, t.atoms.text]}>
-        <Trans>No personas yet</Trans>
-      </Text>
-      <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-        <Trans>
-          Create a persona to give your agent a name, voice, and personality.
+          agent keeps working with its current name and voice in the meantime.
         </Trans>
       </Text>
     </View>
