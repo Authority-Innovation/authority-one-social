@@ -1,5 +1,7 @@
 import {useEffect, useRef, useState} from 'react'
 import {ScrollView, useWindowDimensions, View} from 'react-native'
+import {useReanimatedKeyboardAnimation} from 'react-native-keyboard-controller'
+import Animated, {useAnimatedStyle} from 'react-native-reanimated'
 import {useNavigation} from '@react-navigation/native'
 
 import {type ChatMessage} from '#/lib/agent-runtime'
@@ -51,6 +53,13 @@ const CHAT_COLUMN_WIDTH = 360
 
 /** How long a server rejection (invalid move etc) stays on screen. */
 const ERROR_TOAST_MS = 2500
+
+/** Floor for the chat lane when the keyboard shrinks the narrow split: the
+ *  input row plus roughly one message line. Without it the flex math gives
+ *  the lane ZERO height on short viewports (the game pane's natural size
+ *  alone exceeds what the keyboard leaves) and the input vanishes — the pane
+ *  is the shrinkable party, never the lane. */
+const CHAT_LANE_MIN_HEIGHT = 120
 
 const GAME_TITLES: Record<GameKind, string> = {
   'tic-tac-toe': 'Tic-tac-toe',
@@ -177,6 +186,19 @@ function GameRoomInner({
   const {centerColumnOffset} = useLayoutBreakpoints()
   const {currentAccount} = useSession()
   const navigation = useNavigation<NavigationProp>()
+
+  // KEYBOARD AVOIDANCE (native): the AgentChat pattern — a spacer at the
+  // bottom of the screen grows to the keyboard height, shrinking the split
+  // above so the chat input rides the keyboard top instead of hiding under
+  // it. Driven by the controller's animated keyboard value (app-wide
+  // KeyboardProvider), stays 0 on web where there is no soft-keyboard frame.
+  // The game pane is marked shrinkable and the chat lane keeps a minimum
+  // height so the input survives even when the keyboard is taller than the
+  // lane (phone landscape).
+  const keyboardAnim = useReanimatedKeyboardAnimation()
+  const keyboardSpacerStyle = useAnimatedStyle(() => ({
+    height: Math.max(0, -keyboardAnim.height.get()),
+  }))
 
   const isGuest = !!guestToken && !currentAccount
   const playerName = isGuest
@@ -632,6 +654,7 @@ function GameRoomInner({
             {chatLane}
           </View>
         </View>
+        <Animated.View style={keyboardSpacerStyle} />
       </Layout.Screen>
     )
   }
@@ -659,7 +682,7 @@ function GameRoomInner({
           {maxWidth: CENTER_COLUMN_WIDTH},
         ]}>
         {storyMode ? (
-          <View style={[{height: Math.max(height * 0.45, 300)}]}>
+          <View style={[a.flex_shrink, {height: Math.max(height * 0.45, 300)}]}>
             {gamePane(boardSize)}
           </View>
         ) : (
@@ -669,15 +692,26 @@ function GameRoomInner({
           // Cap the pane at half the viewport and let IT scroll internally;
           // tall (portrait) viewports keep their natural layout.
           <ScrollView
-            style={[{flexGrow: 0}, height < 500 && {maxHeight: height * 0.5}]}
+            style={[
+              a.flex_shrink,
+              {flexGrow: 0},
+              height < 500 && {maxHeight: height * 0.5},
+            ]}
             contentContainerStyle={[a.py_lg, a.align_center]}>
             {gamePane(boardSize)}
           </ScrollView>
         )}
-        <View style={[a.flex_1, a.border_t, t.atoms.border_contrast_low]}>
+        <View
+          style={[
+            a.flex_1,
+            a.border_t,
+            t.atoms.border_contrast_low,
+            {minHeight: CHAT_LANE_MIN_HEIGHT},
+          ]}>
           {chatLane}
         </View>
       </View>
+      <Animated.View style={keyboardSpacerStyle} />
     </Layout.Screen>
   )
 }

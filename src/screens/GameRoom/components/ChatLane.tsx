@@ -1,13 +1,17 @@
 import {useCallback, useRef, useState} from 'react'
 import {ScrollView, TextInput, View} from 'react-native'
+import {useReanimatedKeyboardAnimation} from 'react-native-keyboard-controller'
+import Animated, {useAnimatedStyle} from 'react-native-reanimated'
 
 import {type ChatMessage} from '#/lib/agent-runtime'
+import {useBottomBarOffset} from '#/lib/hooks/useBottomBarOffset'
 import {isSelfSender} from '#/screens/AgentChat/attribution'
 import {MessageBubble} from '#/screens/AgentChat/MessageBubble'
-import {atoms as a, useTheme, web} from '#/alf'
+import {atoms as a, tokens, useTheme, web} from '#/alf'
 import {Button, ButtonIcon} from '#/components/Button'
 import {PaperPlaneVertical_Filled_Stroke2_Corner1_Rounded as SendIcon} from '#/components/icons/PaperPlane'
 import {Text} from '#/components/Typography'
+import {IS_WEB} from '#/env'
 
 /**
  * The game room's chat lane — the SAME bubble surface as agent/group chat
@@ -38,6 +42,20 @@ export function ChatLane({
   const t = useTheme()
   const [input, setInput] = useState('')
   const scrollRef = useRef<ScrollView>(null)
+  // KEYBOARD-CLOSED clearance for the native overlay tab bar (same fix as the
+  // AgentChat composer: without it the input row hides BEHIND the bottom bar).
+  // Collapses to the row's own base padding as the keyboard opens — the
+  // keyboard covers the bar, so keeping the offset would float the input above
+  // the keyboard by exactly that gap. Web keeps today's static padding: the
+  // browser-tested layouts never padded for the web bottom bar, and there is
+  // no soft-keyboard progress to drive it.
+  const bottomBarOffset = useBottomBarOffset()
+  const barClearance = IS_WEB ? 0 : bottomBarOffset
+  const keyboardAnim = useReanimatedKeyboardAnimation()
+  const inputInsetStyle = useAnimatedStyle(() => ({
+    paddingBottom:
+      tokens.space.sm + barClearance * (1 - keyboardAnim.progress.get()),
+  }))
 
   const doSend = () => {
     const text = input.trim()
@@ -90,15 +108,16 @@ export function ChatLane({
         )}
       </ScrollView>
 
-      <View
+      <Animated.View
         style={[
           a.flex_row,
           a.align_center,
           a.gap_sm,
           a.px_md,
-          a.py_sm,
+          a.pt_sm,
           a.border_t,
           t.atoms.border_contrast_low,
+          inputInsetStyle,
         ]}>
         <TextInput
           testID="gameChatInput"
@@ -138,7 +157,7 @@ export function ChatLane({
           onPress={doSend}>
           <ButtonIcon icon={SendIcon} />
         </Button>
-      </View>
+      </Animated.View>
     </View>
   )
 }
