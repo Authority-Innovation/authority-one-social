@@ -1,7 +1,7 @@
 import {useState} from 'react'
 import {Pressable, type TextStyle, View} from 'react-native'
 
-import {atoms as a, useTheme, web} from '#/alf'
+import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {Text} from '#/components/Typography'
 import {
@@ -20,10 +20,9 @@ import {useFlashHint} from './useFlashHint'
 
 /**
  * Fixed board colors (independent of app theme) so the glyphs always read.
- * TWO-TONE NEUTRAL GREY (2026-07-25): both a solid-white and a solid-black piece
- * stand out on mid-greys without needing the heavy dark halo that used to make
- * white pieces read as black (Elliott's screenshot). Mid-toned on purpose —
- * neither square is near-white or near-black, so neither piece color drowns.
+ * TWO-TONE NEUTRAL GREY (2026-07-25): a plain grey board so the colour contrast
+ * lives entirely on the PIECES (red vs blue below). Mid-toned greys let a strong
+ * red and a strong blue both read on either square.
  */
 const DARK_SQUARE = '#8a8a8a'
 const LIGHT_SQUARE = '#c4c4c4'
@@ -32,35 +31,26 @@ const SELECT_TINT = 'rgba(255, 255, 0, 0.55)'
 const CHECK_TINT = 'rgba(220, 40, 40, 0.55)'
 
 /**
- * Both colors render the same solid glyph shapes (see GLYPHS in chess.ts), so
- * piece color is the FILL: distinctly solid white vs solid black. No drop shadow
- * / heavy halo (that ring is what made white pieces look black). Legibility on a
- * same-tone square comes from a THIN 1px neutral edge only: on web a crisp
- * 4-offset 1px hairline (no blur), native a single 1px hairline fallback.
+ * Piece identity is COLOUR CONTRAST, not black/white (Elliott's pick): seat '0'
+ * (chess White) renders solid RED, seat '1' (Black) solid BLUE — clearly red vs
+ * clearly blue, deep enough to look intentional, both readable on both grey
+ * squares. FLAT — NO drop shadow, halo, bevel, or outline of any kind. The a11y
+ * label + status subline say "red"/"blue" to match what is on screen.
  */
+const RED_PIECE = '#cf3030'
+const BLUE_PIECE = '#2f5ecf'
 function pieceStyle(color: ChessColor, size: number): TextStyle[] {
-  const white = color === 'w'
-  const fill = white ? '#ffffff' : '#111111'
-  // Dark hairline under a white piece, light hairline under a black one — just
-  // enough to separate a piece from a same-tone grey square.
-  const edge = white ? '#2b2b2b' : '#ededed'
   return [
     {
-      fontSize: size * 0.72,
-      lineHeight: size * 0.95,
-      color: fill,
-      textShadowColor: edge,
-      textShadowOffset: {width: 0, height: 1},
-      textShadowRadius: 1,
+      // Glyph is 0.90 of the cell (25% larger than the previous 0.72). lineHeight
+      // is the FULL cell so the taller glyph stays vertically centred and never
+      // overflows the square (lineHeight >= fontSize, capped at the cell height);
+      // horizontal centring comes from the cell's justify/align.
+      fontSize: size * 0.9,
+      lineHeight: size,
+      textAlign: 'center',
+      color: color === 'w' ? RED_PIECE : BLUE_PIECE,
     },
-    web({
-      textShadow: [
-        `-1px -1px 0 ${edge}`,
-        `1px -1px 0 ${edge}`,
-        `-1px 1px 0 ${edge}`,
-        `1px 1px 0 ${edge}`,
-      ].join(', '),
-    }),
   ]
 }
 
@@ -156,7 +146,7 @@ export function ChessBoard({
             : seat !== null && !myTurn
               ? `${nameOf(ctx.currentPlayer)} is thinking…`
               : `${nameOf(ctx.currentPlayer)}'s turn`
-      } — ${active === 'w' ? 'white' : 'black'}${G.check ? ' — check!' : ''}`
+      } — ${active === 'w' ? 'red' : 'blue'}${G.check ? ' — check!' : ''}`
 
   const onSquarePress = (i: number) => {
     if (over !== null) return
@@ -264,7 +254,7 @@ export function ChessBoard({
                   accessibilityRole="button"
                   accessibilityLabel={
                     piece
-                      ? `${alg}, ${piece.color === 'w' ? 'white' : 'black'} ${piece.type}`
+                      ? `${alg}, ${piece.color === 'w' ? 'red' : 'blue'} ${piece.type}`
                       : `${alg}, empty`
                   }
                   accessibilityHint="Selects a piece or moves the selected piece here"
