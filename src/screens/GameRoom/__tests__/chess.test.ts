@@ -51,8 +51,10 @@ describe('parseFen / buildFen', () => {
     // "white" set is illegible on light squares.
     expect(pieceGlyph({color: 'w', type: 'k'})).toBe('♚')
     expect(pieceGlyph({color: 'b', type: 'k'})).toBe('♚')
-    expect(pieceGlyph({color: 'w', type: 'p'})).toBe('♟')
-    expect(pieceGlyph({color: 'b', type: 'p'})).toBe('♟')
+    // The pawn carries U+FE0E (text presentation): bare U+265F is the one
+    // chess glyph that defaults to EMOJI presentation and ignores text color.
+    expect(pieceGlyph({color: 'w', type: 'p'})).toBe('♟︎')
+    expect(pieceGlyph({color: 'b', type: 'p'})).toBe('♟︎')
   })
 })
 

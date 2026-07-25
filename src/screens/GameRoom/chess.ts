@@ -118,9 +118,13 @@ export function buildFen(
 // Both colors use the SOLID glyph shapes: the hollow "white" set (U+2654-2659)
 // has thin strokes and no fill, so it nearly vanishes on light squares.
 // Color is conveyed by fill + outline in the board's text styling instead.
+// U+265F (pawn) is the ONE chess glyph with default EMOJI presentation, so
+// bare it renders as the black-pawn color emoji and ignores the text color;
+// U+FE0E (VS-15) forces text presentation so it takes red/blue like the rest.
+const SOLID_PAWN = '♟︎'
 const GLYPHS: Record<ChessColor, Record<ChessPieceType, string>> = {
-  w: {k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'},
-  b: {k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'},
+  w: {k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: SOLID_PAWN},
+  b: {k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: SOLID_PAWN},
 }
 
 export function pieceGlyph(piece: ChessPiece): string {
