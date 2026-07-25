@@ -18,43 +18,47 @@ import {
 import {type GameCtx, type PlayerInfo} from '../gameClient'
 import {useFlashHint} from './useFlashHint'
 
-/** Fixed board colors (independent of app theme) so the glyphs always read. */
-const DARK_SQUARE = '#739552'
-const LIGHT_SQUARE = '#ebecd0'
+/**
+ * Fixed board colors (independent of app theme) so the glyphs always read.
+ * TWO-TONE NEUTRAL GREY (2026-07-25): both a solid-white and a solid-black piece
+ * stand out on mid-greys without needing the heavy dark halo that used to make
+ * white pieces read as black (Elliott's screenshot). Mid-toned on purpose —
+ * neither square is near-white or near-black, so neither piece color drowns.
+ */
+const DARK_SQUARE = '#8a8a8a'
+const LIGHT_SQUARE = '#c4c4c4'
 const LAST_MOVE_TINT = 'rgba(255, 255, 0, 0.4)'
 const SELECT_TINT = 'rgba(255, 255, 0, 0.55)'
 const CHECK_TINT = 'rgba(220, 40, 40, 0.55)'
 
 /**
  * Both colors render the same solid glyph shapes (see GLYPHS in chess.ts), so
- * color must come entirely from fill + a contrasting halo outline. The halo is
- * a ring of offset text shadows on web (RN's single textShadow cannot outline);
- * native keeps the single-shadow fallback.
+ * piece color is the FILL: distinctly solid white vs solid black. No drop shadow
+ * / heavy halo (that ring is what made white pieces look black). Legibility on a
+ * same-tone square comes from a THIN 1px neutral edge only: on web a crisp
+ * 4-offset 1px hairline (no blur), native a single 1px hairline fallback.
  */
 function pieceStyle(color: ChessColor, size: number): TextStyle[] {
   const white = color === 'w'
-  const fill = white ? '#f8f8f8' : '#1a1a1a'
-  const halo = white ? 'rgba(20, 20, 20, 0.9)' : 'rgba(248, 248, 248, 0.75)'
-  const o = Math.max(1, Math.round(size * 0.045))
+  const fill = white ? '#ffffff' : '#111111'
+  // Dark hairline under a white piece, light hairline under a black one — just
+  // enough to separate a piece from a same-tone grey square.
+  const edge = white ? '#2b2b2b' : '#ededed'
   return [
     {
       fontSize: size * 0.72,
       lineHeight: size * 0.95,
       color: fill,
-      textShadowColor: halo,
-      textShadowOffset: {width: 0, height: 0},
-      textShadowRadius: 3,
+      textShadowColor: edge,
+      textShadowOffset: {width: 0, height: 1},
+      textShadowRadius: 1,
     },
     web({
       textShadow: [
-        `-${o}px -${o}px 1px ${halo}`,
-        `${o}px -${o}px 1px ${halo}`,
-        `-${o}px ${o}px 1px ${halo}`,
-        `${o}px ${o}px 1px ${halo}`,
-        `0 -${o}px 1px ${halo}`,
-        `0 ${o}px 1px ${halo}`,
-        `-${o}px 0 1px ${halo}`,
-        `${o}px 0 1px ${halo}`,
+        `-1px -1px 0 ${edge}`,
+        `1px -1px 0 ${edge}`,
+        `-1px 1px 0 ${edge}`,
+        `1px 1px 0 ${edge}`,
       ].join(', '),
     }),
   ]
