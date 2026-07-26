@@ -28,6 +28,10 @@ import {
 } from './connectFour'
 import {type Cell, type TicTacToeG} from './tictactoe'
 import {
+  ASSIST_INTENTS,
+  type AssistInfo,
+  type AssistIntent,
+  type AssistSuggestion,
   type CheckersMove,
   type ChessMove,
   type ConnectFourMove,
@@ -288,6 +292,51 @@ export function mapWireSeries(series: unknown): GameSeries | null {
   }
 }
 
+/**
+ * Wire `assist` ({seats, intents}) → AssistInfo, or null when absent/malformed.
+ * PURE, defensive. Absent is the NORMAL case — assist is opt-in per player, so
+ * anything we cannot read cleanly means "no buttons", never "buttons for all".
+ */
+export function mapWireAssistInfo(assist: unknown): AssistInfo | null {
+  if (!assist || typeof assist !== 'object') return null
+  const a = assist as {seats?: unknown; intents?: unknown}
+  const seats = Array.isArray(a.seats)
+    ? a.seats.filter((x): x is string => typeof x === 'string')
+    : []
+  if (!seats.length) return null
+  const intents = Array.isArray(a.intents)
+    ? a.intents.filter((x): x is AssistIntent =>
+        (ASSIST_INTENTS as readonly string[]).includes(x as string),
+      )
+    : []
+  return {seats, intents: intents.length ? intents : [...ASSIST_INTENTS]}
+}
+
+/** Wire `assist-move` frame → AssistSuggestion, or null when malformed. PURE.
+ *  A suggestion we cannot read is dropped rather than shown half-rendered. */
+export function mapWireAssistMove(frame: {
+  [k: string]: unknown
+}): AssistSuggestion | null {
+  const move = frame.move as {from?: unknown; to?: unknown; promotion?: unknown}
+  if (typeof move?.from !== 'string' || typeof move?.to !== 'string')
+    return null
+  if (!(ASSIST_INTENTS as readonly string[]).includes(frame.intent as string)) {
+    return null
+  }
+  return {
+    intent: frame.intent as AssistIntent,
+    move: {
+      from: move.from,
+      to: move.to,
+      ...(typeof move.promotion === 'string'
+        ? {promotion: move.promotion}
+        : {}),
+    },
+    reason: typeof frame.reason === 'string' ? frame.reason : '',
+    differentiated: frame.differentiated !== false,
+  }
+}
+
 /** Wire ctx.gameover ({winner:"0"} | {draw:true}) → {winner|null}. PURE. */
 export function mapWireGameover(
   gameover: unknown,
@@ -419,9 +468,17 @@ export function createLiveGameClient(opts: LiveGameClientOptions): GameClient {
         callbacks.onState(G, ctx, mapWirePlayers(frame.players))
         const series = mapWireSeries(frame.series)
         if (series) callbacks.onSeries?.(series)
+        // Assist capability rides EVERY state frame (unlike `series`, absence
+        // is meaningful: it means the buttons are off), so report it each time.
+        callbacks.onAssistInfo?.(mapWireAssistInfo(frame.assist))
         for (const text of pendingChat.splice(0)) {
           send({t: 'chat', text})
         }
+        break
+      }
+      case 'assist-move': {
+        const suggestion = mapWireAssistMove(frame)
+        if (suggestion) callbacks.onAssistMove?.(suggestion)
         break
       }
       case 'players':
@@ -577,6 +634,13 @@ export function createLiveGameClient(opts: LiveGameClientOptions): GameClient {
       // valid), no navigation — the server answers with a fresh state frame
       // (or a rematch-not-allowed error, surfaced via the onError path).
       send({t: 'rematch'})
+    },
+
+    sendAssist(intent: AssistIntent) {
+      // ACCESSIBILITY ASSIST: read-only ask. Deliberately NOT queued while
+      // offline (like moves, unlike chat) — advice about a position we may no
+      // longer be in is worse than no advice.
+      send({t: 'assist', intent})
     },
   }
 }

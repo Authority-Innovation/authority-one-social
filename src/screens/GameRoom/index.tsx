@@ -29,6 +29,9 @@ import {ScenePane} from './components/ScenePane'
 import {initialConnectFourG} from './connectFour'
 import {createLiveMatch, type LaunchableGame} from './createMatch'
 import {
+  type AssistInfo,
+  type AssistIntent,
+  type AssistSuggestion,
   createGameClient,
   FORCE_MOCK_TRANSPORT,
   type GameChatMsg,
@@ -223,6 +226,12 @@ function GameRoomInner({
   // score across games on this board.
   const [series, setSeries] = useState<GameSeries | null>(null)
   const [sceneChosenId, setSceneChosenId] = useState<string | null>(null)
+  // ACCESSIBILITY ASSIST: which seats may ask for move help (from every state
+  // frame), the intent we are waiting on, and the server's recommendation.
+  const [assistInfo, setAssistInfo] = useState<AssistInfo | null>(null)
+  const [assistPending, setAssistPending] = useState<AssistIntent | null>(null)
+  const [assistSuggestion, setAssistSuggestion] =
+    useState<AssistSuggestion | null>(null)
   const [errorText, setErrorText] = useState<string | null>(null)
   const [connection, setConnection] = useState<GameConnectionStatus | null>(
     null,
@@ -271,6 +280,9 @@ function GameRoomInner({
           setCtx(c)
           setPlayers(p)
           setHasState(true)
+          // Any new position invalidates advice about the old one.
+          setAssistSuggestion(null)
+          setAssistPending(null)
         },
         onPlayers: setPlayers,
         onChat: m => setChat(prev => [...prev, toChatMessage(m)]),
@@ -283,11 +295,19 @@ function GameRoomInner({
         onGameover: () => {},
         onSeat: setSeat,
         onSeries: setSeries,
+        onAssistInfo: setAssistInfo,
+        onAssistMove: suggestion => {
+          setAssistPending(null)
+          setAssistSuggestion(suggestion)
+        },
         onScene: s => {
           setScene(s)
           setSceneChosenId(null)
         },
         onError: err => {
+          // A refused/failed assist must never leave the panel stuck on
+          // "thinking…" — drop back to the buttons and show the reason.
+          setAssistPending(null)
           // Gentle surface: a transient line in the game pane, never a crash.
           // A refused rematch gets a human line (the raw code would read as
           // debug output); the server's own message wins when it sends one.
@@ -459,6 +479,21 @@ function GameRoomInner({
             })
           }
           onNewGame={live ? undefined : onNewGame}
+          assist={{
+            info: assistInfo,
+            suggestion: assistSuggestion,
+            pending: assistPending,
+            agentName: players.find(p => p.id !== seat)?.name ?? null,
+            onRequest: intent => {
+              setAssistSuggestion(null)
+              setAssistPending(intent)
+              clientRef.current?.sendAssist?.(intent)
+            },
+            onDismiss: () => {
+              setAssistSuggestion(null)
+              setAssistPending(null)
+            },
+          }}
         />
       )
     }

@@ -112,6 +112,7 @@ export type ClientMsg =
   | {t: 'move'; move: GameMove}
   | {t: 'chat'; text: string}
   | {t: 'choice'; id: string}
+  | {t: 'assist'; intent: AssistIntent}
   | {t: 'rematch'}
 
 /** Server → client frames (app-side shapes; the live client maps wire G /
@@ -123,7 +124,34 @@ export type ServerMsg =
   | {t: 'gameover'; winner: string | null}
   | {t: 'chat-history'; messages: GameChatMsg[]}
   | {t: 'error'; code: string; message: string}
+  | ({t: 'assist-move'} & AssistSuggestion)
   | ({t: 'scene'} & SceneFrame)
+
+/**
+ * ACCESSIBILITY ASSIST — the three plain-language things a player can ask for
+ * on their own turn. The server works out a sound move for whichever one they
+ * tap. Order is the order the buttons are shown.
+ */
+export const ASSIST_INTENTS = ['attack', 'defend', 'surprise'] as const
+export type AssistIntent = (typeof ASSIST_INTENTS)[number]
+
+/** The server's answer to an assist request: one recommended move plus a short
+ *  warm line to show alongside it. The board HIGHLIGHTS this; the player still
+ *  plays it themselves. */
+export interface AssistSuggestion {
+  intent: AssistIntent
+  move: {from: string; to: string; promotion?: string}
+  reason: string
+  /** False when the game cannot yet tell the three intents apart (every game
+   *  except chess) — the UI says "best move" instead of pretending. */
+  differentiated: boolean
+}
+
+/** Which seats this match offers assist to (null = nobody, the default). */
+export interface AssistInfo {
+  seats: string[]
+  intents: AssistIntent[]
+}
 
 export interface GameCallbacks {
   onState: (G: GameG, ctx: GameCtx, players: PlayerInfo[]) => void
@@ -147,6 +175,11 @@ export interface GameCallbacks {
   onSeries?: (series: GameSeries) => void
   /** Live transport connectivity, for a subtle "reconnecting" indicator. */
   onConnection?: (status: GameConnectionStatus) => void
+  /** Which seats may use the accessibility assist (rides every state frame,
+   *  like `series`). null = nobody. */
+  onAssistInfo?: (assist: AssistInfo | null) => void
+  /** The server's answer to a {t:'assist'} ask — sent to THIS client only. */
+  onAssistMove?: (suggestion: AssistSuggestion) => void
 }
 
 export interface GameClientOptions {
@@ -173,4 +206,8 @@ export interface GameClient {
    *  {code:'rematch-not-allowed'} error unless the game is over. LIVE
    *  transport only; the mocks reset via their local new-game control. */
   sendRematch?: () => void
+  /** ACCESSIBILITY ASSIST: ask the server for a recommended move for this seat
+   *  ({t:'assist'}). Read-only — it never changes the board; the answer arrives
+   *  on onAssistMove and the player still taps to play it. */
+  sendAssist?: (intent: AssistIntent) => void
 }

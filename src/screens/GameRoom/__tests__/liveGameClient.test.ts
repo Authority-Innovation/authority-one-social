@@ -14,6 +14,8 @@ import {
   wireGameKind,
 } from '../liveGameClient'
 import {
+  type AssistInfo,
+  type AssistSuggestion,
   type GameCallbacks,
   type GameChatMsg,
   type GameClient,
@@ -76,6 +78,8 @@ function harness() {
   const errors: GameErrorMsg[] = []
   const seats: Array<string | null> = []
   const connections: GameConnectionStatus[] = []
+  const assistInfos: Array<AssistInfo | null> = []
+  const assistMoves: AssistSuggestion[] = []
   const callbacks: GameCallbacks = {
     onState: (G, ctx, players) => states.push({G, ctx, players}),
     onChat: m => chats.push(m),
@@ -86,6 +90,8 @@ function harness() {
     onError: e => errors.push(e),
     onSeat: s => seats.push(s),
     onConnection: c => connections.push(c),
+    onAssistInfo: a => assistInfos.push(a),
+    onAssistMove: m => assistMoves.push(m),
   }
   return {
     callbacks,
@@ -98,6 +104,8 @@ function harness() {
     errors,
     seats,
     connections,
+    assistInfos,
+    assistMoves,
   }
 }
 
@@ -651,5 +659,63 @@ describe('createLiveGameClient', () => {
     client!.sendMove({type: 'place', args: {cell: 1}})
     client!.sendChat('hello?')
     expect(ws.sent).toHaveLength(1)
+  })
+
+  it('reports the assist capability from every state frame, and the answer to an ask', () => {
+    const h = connect()
+    const ws = FakeWebSocket.latest()
+    ws.serverOpen()
+
+    // No assist on this match: the capability is reported as null, not omitted,
+    // so the UI can turn the buttons OFF again if it is ever revoked.
+    ws.serverSend({
+      t: 'state',
+      G: {cells: Array(9).fill(null)},
+      ctx: {currentPlayer: '0'},
+      players: {},
+    })
+    expect(h.assistInfos).toEqual([null])
+
+    ws.serverSend({
+      t: 'state',
+      G: {cells: Array(9).fill(null)},
+      ctx: {currentPlayer: '0'},
+      players: {},
+      assist: {seats: ['0'], intents: ['attack', 'defend', 'surprise']},
+    })
+    expect(h.assistInfos[1]).toEqual({
+      seats: ['0'],
+      intents: ['attack', 'defend', 'surprise'],
+    })
+
+    ws.serverSend({
+      t: 'assist-move',
+      intent: 'attack',
+      move: {from: 'e2', to: 'e4'},
+      reason: 'Take some space!',
+      differentiated: true,
+    })
+    expect(h.assistMoves).toEqual([
+      {
+        intent: 'attack',
+        move: {from: 'e2', to: 'e4'},
+        reason: 'Take some space!',
+        differentiated: true,
+      },
+    ])
+
+    // A malformed suggestion is dropped, never surfaced half-rendered.
+    ws.serverSend({t: 'assist-move', intent: 'attack', move: {from: 'e2'}})
+    expect(h.assistMoves).toHaveLength(1)
+  })
+
+  it('sendAssist puts an assist frame on the wire', () => {
+    connect()
+    const ws = FakeWebSocket.latest()
+    ws.serverOpen()
+    const c = client
+    if (!c) throw new Error('client was not created')
+    c.sendAssist?.('defend')
+    expect(ws.sent).toContainEqual({t: 'assist', intent: 'defend'})
   })
 })

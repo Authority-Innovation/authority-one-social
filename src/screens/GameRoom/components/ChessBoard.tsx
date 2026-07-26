@@ -5,6 +5,17 @@ import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {Text} from '#/components/Typography'
 import {
+  ASSIST_CANCEL_LABEL,
+  ASSIST_CONFIRM_LABEL,
+  assistHeadline,
+  assistIntentFace,
+  assistIntentsFor,
+  assistPanelMode,
+  assistPrompt,
+  assistThinkingLine,
+  describeAssistSuggestion,
+} from '../assistPanel'
+import {
   algToSq,
   type ChessColor,
   type ChessG,
@@ -15,7 +26,13 @@ import {
   PROMOTION_PIECES,
   sqToAlg,
 } from '../chess'
-import {type GameCtx, type PlayerInfo} from '../gameClient'
+import {
+  type AssistInfo,
+  type AssistIntent,
+  type AssistSuggestion,
+  type GameCtx,
+  type PlayerInfo,
+} from '../gameClient'
 import {useFlashHint} from './useFlashHint'
 
 /**
@@ -29,6 +46,17 @@ const LIGHT_SQUARE = '#c4c4c4'
 const LAST_MOVE_TINT = 'rgba(255, 255, 0, 0.4)'
 const SELECT_TINT = 'rgba(255, 255, 0, 0.55)'
 const CHECK_TINT = 'rgba(220, 40, 40, 0.55)'
+
+/**
+ * ACCESSIBILITY ASSIST highlight. GREEN is the one hue the board is not already
+ * using (pieces are red/blue, squares grey, last-move yellow), so a suggested
+ * move can never be confused with anything else on screen. It is deliberately
+ * NOT colour-only: the two squares also get a thick solid ring, and the
+ * destination gets a large filled marker, so the suggestion survives colour
+ * blindness and a low-contrast screen.
+ */
+const ASSIST_TINT = 'rgba(31, 157, 77, 0.55)'
+const ASSIST_RING = '#0f7a37'
 
 /**
  * Piece identity is COLOUR CONTRAST, not black/white (Elliott's pick): seat '0'
@@ -76,6 +104,7 @@ export function ChessBoard({
   boardSize,
   onMove,
   onNewGame,
+  assist,
 }: {
   G: ChessG & {legalMoves: ChessMove[]}
   ctx: GameCtx
@@ -88,6 +117,18 @@ export function ChessBoard({
   boardSize: number
   onMove: (from: string, to: string, promotion?: string) => void
   onNewGame?: () => void
+  /** ACCESSIBILITY ASSIST (absent = the feature is off for this player, which
+   *  is the default for everybody). The board shows three big buttons on this
+   *  player's turn, highlights whatever the server recommends, and plays it on
+   *  one confirming tap — it never moves on its own. */
+  assist?: {
+    info: AssistInfo | null
+    suggestion: AssistSuggestion | null
+    pending: AssistIntent | null
+    agentName?: string | null
+    onRequest: (intent: AssistIntent) => void
+    onDismiss: () => void
+  }
 }) {
   const t = useTheme()
   const [selected, setSelected] = useState<number | null>(null)
@@ -117,6 +158,28 @@ export function ChessBoard({
 
   const lastFrom = G.lastMove ? algToSq(G.lastMove.from) : null
   const lastTo = G.lastMove ? algToSq(G.lastMove.to) : null
+
+  // ---- accessibility assist ------------------------------------------------
+  const assistMode = assistPanelMode({
+    assist: assist?.info ?? null,
+    seat,
+    myTurn,
+    gameover: over !== null,
+    pending: assist?.pending ?? null,
+    suggestion: assist?.suggestion ?? null,
+  })
+  const suggestion =
+    assistMode === 'suggestion' ? (assist?.suggestion ?? null) : null
+  const assistFrom = suggestion ? algToSq(suggestion.move.from) : null
+  const assistTo = suggestion ? algToSq(suggestion.move.to) : null
+  /** Play the suggested move — the ONE place a suggestion turns into a move. */
+  const playSuggestion = () => {
+    if (!suggestion) return
+    setSelected(null)
+    setPromotionChoice(null)
+    onMove(suggestion.move.from, suggestion.move.to, suggestion.move.promotion)
+    assist?.onDismiss()
+  }
   // Check marks the side to move's king.
   let checkedKingSq: number | null = null
   if (G.check && over === null) {
@@ -158,6 +221,13 @@ export function ChessBoard({
             ? 'No opponent yet — waiting for someone to join'
             : `Waiting for ${nameOf(ctx.currentPlayer)} — it’s their turn`,
       )
+      return
+    }
+    // A suggestion is on the board: tapping either highlighted square plays it.
+    // Tapping the piece Bob pointed at IS the confirming tap — the most obvious
+    // gesture should be the one that works.
+    if (suggestion && (i === assistFrom || i === assistTo)) {
+      playSuggestion()
       return
     }
     setPromotionChoice(null)
@@ -239,8 +309,13 @@ export function ChessBoard({
               const alg = sqToAlg(i)
               const isSelected = selected === i && piece !== null
               const isDest = destinations.some(m => m.to === alg)
-              const tint =
-                checkedKingSq === i
+              // The assist highlight OUTRANKS every other tint: when Bob has
+              // pointed at a move, that is the only thing on the board the
+              // player should have to look at.
+              const isAssist = i === assistFrom || i === assistTo
+              const tint = isAssist
+                ? ASSIST_TINT
+                : checkedKingSq === i
                   ? CHECK_TINT
                   : isSelected
                     ? SELECT_TINT
@@ -253,11 +328,20 @@ export function ChessBoard({
                   testID={`ch-sq-${alg}`}
                   accessibilityRole="button"
                   accessibilityLabel={
-                    piece
+                    (piece
                       ? `${alg}, ${piece.color === 'w' ? 'red' : 'blue'} ${piece.type}`
-                      : `${alg}, empty`
+                      : `${alg}, empty`) +
+                    (i === assistFrom
+                      ? ', suggested piece to move'
+                      : i === assistTo
+                        ? ', suggested destination'
+                        : '')
                   }
-                  accessibilityHint="Selects a piece or moves the selected piece here"
+                  accessibilityHint={
+                    isAssist
+                      ? 'Plays the suggested move'
+                      : 'Selects a piece or moves the selected piece here'
+                  }
                   disabled={over !== null}
                   onPress={() => onSquarePress(i)}
                   style={[
@@ -274,10 +358,37 @@ export function ChessBoard({
                       style={[a.absolute, a.inset_0, {backgroundColor: tint}]}
                     />
                   ) : null}
+                  {/* Thick ring on both suggested squares — the part of the
+                      highlight that does NOT depend on seeing the colour. */}
+                  {isAssist ? (
+                    <View
+                      testID={`ch-assist-${i === assistFrom ? 'from' : 'to'}-${alg}`}
+                      pointerEvents="none"
+                      style={[
+                        a.absolute,
+                        a.inset_0,
+                        {
+                          borderWidth: Math.max(3, Math.round(cellSize * 0.09)),
+                          borderColor: ASSIST_RING,
+                        },
+                      ]}
+                    />
+                  ) : null}
                   {piece ? (
                     <Text style={pieceStyle(piece.color, cellSize)}>
                       {pieceGlyph(piece)}
                     </Text>
+                  ) : i === assistTo ? (
+                    // Big filled marker on an empty destination — far more
+                    // visible than the small legal-move dot.
+                    <View
+                      style={{
+                        width: cellSize * 0.44,
+                        height: cellSize * 0.44,
+                        borderRadius: cellSize * 0.22,
+                        backgroundColor: ASSIST_RING,
+                      }}
+                    />
                   ) : isDest ? (
                     <View
                       testID={`ch-dest-${alg}`}
@@ -295,6 +406,135 @@ export function ChessBoard({
           </View>
         ))}
       </View>
+
+      {/* ACCESSIBILITY ASSIST — three big buttons on this player's own turn,
+          then the recommendation with one confirming tap. Sits directly under
+          the board so the highlight and the words are in one glance. */}
+      {assistMode === 'hidden' ? null : (
+        <View
+          testID="assistPanel"
+          style={[
+            a.w_full,
+            a.gap_sm,
+            a.px_sm,
+            a.py_sm,
+            a.rounded_md,
+            a.border,
+            {
+              maxWidth: cellSize * 8,
+              borderColor:
+                assistMode === 'suggestion' ? ASSIST_RING : undefined,
+              borderWidth: assistMode === 'suggestion' ? 2 : undefined,
+            },
+            assistMode === 'suggestion' ? null : t.atoms.border_contrast_low,
+          ]}>
+          {assistMode === 'choose' ? (
+            <>
+              <Text
+                style={[
+                  a.text_sm,
+                  a.text_center,
+                  t.atoms.text_contrast_medium,
+                ]}>
+                {assistPrompt(assist?.agentName ?? null)}
+              </Text>
+              <View style={[a.flex_row, a.gap_sm]}>
+                {assistIntentsFor(assist?.info ?? null).map(intent => {
+                  const face = assistIntentFace(intent)
+                  return (
+                    <Pressable
+                      key={intent}
+                      testID={`assist-${intent}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={face.label}
+                      accessibilityHint={face.hint}
+                      onPress={() => assist?.onRequest(intent)}
+                      style={[
+                        a.flex_1,
+                        a.align_center,
+                        a.justify_center,
+                        a.gap_xs,
+                        a.rounded_md,
+                        a.border,
+                        a.px_xs,
+                        t.atoms.border_contrast_medium,
+                        t.atoms.bg_contrast_25,
+                        // A generous target: this button exists for someone who
+                        // may not have fine motor control.
+                        {minHeight: 76, paddingVertical: 8},
+                      ]}>
+                      <Text style={[a.text_2xl]}>{face.emoji}</Text>
+                      <Text
+                        style={[
+                          a.text_md,
+                          a.font_bold,
+                          a.text_center,
+                          t.atoms.text,
+                        ]}>
+                        {face.label}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </>
+          ) : assistMode === 'thinking' ? (
+            <Text
+              testID="assistThinking"
+              accessibilityLiveRegion="polite"
+              style={[
+                a.text_md,
+                a.text_center,
+                a.py_md,
+                t.atoms.text_contrast_medium,
+              ]}>
+              {assistThinkingLine(assist?.pending ?? 'attack')}
+            </Text>
+          ) : suggestion ? (
+            <>
+              <Text
+                testID="assistReason"
+                accessibilityLiveRegion="polite"
+                style={[a.text_md, a.font_bold, a.text_center, t.atoms.text]}>
+                {assistHeadline(suggestion)}
+              </Text>
+              <Pressable
+                testID="assistConfirm"
+                accessibilityRole="button"
+                accessibilityLabel={ASSIST_CONFIRM_LABEL}
+                accessibilityHint={describeAssistSuggestion(suggestion)}
+                onPress={playSuggestion}
+                style={[
+                  a.align_center,
+                  a.justify_center,
+                  a.rounded_md,
+                  a.px_md,
+                  {minHeight: 64, backgroundColor: ASSIST_RING},
+                ]}>
+                <Text style={[a.text_lg, a.font_bold, {color: '#ffffff'}]}>
+                  {ASSIST_CONFIRM_LABEL}
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="assistDismiss"
+                accessibilityRole="button"
+                accessibilityLabel={ASSIST_CANCEL_LABEL}
+                accessibilityHint="Puts the three buttons back so you can ask for a different kind of move"
+                onPress={() => assist?.onDismiss()}
+                style={[a.align_center, a.justify_center, {minHeight: 44}]}>
+                <Text
+                  style={[
+                    a.text_sm,
+                    a.font_bold,
+                    t.atoms.text_contrast_medium,
+                  ]}>
+                  {ASSIST_CANCEL_LABEL}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+      )}
 
       {promotionChoice ? (
         <View

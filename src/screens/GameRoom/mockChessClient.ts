@@ -79,6 +79,12 @@ export function createMockChessClient(opts: GameClientOptions): GameClient {
         callbacks.onConnection?.('online')
         callbacks.onPlayers(players)
         callbacks.onState(appG(), ctx(), players)
+        // The mock always offers assist to the local seat so the buttons are
+        // developable offline (live matches are gated per player by the server).
+        callbacks.onAssistInfo?.({
+          seats: [playerID],
+          intents: ['attack', 'defend', 'surprise'],
+        })
       })
       agentSay('Chess board is live — white to move.', 900)
     },
@@ -134,5 +140,54 @@ export function createMockChessClient(opts: GameClientOptions): GameClient {
 
     // Board matches have no branch points; only the story transports act on this.
     sendChoice() {},
+
+    /**
+     * ACCESSIBILITY ASSIST in the mock. The mock has NO engine — the real
+     * three-intent search lives on the server (pilot-agent-runtime
+     * src/game/assist.js) — so this is a deliberately crude stand-in that keeps
+     * the UI developable offline: ATTACK prefers any capture, DEFEND and
+     * SURPRISE both pick at random. The suggestions here are NOT sound and are
+     * not meant to be; never judge the feature from this path.
+     */
+    sendAssist(intent) {
+      if (!connected || over) return
+      const moves = pseudoLegalMoves(squares, active)
+      if (!moves.length) return
+      const captures = moves.filter(m => {
+        const target = squares[algIndex(m.to)]
+        return (
+          target !== null && target !== undefined && target.color !== active
+        )
+      })
+      let move = moves[Math.floor(Math.random() * moves.length)]
+      let reason = 'Something different — give this one a go!'
+      if (intent === 'attack' && captures.length) {
+        move = captures[Math.floor(Math.random() * captures.length)]
+        reason = 'Let’s take one of their pieces!'
+      } else if (intent === 'attack') {
+        reason = 'Push forward and take some space!'
+      } else if (intent === 'defend') {
+        reason = 'Nice and steady — this keeps you safe.'
+      }
+      later(200, () =>
+        callbacks.onAssistMove?.({
+          intent,
+          move: {
+            from: move.from,
+            to: move.to,
+            ...(move.promotion ? {promotion: move.promotion} : {}),
+          },
+          reason,
+          differentiated: true,
+        }),
+      )
+    },
   }
+}
+
+/** 'e2' → board index, for the mock's capture check. */
+function algIndex(alg: string): number {
+  const col = alg.charCodeAt(0) - 97
+  const rank = alg.charCodeAt(1) - 48
+  return (8 - rank) * 8 + col
 }
