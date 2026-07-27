@@ -300,8 +300,18 @@ export function mapWireSeries(series: unknown): GameSeries | null {
 export function mapWireAssistInfo(assist: unknown): AssistInfo | null {
   if (!assist || typeof assist !== 'object') return null
   const a = assist as {seats?: unknown; intents?: unknown}
+  // Seat ids are strings on our wire, but a NUMERIC seat used to be dropped
+  // silently — and a dropped seat looks exactly like "assist is off" to the
+  // player. Coerce the number rather than lose the grant; anything else still
+  // fails closed.
   const seats = Array.isArray(a.seats)
-    ? a.seats.filter((x): x is string => typeof x === 'string')
+    ? a.seats
+        .filter(
+          (x): x is string | number =>
+            typeof x === 'string' ||
+            (typeof x === 'number' && Number.isInteger(x)),
+        )
+        .map(String)
     : []
   if (!seats.length) return null
   const intents = Array.isArray(a.intents)

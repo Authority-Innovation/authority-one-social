@@ -7,8 +7,13 @@
  * says, what a screen reader hears — are testable without rendering anything.
  *
  * DESIGN NOTES (they are requirements, not decoration):
- *  - The buttons appear ONLY on this player's own turn. A dead button is a
- *    small cruelty to someone who is already finding the game hard.
+ *  - The PANEL is present for the whole match once a seat has been granted
+ *    assist — including the opponent's turn, where it holds its place with a
+ *    quiet line instead of vanishing. Buttons that appear and disappear are
+ *    buttons a player with low vision never finds; a stable, always-there
+ *    block is the whole point. The tappable buttons themselves still only
+ *    arm on this player's own turn (a dead button is a small cruelty to
+ *    someone already finding the game hard) — hence 'waiting'.
  *  - Nothing auto-plays. The server recommends, the board highlights, the
  *    player taps once to play it. They are playing, not watching.
  *  - The highlight never relies on colour alone (the board is already carrying
@@ -24,15 +29,18 @@ import {
 
 /** What the assist area should be showing right now. */
 export type AssistPanelMode =
-  | 'hidden' // not this player's match, seat, or turn
+  | 'hidden' // not this player's match or seat (or the game is over)
+  | 'waiting' // granted, but the opponent is to move: hold the place, no buttons
   | 'choose' // the three buttons, waiting for a tap
   | 'thinking' // asked, waiting for the server
   | 'suggestion' // a move is on the board, waiting for the confirming tap
 
 /**
- * The single decision about what the assist area shows. Deliberately strict:
- * assist is a capability granted to ONE seat, and it only ever appears on that
- * seat's own live turn.
+ * The single decision about what the assist area shows. Strict about WHO:
+ * assist is a capability granted per seat and never leaks to another player or
+ * a spectator. Deliberately NOT strict about WHEN any more — a granted seat
+ * keeps the block on screen all match ('waiting' off-turn) so the buttons
+ * always appear in the same place rather than blinking in and out.
  */
 export function assistPanelMode({
   assist,
@@ -54,11 +62,27 @@ export function assistPanelMode({
   if (gameover) return 'hidden'
   if (!assist || seat === null) return 'hidden'
   if (!assist.seats.includes(seat)) return 'hidden'
-  if (!myTurn) return 'hidden'
+  if (!myTurn) return 'waiting'
   if (suggestion) return 'suggestion'
   if (pending) return 'thinking'
   return 'choose'
 }
+
+/** Is the assist block on screen at all (any mode but 'hidden')? Used by the
+ *  screen to reserve vertical room for it BEFORE sizing the board, so the
+ *  buttons are never the thing that falls off the bottom. */
+export function assistPanelVisible(mode: AssistPanelMode): boolean {
+  return mode !== 'hidden'
+}
+
+/** The block's own heading — it names the feature so the player can be told
+ *  "tap the green MOVE HELP buttons" and find it. */
+export const ASSIST_TITLE = 'MOVE HELP'
+
+/** Held place on the opponent's turn: says where the buttons went and that
+ *  they are coming back. */
+export const ASSIST_WAITING_LINE =
+  'Your move help buttons appear here on your turn.'
 
 /** Which intents to offer, in order — the server's list when it sent one. */
 export function assistIntentsFor(assist: AssistInfo | null): AssistIntent[] {

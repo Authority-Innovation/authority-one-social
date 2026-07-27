@@ -13,6 +13,7 @@ import {
   assistIntentFace,
   assistIntentsFor,
   assistPanelMode,
+  assistPanelVisible,
   assistPrompt,
   assistThinkingLine,
   describeAssistSuggestion,
@@ -57,8 +58,33 @@ describe('assistPanelMode', () => {
     expect(assistPanelMode({...base, seat: null})).toBe('hidden')
   })
 
-  it('is hidden when it is not your turn — a dead button helps nobody', () => {
-    expect(assistPanelMode({...base, myTurn: false})).toBe('hidden')
+  it('holds its place on the opponent’s turn instead of vanishing', () => {
+    // Buttons that appear and disappear are buttons a low-vision player never
+    // finds — the block stays put and says so; only the buttons stand down.
+    expect(assistPanelMode({...base, myTurn: false})).toBe('waiting')
+  })
+
+  it('waiting outranks a stale pending ask or suggestion off-turn', () => {
+    expect(
+      assistPanelMode({
+        ...base,
+        myTurn: false,
+        pending: 'attack',
+        suggestion: SUGGESTION,
+      }),
+    ).toBe('waiting')
+  })
+
+  it('is on screen in every mode but hidden', () => {
+    expect(assistPanelVisible('hidden')).toBe(false)
+    for (const mode of [
+      'waiting',
+      'choose',
+      'thinking',
+      'suggestion',
+    ] as const) {
+      expect(assistPanelVisible(mode)).toBe(true)
+    }
   })
 
   it('is hidden once the game is over', () => {
@@ -186,8 +212,12 @@ describe('mapWireAssistInfo', () => {
 
   it('drops junk seats and unknown intents rather than trusting them', () => {
     expect(
-      mapWireAssistInfo({seats: ['0', 7, null], intents: ['attack', 'nuke']}),
+      mapWireAssistInfo({seats: ['0', null, {}], intents: ['attack', 'nuke']}),
     ).toEqual({seats: ['0'], intents: ['attack']})
+  })
+
+  it('accepts a numeric seat — a dropped grant reads as "assist is off"', () => {
+    expect(mapWireAssistInfo({seats: [0, 1]})?.seats).toEqual(['0', '1'])
   })
 })
 

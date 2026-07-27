@@ -7,6 +7,8 @@ import {Text} from '#/components/Typography'
 import {
   ASSIST_CANCEL_LABEL,
   ASSIST_CONFIRM_LABEL,
+  ASSIST_TITLE,
+  ASSIST_WAITING_LINE,
   assistHeadline,
   assistIntentFace,
   assistIntentsFor,
@@ -57,6 +59,24 @@ const CHECK_TINT = 'rgba(220, 40, 40, 0.55)'
  */
 const ASSIST_TINT = 'rgba(31, 157, 77, 0.55)'
 const ASSIST_RING = '#0f7a37'
+
+/**
+ * ASSIST PANEL colours are FIXED, like the board's — the player this exists for
+ * may be running any theme at any brightness, and a theme-tinted "subtle"
+ * surface is exactly how these buttons went unseen the first time. White on
+ * #0f7a37 is 5.4:1 (AA at any size, AAA at this size); the dark text on the
+ * pale panel is far higher again.
+ */
+const ASSIST_PANEL_BG = '#eef5f0'
+const ASSIST_PANEL_BORDER = '#0f7a37'
+const ASSIST_PANEL_TEXT = '#12261a'
+const ASSIST_BTN_BG = '#0f7a37'
+const ASSIST_BTN_BORDER = '#0a5526'
+const ASSIST_BTN_TEXT = '#ffffff'
+/** Tap target for the three intent buttons. Bigger than the 44pt platform
+ *  minimum on purpose: this is the button for the player with the least
+ *  precision, and it must be findable without hunting. */
+const ASSIST_BTN_MIN_HEIGHT = 96
 
 /**
  * Piece identity is COLOUR CONTRAST, not black/white (Elliott's pick): seat '0'
@@ -271,6 +291,186 @@ export function ChessBoard({
 
   const cellSize = Math.floor(boardSize / 8)
 
+  // The three labels share the panel's width, and "Surprise" is the long one:
+  // scale the type to the panel instead of clipping it on a narrow phone. Never
+  // below 14 — this whole block exists to be readable.
+  const assistLabelSize = Math.max(14, Math.min(20, Math.round(boardSize / 21)))
+
+  /**
+   * ACCESSIBILITY ASSIST block. Rendered ABOVE the board (2026-07-27): under
+   * the board it sat below the fold of the game pane on a phone — the pane is
+   * a shrinkable scroll area with the chat lane beneath it — so the player it
+   * was built for never saw it and reported the buttons "missing". The board
+   * is the biggest thing on screen and needs no help being found; these
+   * buttons do. The suggestion highlight is still on the board directly below,
+   * so the words and the highlight stay in one glance.
+   */
+  const assistBlock =
+    assistMode === 'hidden' ? null : (
+      <View
+        testID="assistPanel"
+        style={[
+          a.w_full,
+          a.gap_sm,
+          a.px_sm,
+          a.py_sm,
+          a.rounded_md,
+          {
+            maxWidth: cellSize * 8,
+            backgroundColor: ASSIST_PANEL_BG,
+            borderWidth: assistMode === 'suggestion' ? 4 : 3,
+            borderColor: ASSIST_PANEL_BORDER,
+          },
+        ]}>
+        <Text
+          testID="assistTitle"
+          style={[
+            a.text_sm,
+            a.font_bold,
+            a.text_center,
+            {color: ASSIST_PANEL_BORDER, letterSpacing: 1},
+          ]}>
+          {ASSIST_TITLE}
+        </Text>
+        {assistMode === 'waiting' ? (
+          <Text
+            testID="assistWaiting"
+            style={[
+              a.text_md,
+              a.text_center,
+              a.py_xs,
+              {color: ASSIST_PANEL_TEXT, opacity: 0.75},
+            ]}>
+            {ASSIST_WAITING_LINE}
+          </Text>
+        ) : assistMode === 'choose' ? (
+          <>
+            <Text
+              style={[
+                a.text_md,
+                a.font_bold,
+                a.text_center,
+                {color: ASSIST_PANEL_TEXT},
+              ]}>
+              {assistPrompt(assist?.agentName ?? null)}
+            </Text>
+            <View style={[a.flex_row, a.gap_sm]}>
+              {assistIntentsFor(assist?.info ?? null).map(intent => {
+                const face = assistIntentFace(intent)
+                return (
+                  <Pressable
+                    key={intent}
+                    testID={`assist-${intent}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={face.label}
+                    accessibilityHint={face.hint}
+                    onPress={() => assist?.onRequest(intent)}
+                    style={[
+                      a.flex_1,
+                      a.align_center,
+                      a.justify_center,
+                      a.gap_xs,
+                      a.rounded_md,
+                      a.px_xs,
+                      {
+                        minHeight: ASSIST_BTN_MIN_HEIGHT,
+                        paddingVertical: 10,
+                        backgroundColor: ASSIST_BTN_BG,
+                        borderWidth: 2,
+                        borderColor: ASSIST_BTN_BORDER,
+                      },
+                    ]}>
+                    <Text
+                      style={{
+                        fontSize: assistLabelSize * 1.6,
+                        lineHeight: assistLabelSize * 1.9,
+                      }}>
+                      {face.emoji}
+                    </Text>
+                    {/* No numberOfLines: a wrapped label is readable, an
+                        ellipsised one ("Surpr…") is not. */}
+                    <Text
+                      style={[
+                        a.font_bold,
+                        a.text_center,
+                        {
+                          fontSize: assistLabelSize,
+                          lineHeight: assistLabelSize * 1.25,
+                          color: ASSIST_BTN_TEXT,
+                        },
+                      ]}>
+                      {face.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </>
+        ) : assistMode === 'thinking' ? (
+          <Text
+            testID="assistThinking"
+            accessibilityLiveRegion="polite"
+            style={[
+              a.text_lg,
+              a.font_bold,
+              a.text_center,
+              a.py_md,
+              {color: ASSIST_PANEL_TEXT},
+            ]}>
+            {assistThinkingLine(assist?.pending ?? 'attack')}
+          </Text>
+        ) : suggestion ? (
+          <>
+            <Text
+              testID="assistReason"
+              accessibilityLiveRegion="polite"
+              style={[
+                a.text_md,
+                a.font_bold,
+                a.text_center,
+                {color: ASSIST_PANEL_TEXT},
+              ]}>
+              {assistHeadline(suggestion)}
+            </Text>
+            <Pressable
+              testID="assistConfirm"
+              accessibilityRole="button"
+              accessibilityLabel={ASSIST_CONFIRM_LABEL}
+              accessibilityHint={describeAssistSuggestion(suggestion)}
+              onPress={playSuggestion}
+              style={[
+                a.align_center,
+                a.justify_center,
+                a.rounded_md,
+                a.px_md,
+                {
+                  minHeight: 72,
+                  backgroundColor: ASSIST_BTN_BG,
+                  borderWidth: 2,
+                  borderColor: ASSIST_BTN_BORDER,
+                },
+              ]}>
+              <Text style={[a.text_xl, a.font_bold, {color: ASSIST_BTN_TEXT}]}>
+                {ASSIST_CONFIRM_LABEL}
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="assistDismiss"
+              accessibilityRole="button"
+              accessibilityLabel={ASSIST_CANCEL_LABEL}
+              accessibilityHint="Puts the three buttons back so you can ask for a different kind of move"
+              onPress={() => assist?.onDismiss()}
+              style={[a.align_center, a.justify_center, {minHeight: 48}]}>
+              <Text
+                style={[a.text_md, a.font_bold, {color: ASSIST_PANEL_BORDER}]}>
+                {ASSIST_CANCEL_LABEL}
+              </Text>
+            </Pressable>
+          </>
+        ) : null}
+      </View>
+    )
+
   return (
     <View style={[a.align_center, a.gap_sm]}>
       <Text
@@ -291,6 +491,8 @@ export function ChessBoard({
           </Text>
         ) : null}
       </View>
+
+      {assistBlock}
 
       <View
         style={[
@@ -406,135 +608,6 @@ export function ChessBoard({
           </View>
         ))}
       </View>
-
-      {/* ACCESSIBILITY ASSIST — three big buttons on this player's own turn,
-          then the recommendation with one confirming tap. Sits directly under
-          the board so the highlight and the words are in one glance. */}
-      {assistMode === 'hidden' ? null : (
-        <View
-          testID="assistPanel"
-          style={[
-            a.w_full,
-            a.gap_sm,
-            a.px_sm,
-            a.py_sm,
-            a.rounded_md,
-            a.border,
-            {
-              maxWidth: cellSize * 8,
-              borderColor:
-                assistMode === 'suggestion' ? ASSIST_RING : undefined,
-              borderWidth: assistMode === 'suggestion' ? 2 : undefined,
-            },
-            assistMode === 'suggestion' ? null : t.atoms.border_contrast_low,
-          ]}>
-          {assistMode === 'choose' ? (
-            <>
-              <Text
-                style={[
-                  a.text_sm,
-                  a.text_center,
-                  t.atoms.text_contrast_medium,
-                ]}>
-                {assistPrompt(assist?.agentName ?? null)}
-              </Text>
-              <View style={[a.flex_row, a.gap_sm]}>
-                {assistIntentsFor(assist?.info ?? null).map(intent => {
-                  const face = assistIntentFace(intent)
-                  return (
-                    <Pressable
-                      key={intent}
-                      testID={`assist-${intent}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={face.label}
-                      accessibilityHint={face.hint}
-                      onPress={() => assist?.onRequest(intent)}
-                      style={[
-                        a.flex_1,
-                        a.align_center,
-                        a.justify_center,
-                        a.gap_xs,
-                        a.rounded_md,
-                        a.border,
-                        a.px_xs,
-                        t.atoms.border_contrast_medium,
-                        t.atoms.bg_contrast_25,
-                        // A generous target: this button exists for someone who
-                        // may not have fine motor control.
-                        {minHeight: 76, paddingVertical: 8},
-                      ]}>
-                      <Text style={[a.text_2xl]}>{face.emoji}</Text>
-                      <Text
-                        style={[
-                          a.text_md,
-                          a.font_bold,
-                          a.text_center,
-                          t.atoms.text,
-                        ]}>
-                        {face.label}
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
-            </>
-          ) : assistMode === 'thinking' ? (
-            <Text
-              testID="assistThinking"
-              accessibilityLiveRegion="polite"
-              style={[
-                a.text_md,
-                a.text_center,
-                a.py_md,
-                t.atoms.text_contrast_medium,
-              ]}>
-              {assistThinkingLine(assist?.pending ?? 'attack')}
-            </Text>
-          ) : suggestion ? (
-            <>
-              <Text
-                testID="assistReason"
-                accessibilityLiveRegion="polite"
-                style={[a.text_md, a.font_bold, a.text_center, t.atoms.text]}>
-                {assistHeadline(suggestion)}
-              </Text>
-              <Pressable
-                testID="assistConfirm"
-                accessibilityRole="button"
-                accessibilityLabel={ASSIST_CONFIRM_LABEL}
-                accessibilityHint={describeAssistSuggestion(suggestion)}
-                onPress={playSuggestion}
-                style={[
-                  a.align_center,
-                  a.justify_center,
-                  a.rounded_md,
-                  a.px_md,
-                  {minHeight: 64, backgroundColor: ASSIST_RING},
-                ]}>
-                <Text style={[a.text_lg, a.font_bold, {color: '#ffffff'}]}>
-                  {ASSIST_CONFIRM_LABEL}
-                </Text>
-              </Pressable>
-              <Pressable
-                testID="assistDismiss"
-                accessibilityRole="button"
-                accessibilityLabel={ASSIST_CANCEL_LABEL}
-                accessibilityHint="Puts the three buttons back so you can ask for a different kind of move"
-                onPress={() => assist?.onDismiss()}
-                style={[a.align_center, a.justify_center, {minHeight: 44}]}>
-                <Text
-                  style={[
-                    a.text_sm,
-                    a.font_bold,
-                    t.atoms.text_contrast_medium,
-                  ]}>
-                  {ASSIST_CANCEL_LABEL}
-                </Text>
-              </Pressable>
-            </>
-          ) : null}
-        </View>
-      )}
 
       {promotionChoice ? (
         <View

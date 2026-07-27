@@ -26,6 +26,15 @@ export type LaunchableGame = GameKind | 'mystery'
  * bearer — the client never guesses names or personas) and wires the match
  * to report its result back to the owner. Sending `agent: null` would
  * instead create a 2-human match with an open second seat.
+ *
+ * ACCESSIBILITY ASSIST (2026-07-27): the launcher now asks for it explicitly.
+ * The runtime's create path is `assist: body.assist ?? null` — opt-in — and
+ * this body used to be `{game}` alone, so EVERY match started from the app
+ * launcher granted assist to nobody and the Attack / Defend / Surprise buttons
+ * could never render, whatever the board did. `{enabled:true}` is the runtime's
+ * "every human seat" shape (the agent's seat is excluded server-side). Board
+ * games only: a story match has no board moves to suggest and the server
+ * refuses the ask.
  */
 export async function createLiveMatch(
   game: LaunchableGame,
@@ -42,7 +51,10 @@ export async function createLiveMatch(
         'content-type': 'application/json',
         authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({game}),
+      body: JSON.stringify({
+        game,
+        ...(game === 'mystery' ? {} : {assist: {enabled: true}}),
+      }),
     })
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as {

@@ -64,6 +64,12 @@ const ERROR_TOAST_MS = 2500
  *  is the shrinkable party, never the lane. */
 const CHAT_LANE_MIN_HEIGHT = 120
 
+/** Vertical room the accessibility-assist block needs above the board (title +
+ *  prompt + a 96pt button row + padding). Reserved out of the BOARD's budget
+ *  when this seat has assist, so the buttons can never be the thing that falls
+ *  off the bottom of the pane — the failure Austin hit. */
+const ASSIST_PANE_ROOM = 180
+
 const GAME_TITLES: Record<GameKind, string> = {
   'tic-tac-toe': 'Tic-tac-toe',
   checkers: 'Checkers',
@@ -602,6 +608,16 @@ function GameRoomInner({
   // "Elliott 2 – 1 Bob · game 3" once a rematch has happened (round >= 2).
   const seriesText = seriesLine(series, players)
 
+  // ACCESSIBILITY ASSIST: this seat has the move-help block, so the game pane
+  // is ~180px taller all match (the block holds its place off-turn too). In the
+  // WIDE split the screen is overflow:hidden with no scroll, so that room has
+  // to come out of the board's budget — a slightly smaller board is a fair
+  // trade against buttons the player it exists for cannot find.
+  const assistRoom =
+    assistInfo !== null && seat !== null && assistInfo.seats.includes(seat)
+      ? ASSIST_PANE_ROOM
+      : 0
+
   const gamePane = (boardSize: number) =>
     storyMode ? (
       <View style={[a.flex_1, a.w_full]}>
@@ -633,7 +649,11 @@ function GameRoomInner({
       CENTER_COLUMN_WIDTH -
       (centerColumnOffset ? LEFT_NAV_MINIMAL_WIDTH / 2 + 30 : 0)
     const containerWidth = gameColumnWidth + CHAT_COLUMN_WIDTH
-    const boardSize = Math.min(gameColumnWidth - 96, height - 300, 440)
+    const boardSize = Math.min(
+      gameColumnWidth - 96,
+      height - 300 - assistRoom,
+      440,
+    )
 
     return (
       // Web Layout.Screen is minHeight:100dvh — a floor, not a ceiling — so
@@ -669,14 +689,30 @@ function GameRoomInner({
           <View
             style={[
               a.flex_1,
-              storyMode ? undefined : a.align_center,
-              storyMode ? undefined : a.justify_center,
-              storyMode ? undefined : a.px_xl,
               a.border_l,
               t.atoms.border_contrast_low,
               t.atoms.bg,
             ]}>
-            {gamePane(Math.max(boardSize, 240))}
+            {storyMode ? (
+              gamePane(Math.max(boardSize, 240))
+            ) : (
+              // The screen above is overflow:hidden (it has to be, or the chat
+              // lane grows the page), so a game pane taller than the column got
+              // CLIPPED at both ends rather than scrolled — which is how the
+              // assist block could be on screen and still unreachable. Centre
+              // it while it fits, scroll it the moment it does not.
+              <ScrollView
+                style={[a.flex_1]}
+                contentContainerStyle={[
+                  a.align_center,
+                  a.justify_center,
+                  a.px_xl,
+                  a.py_md,
+                  {flexGrow: 1},
+                ]}>
+                {gamePane(Math.max(boardSize, 240))}
+              </ScrollView>
+            )}
           </View>
           <View
             style={[
@@ -697,6 +733,9 @@ function GameRoomInner({
   // Phone / portrait split: game pane TOP, chat lane BOTTOM. Board caps at a
   // size that always leaves the chat lane a workable share of the screen; the
   // story pane takes a fixed share for the same reason.
+  // NOT reduced by assistRoom: the narrow pane scrolls and the assist block is
+  // ABOVE the board, so extra height costs the chat lane (which has its own
+  // floor), never the buttons.
   const boardSize = Math.max(Math.min(width - 64, height * 0.36, 340), 200)
 
   return (
