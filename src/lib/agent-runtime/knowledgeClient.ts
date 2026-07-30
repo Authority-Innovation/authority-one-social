@@ -14,11 +14,17 @@ import {
  * GET /app/agents row); omitted = the owner's token-mapped agent. A non-owned handle
  * gets a 403 {code:'not-your-agent'} — surfaced as a code, NOT as signedOut.
  *
- * Everything a user uploads lands as PROVISIONAL memory pending review (per the
- * Mnemonic contract), so a saved file's status is 'saved' + provisional. The runtime
- * refuses documents honestly, never faking success:
- *   - a text file with a real email/phone/secret is BLOCKED by the runtime PII guard
- *     -> HTTP 200 {ok:false, status:'blocked', file:{reason:<real reason>}}
+ * A saved file goes STRAIGHT INTO the agent's long-term memory and is searchable
+ * within a minute or two — status 'saved' is the live state, not a queue (verified
+ * 2026-07-31: uploads land in Mnemonic as `active` and come back in recall; there is
+ * no review step and no reviewer). `provisional` is the runtime's flag for "written",
+ * kept for wire compatibility; it does NOT mean the file is withheld from recall.
+ * The runtime refuses documents honestly, never faking success:
+ *   - emails/phones in a text file are reversibly TOKENIZED (the owner holds the key)
+ *     and credentials are stripped — that path saves, it does not refuse
+ *   - a genuine refusal (memory writes switched off for the agent, an ingest failure)
+ *     -> HTTP 200 {ok:false, status:'blocked'|'failed', file:{reason:<internal reason>}}
+ *     — run every such reason through knowledgeReasonMessage before showing it
  *   - docx/image -> 415 (not supported yet); >512KB -> 413; empty -> 400.
  * The upload transport reads RAW bytes (no multipart) with the file's Content-Type,
  * the same shape uploadChatImage uses. Text formats go as text/*; PDFs go as
@@ -34,15 +40,16 @@ export interface KnowledgeFile {
   contentType: string | null
   /** ISO timestamp the runtime stamped when the file was ingested. */
   uploadedAt: string
-  /** 'saved' (written, provisional pending review) | 'blocked' (PII/format) | 'failed'. */
+  /** 'saved' (written — in memory, searchable) | 'blocked' (refused) | 'failed'. */
   status: 'saved' | 'blocked' | 'failed'
-  /** True when the file was written and is pending review (the normal saved state). */
+  /** The runtime's "written" flag. NOT a review/hold state — a saved file is live. */
   provisional: boolean
   /** True when the runtime truncated an oversize file (not used by the app path today). */
   truncated: boolean
   /** False when the item is switched off (no recall/injection). Legacy rows read true. */
   enabled: boolean
-  /** Honest reason for a blocked/failed file (e.g. the PII-guard message); null when saved. */
+  /** Honest INTERNAL reason for a blocked/failed file; null when saved. Never render
+   *  it raw — it can carry config keys/HTTP detail. Use knowledgeReasonMessage. */
   reason: string | null
   /** The created Mnemonic artifact id when the runtime surfaces one; may be null. */
   artifactId: string | null
@@ -424,4 +431,111 @@ export function knowledgeRemovalMessage(input: {
     return `${line} ${runtimeMessage.trim()}`
   }
   return line
+}
+
+/** The generic, always-safe fallback when we can't say anything more specific. */
+const KNOWLEDGE_GENERIC_REASON =
+  'That file couldn’t be saved. Try again in a moment — if it keeps happening, contact support.'
+
+/**
+ * Fragments that mean the reason string is INTERNAL: config keys, env var names,
+ * HTTP/transport detail, ids. A reason matching any of these is NEVER shown to a
+ * customer — the generic line goes out instead. (A customer once saw
+ * "write-back disabled: config.mnemonic.write.enabled is not set true for this
+ * agent" on a declined upload; that is what this exists to stop.)
+ */
+const INTERNAL_REASON_MARKERS = [
+  /\bconfig\./i,
+  /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/, // MNEMONIC_TOKEN, MNEMONIC_BASE_URL, …
+  /\bhttps?:\/\//i,
+  /\bHTTP\s*\d{3}\b/i,
+  /\b(?:status|code)\s*[:=]?\s*\d{3}\b/i,
+  /\bmnemonic\b/i,
+  /\bartifact_id\b|\bproject_id\b|\bentity_id\b/i,
+  /\bundefined\b|\bnull\b|\[object /i,
+  /\berror:/i,
+]
+
+/**
+ * Turn the runtime's INTERNAL blocked/failed reason into plain customer English.
+ *
+ * The runtime's reasons are written for us, not for customers: they name config
+ * keys, env vars and HTTP statuses. This maps the known families to something a
+ * customer can act on, and — critically — FAILS SAFE: anything that still looks
+ * internal (see INTERNAL_REASON_MARKERS) becomes the generic line rather than
+ * leaking machinery. Only a reason that is already plain and clean passes through.
+ *
+ * PURE — no i18n context (same plain-English convention as knowledgeRemovalMessage).
+ */
+export function knowledgeReasonMessage(reason?: string | null): string {
+  const raw = String(reason ?? '').trim()
+  if (!raw) return KNOWLEDGE_GENERIC_REASON
+  const s = raw.toLowerCase()
+
+  // 1. OPERATOR DEPENDENCY — memory writes are off for this agent, or the memory
+  //    service isn't reachable. Nothing the customer did; nothing they can fix.
+  if (
+    s.includes('write-back disabled') ||
+    s.includes('no mnemonic http client available') ||
+    s.includes('no mnemonic media client available')
+  ) {
+    return 'Saving to memory is switched off for this agent right now, so this file wasn’t stored. Contact support and we’ll switch it on.'
+  }
+
+  // 2. REAL-PERSONAL-DATA GUARD — the one refusal the customer can act on. The
+  //    runtime lists which categories tripped it; translate those, don't echo them.
+  if (s.includes('real-personal-data guard')) {
+    const kinds = [
+      s.includes('email') ? 'an email address' : null,
+      s.includes('phone') ? 'a phone number' : null,
+      s.includes('credential') || s.includes('secret')
+        ? 'a password or key'
+        : null,
+    ].filter(Boolean) as string[]
+    const what =
+      kinds.length === 0
+        ? 'real personal details'
+        : kinds.length === 1
+          ? kinds[0]
+          : `${kinds.slice(0, -1).join(', ')} and ${kinds[kinds.length - 1]}`
+    return `This file wasn’t saved because it contains ${what}. Remove that and upload it again.`
+  }
+
+  // 3. TIMEOUT — long documents on a cold start. It may still land, so say so.
+  if (s.includes('timed out') || s.includes('timeout')) {
+    return 'That file took too long to process. Give it a minute and refresh — if it still isn’t listed, upload it again.'
+  }
+
+  // 4. EMPTY AFTER DECODING — a real, checkable customer-side condition.
+  if (
+    s.includes('empty after decoding') ||
+    s.includes('nothing to remember') ||
+    s.includes('was empty')
+  ) {
+    return 'That file looked empty once we read it. Check the file and try again.'
+  }
+
+  // 5. DOCUMENT-EXTRACTION LEG (PDF/Office): begin/upload/confirm failures.
+  if (
+    s.includes('media begin') ||
+    s.includes('media upload failed') ||
+    s.includes('media confirm') ||
+    s.includes('ingest failed') ||
+    s.includes('the ingest failed')
+  ) {
+    return 'We couldn’t finish processing that document. Try uploading it again — if it keeps failing, contact support.'
+  }
+
+  // 6. FORMAT — the runtime already words these for customers ("that format is not
+  //    supported yet (send a .txt, .md, .csv, or .pdf)"). Sentence-case and pass on.
+  if (s.includes('not supported yet') || s.includes('unsupported file type')) {
+    return raw.charAt(0).toUpperCase() + raw.slice(1)
+  }
+
+  // 7. FAIL SAFE: unknown reason. Pass it through ONLY if it reads as plain prose;
+  //    anything with machinery in it becomes the generic line.
+  if (INTERNAL_REASON_MARKERS.some(re => re.test(raw))) {
+    return KNOWLEDGE_GENERIC_REASON
+  }
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
 }

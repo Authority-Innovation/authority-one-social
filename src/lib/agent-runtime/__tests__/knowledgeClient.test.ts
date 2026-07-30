@@ -4,6 +4,7 @@ import {getSupabaseAccessToken} from '../authToken'
 import {
   deleteKnowledgeFile,
   fetchKnowledgeFiles,
+  knowledgeReasonMessage,
   knowledgeRemovalMessage,
   setKnowledgeFileEnabled,
 } from '../knowledgeClient'
@@ -325,5 +326,102 @@ describe('knowledgeRemovalMessage (honest upstream copy)', () => {
         runtimeMessage: line,
       }),
     ).toBe(line)
+  })
+})
+
+describe('knowledgeReasonMessage', () => {
+  it('never leaks the write-gate config key a customer actually saw', () => {
+    const out = knowledgeReasonMessage(
+      'write-back disabled: config.mnemonic.write.enabled is not set true for this agent',
+    )
+    expect(out).not.toMatch(/config\./)
+    expect(out).not.toMatch(/mnemonic/i)
+    expect(out).toBe(
+      'Saving to memory is switched off for this agent right now, so this file wasn’t stored. Contact support and we’ll switch it on.',
+    )
+  })
+
+  it.each([
+    'no mnemonic http client available',
+    'no mnemonic media client available',
+    'write-back disabled: MNEMONIC_TOKEN is empty (read-write token required)',
+  ])('maps the operator-dependency family: %s', reason => {
+    expect(knowledgeReasonMessage(reason)).toMatch(
+      /switched off for this agent/,
+    )
+  })
+
+  it('names the personal data that tripped the guard, without echoing internals', () => {
+    expect(
+      knowledgeReasonMessage(
+        'real-personal-data guard blocked: contains an email address; contains a phone-number-like sequence',
+      ),
+    ).toBe(
+      'This file wasn’t saved because it contains an email address and a phone number. Remove that and upload it again.',
+    )
+    expect(
+      knowledgeReasonMessage(
+        'real-personal-data guard blocked: contains a credential/secret-like token',
+      ),
+    ).toBe(
+      'This file wasn’t saved because it contains a password or key. Remove that and upload it again.',
+    )
+  })
+
+  it('maps timeouts to a "may still land" line', () => {
+    expect(
+      knowledgeReasonMessage(
+        'ingest timed out — Mnemonic took too long to process the document (it may still land as provisional memory); please retry in a minute',
+      ),
+    ).toMatch(/took too long to process/)
+    expect(
+      knowledgeReasonMessage(
+        'ingest timed out — Mnemonic took too long to process the document',
+      ),
+    ).not.toMatch(/mnemonic/i)
+  })
+
+  it('maps empty-after-decode and the media-extraction leg', () => {
+    expect(
+      knowledgeReasonMessage('the document was empty after decoding'),
+    ).toBe(
+      'That file looked empty once we read it. Check the file and try again.',
+    )
+    expect(knowledgeReasonMessage('media upload failed (500)')).toMatch(
+      /couldn’t finish processing that document/,
+    )
+    expect(knowledgeReasonMessage('media begin failed (403)')).not.toMatch(
+      /\d{3}/,
+    )
+  })
+
+  it('passes the already-customer-worded format refusals through', () => {
+    expect(
+      knowledgeReasonMessage(
+        'that format is not supported yet (send a .txt, .md, .csv, or .pdf)',
+      ),
+    ).toBe('That format is not supported yet (send a .txt, .md, .csv, or .pdf)')
+  })
+
+  it('falls back to the generic line for anything still machine-shaped', () => {
+    const generic =
+      'That file couldn’t be saved. Try again in a moment — if it keeps happening, contact support.'
+    expect(knowledgeReasonMessage('')).toBe(generic)
+    expect(knowledgeReasonMessage(null)).toBe(generic)
+    expect(knowledgeReasonMessage('remember error: TypeError undefined')).toBe(
+      generic,
+    )
+    expect(
+      knowledgeReasonMessage('HTTP 502 from https://api.example.com'),
+    ).toBe(generic)
+    expect(knowledgeReasonMessage('media begin returned no artifact_id')).toBe(
+      'We couldn’t finish processing that document. Try uploading it again — if it keeps failing, contact support.',
+    )
+  })
+
+  it('passes clean prose through, sentence-cased', () => {
+    expect(knowledgeReasonMessage('the file was rejected by the agent')).toBe(
+      'The file was rejected by the agent',
+    )
   })
 })

@@ -291,10 +291,11 @@ export const SOCIAL_AUTONOMY_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/social-au
  * ONE document (.txt/.md/.csv/.pdf) as RAW bytes with the file's `Content-Type`
  * header (the runtime reads request.arrayBuffer() + validates the type — it does NOT
  * parse multipart/form-data); the file is written into the agent's long-term Mnemonic
- * memory and lands PROVISIONAL pending review. PDFs go as `application/pdf` binary
- * and route to Mnemonic's document-extraction pipeline. Honest failures: 415
- * unsupported format (docx/image), 413 too large, and a 200 {ok:false,status:'blocked'}
- * when the runtime PII guard refuses a doc containing an email/phone/secret.
+ * memory, where it is live and searchable within a minute or two (no review step).
+ * PDFs go as `application/pdf` binary and route to Mnemonic's document-extraction
+ * pipeline. Honest failures: 415 unsupported format (docx/image), 413 too large, and
+ * a 200 {ok:false,status:'blocked'} when the runtime refuses the write (e.g. memory
+ * writes switched off for the agent). Emails/phones are tokenized, not refused.
  */
 export const KNOWLEDGE_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/knowledge`
 export const KNOWLEDGE_UPLOAD_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/knowledge/upload`

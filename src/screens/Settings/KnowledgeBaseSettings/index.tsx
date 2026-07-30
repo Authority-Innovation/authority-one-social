@@ -5,6 +5,7 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {
   type KnowledgeFile,
   type KnowledgeFileToUpload,
+  knowledgeReasonMessage,
   knowledgeRemovalMessage,
 } from '#/lib/agent-runtime'
 import {
@@ -49,11 +50,16 @@ type Props = NativeStackScreenProps<
  * PersonaSettings via route param `agent` (the FULL handle from My Agents); without it,
  * this manages the owner's token-mapped agent.
  *
- * Everything uploaded lands as PROVISIONAL memory pending review (per the Mnemonic
- * contract) — labeled clearly throughout. The runtime refuses documents honestly: a
- * file containing a real email/phone/secret is BLOCKED by the PII guard and shown as a
- * blocked slot with the real reason (never a fake save); docx is "not supported yet".
- * PDFs upload as raw binary and route to Mnemonic's document-extraction pipeline.
+ * An uploaded file goes STRAIGHT INTO long-term memory and is searchable within a
+ * minute or two — "saved" is the live state. (Until 2026-07-31 this screen labeled
+ * saved files "Pending review", which read as stuck: there is no review queue and no
+ * reviewer — uploads land `active` in Mnemonic and come back in recall. The label was
+ * a stale assumption, not a gate.) Emails/phones in a text file are reversibly
+ * tokenized by the runtime (the owner holds the key) and credentials are stripped, so
+ * PII is not a refusal on this path. A genuine refusal is shown as a blocked/failed
+ * slot with its reason run through knowledgeReasonMessage — customer English, never
+ * config keys. docx is "not supported yet"; PDFs upload as raw binary and route to
+ * Mnemonic's document-extraction pipeline.
  *
  * Removing a slot (trash button + confirm, same pattern as PersonaSettings) is
  * optimistic with a visible revert on failure. The success copy is keyed off the
@@ -95,11 +101,12 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
     if (!picked) return
     upload.mutate(picked, {
       onSuccess: res => {
-        // An honest PII-guard/format BLOCK comes back as ok:false with a slot that
-        // carries the real reason — surface it, don't pretend it saved.
+        // An honest BLOCK comes back as ok:false with a slot that carries the
+        // INTERNAL reason — humanize it, never show the raw string (it can name
+        // config keys), and never pretend it saved.
         if (!res.ok) {
           Toast.show(
-            res.file?.reason ?? res.error ?? l`That file couldn’t be saved.`,
+            knowledgeReasonMessage(res.file?.reason ?? res.error ?? null),
             {type: 'error'},
           )
           return
@@ -108,7 +115,7 @@ export function KnowledgeBaseSettingsScreen({route}: Props) {
         // these interpolated strings, and uncompiled messages render the literal
         // "{agentLabel}" placeholder (same bug/fix as the composer {pct} label).
         Toast.show(
-          `Added to ${agentLabel}’s knowledge base — pending review.`,
+          `Added to ${agentLabel}’s knowledge base — searchable in a minute or two.`,
           {
             type: 'success',
           },
@@ -299,9 +306,9 @@ function Intro({agentLabel}: {agentLabel: string}) {
       </Text>
       <Text style={[a.text_xs, t.atoms.text_contrast_low, a.leading_snug]}>
         <Trans>
-          Uploads land as provisional memory pending review before they surface
-          in recall. Files with a real email address, phone number, or secret
-          are declined automatically.
+          Uploads go straight into long-term memory and are searchable within a
+          minute or two. Any email addresses and phone numbers are replaced with
+          placeholders only you can unlock; passwords and keys are stripped out.
         </Trans>
       </Text>
     </View>
@@ -411,7 +418,7 @@ function FileRow({
             <Text
               style={[a.text_xs, t.atoms.text_contrast_medium]}
               numberOfLines={2}>
-              {file.reason}
+              {knowledgeReasonMessage(file.reason)}
             </Text>
           ) : null}
         </View>
@@ -454,7 +461,7 @@ function FileRow({
   )
 }
 
-/** Saved (pending review) / Blocked / Failed pill, from the runtime's real outcome. */
+/** In memory (saved) / Declined / Failed pill, from the runtime's real outcome. */
 function StatusBadge({file}: {file: KnowledgeFile}) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -462,7 +469,7 @@ function StatusBadge({file}: {file: KnowledgeFile}) {
     return (
       <Badge
         icon={CircleCheckIcon}
-        label={l`Pending review`}
+        label={l`In memory`}
         bg={t.palette.positive_50}
         fg={t.palette.positive_700}
       />

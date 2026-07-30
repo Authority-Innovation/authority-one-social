@@ -118,6 +118,7 @@ export {
   type KnowledgeFile,
   type KnowledgeFileToUpload,
   type KnowledgeListResult,
+  knowledgeReasonMessage,
   knowledgeRemovalMessage,
   type KnowledgeToggleResult,
   type KnowledgeUploadResult,
