@@ -134,3 +134,7 @@ bskyweb/static/media/*.svg
 # superpowers plugin plans/specs — local-only workspace
 docs/superpowers/
 .claude/worktrees
+
+# local tooling / dev-server state (this fork)
+.claude/
+.wrangler/
