@@ -62,12 +62,31 @@ Notes:
   browser farms during builds.
 - First full build ~12–15 min on the M5; incremental rebuilds are minutes.
 
+## RESULT (2026-08-29): first Android debug APK BUILT and INSTALLED
+
+`app-debug.apk` — 318 MB (4 ABIs, uncompressed native libs; normal for RN debug),
+package `com.authorityone.app` vc1/1.0, minSdk 24, target/compileSdk 36 (platform
+36 + NDK 27.1 auto-downloaded by AGP), debug-keystore signed (apksigner verified).
+Installed clean via `adb install` on a Samsung SM-A066B (Galaxy A06).
+Copied to `/Users/clawbob/authority-one-spike/authority-one-social-android-debug.apk`.
+NOTE: the debug variant expects a Metro dev server (`pnpm android` / `npx expo
+start`) to serve the JS bundle at launch — install works standalone, running the
+app does not. `assembleRelease` (debug-keystore signed, JS bundled) is the
+standalone hand-to-someone artifact.
+
 ## Failure log (so nobody re-hits these)
 
 | # | Failure | Cause | Fix |
 |---|---|---|---|
 | 1 | `Could not find io.bitdrift:capture:0.17.26` | stale prebuild lacks the bitdrift plugin's Maven-repo edits | hand-applied plugin edits (or re-prebuild) |
 | 2 | AAPT `resource color/iconBackground not found` (ic_launcher.xml) | stale prebuild lacks the adaptive-icon color resource | added `<color name="iconBackground">#F4F0E8</color>` (or re-prebuild) |
+| 3 | Kotlin `Unresolved reference 'R'/'BuildConfig'` in MainActivity/MainApplication | sources are package `com.authorityone.app` but gradle namespace/applicationId said `com.authorityone` (half-migrated prebuild) | set namespace + applicationId to `com.authorityone.app` in app/build.gradle |
+| 4 | javac `cannot find symbol com.authorityone.BuildConfig` in generated `ReactNativeApplicationEntryPoint.java` | `android/build/generated/autolinking/autolinking.json` cached the old packageName and is not invalidated by the namespace change | `rm -rf android/build/generated/autolinking android/app/build/generated/autolinking`, rebuild |
+
+Build-watching gotcha: during `:app:buildCMakeDebug[*]` the Gradle log goes silent
+for 10+ minutes and the daemon JVM sits near 0% CPU — the work is in child NDK
+`clang` processes. Check `ps aux | grep clang` before declaring a hang. Full build
+~22–27 min on the M5/16GB.
 
 ## Remaining to a first customer-testable Android build
 
