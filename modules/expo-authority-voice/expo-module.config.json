@@ -1,6 +1,12 @@
 {
-  "platforms": ["ios"],
+  "platforms": ["ios", "android"],
   "ios": {
     "modules": ["AuthoritySpeechModule", "AuthorityTtsModule"]
+  },
+  "android": {
+    "modules": [
+      "expo.modules.authorityvoice.stt.AuthoritySpeechModule",
+      "expo.modules.authorityvoice.tts.AuthorityTtsModule"
+    ]
   }
 }

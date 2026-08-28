@@ -1,4 +1,8 @@
-export type SpeechBackend = 'speechAnalyzer' | 'whisperKit' | 'unavailable'
+export type SpeechBackend =
+  | 'speechAnalyzer' // iOS 26+ (Apple SpeechAnalyzer / SpeechTranscriber)
+  | 'whisperKit' // iOS 17-25 fallback (currently disabled in the native build)
+  | 'androidSpeechRecognizer' // Android (android.speech.SpeechRecognizer)
+  | 'unavailable'
 
 export interface SpeechCapabilities {
   /** Which on-device backend would be used. */

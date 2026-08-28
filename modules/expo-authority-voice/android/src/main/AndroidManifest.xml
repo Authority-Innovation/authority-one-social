@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- On-device STT captures the mic; the app requests this at runtime via STT.requestPermissions(). -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+  <!-- Android 11+ (targetSdk 30+) package visibility: without these queries the platform
+       SpeechRecognizer and TextToSpeech services are invisible and bind attempts fail. -->
+  <queries>
+    <intent>
+      <action android:name="android.speech.RecognitionService" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.TTS_SERVICE" />
+    </intent>
+  </queries>
+
+</manifest>

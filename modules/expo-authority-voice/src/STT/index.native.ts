@@ -35,12 +35,19 @@ const UNAVAILABLE: SpeechCapabilities = {
   osVersion: Platform.Version?.toString() ?? '',
 }
 
-// The module only ships an iOS implementation (Apple SpeechAnalyzer / WhisperKit).
-// On Android we degrade gracefully so the shared `index.native.ts` import never throws.
-const Native: NativeSpeechModule | null =
-  Platform.OS === 'ios'
-    ? requireNativeModule<NativeSpeechModule>('AuthoritySpeechModule')
-    : null
+// Native implementations ship for BOTH iOS (Apple SpeechAnalyzer / WhisperKit) and
+// Android (android.speech.SpeechRecognizer). On any other platform (there shouldn't
+// be one that loads this `.native` file) we degrade gracefully so the import never
+// throws. requireNativeModule is wrapped so a missing/unlinked native module reports
+// `unavailable` rather than crashing the screen.
+const Native: NativeSpeechModule | null = (() => {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return null
+  try {
+    return requireNativeModule<NativeSpeechModule>('AuthoritySpeechModule')
+  } catch {
+    return null
+  }
+})()
 
 export const STT: SpeechModule = {
   getCapabilities(): SpeechCapabilities {
