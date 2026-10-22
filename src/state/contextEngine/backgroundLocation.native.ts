@@ -4,6 +4,7 @@ import * as TaskManager from 'expo-task-manager'
 import {fetchNearbyPoi, postContextEvents} from '#/lib/agent-runtime'
 import {
   advanceDwell,
+  BACKGROUND_LOCATION_SHIPPED,
   derivePlace,
   isInTransit,
   needsPoiLookup,
@@ -76,6 +77,12 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
   if (!locations || locations.length === 0) return
 
   try {
+    // Not shipped (derive.ts BACKGROUND_LOCATION_SHIPPED): a wake queued by an older
+    // build stops the updates and captures nothing.
+    if (!BACKGROUND_LOCATION_SHIPPED) {
+      await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {})
+      return
+    }
     // DEFENCE IN DEPTH: re-check the opt-in inside the task. If the user turned
     // background context off after the OS queued this wake, capture nothing.
     const prefs = await loadPrefs()
@@ -133,7 +140,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
 })
 
 export function backgroundLocationSupported(): boolean {
-  return true
+  return BACKGROUND_LOCATION_SHIPPED
 }
 
 export async function getBackgroundPermissionGranted(): Promise<boolean> {
@@ -171,6 +178,7 @@ export async function isBackgroundUpdatesRunning(): Promise<boolean> {
 }
 
 export async function startBackgroundUpdates(): Promise<boolean> {
+  if (!BACKGROUND_LOCATION_SHIPPED) return false
   try {
     if (await isBackgroundUpdatesRunning()) return true
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {

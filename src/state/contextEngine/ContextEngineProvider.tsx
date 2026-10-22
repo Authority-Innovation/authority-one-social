@@ -10,6 +10,7 @@ import {
 import {getCurrentState} from '#/lib/appState'
 import {
   advanceDwell,
+  backgroundMigration,
   closeDwell,
   DEFAULT_LABELED_RADIUS_M,
   derivePlace,
@@ -162,9 +163,19 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
         )
         if (!cancelled) setPermissionGranted(perm?.granted === true)
       }
-      // Phase 1.5: if background context was left on, re-check Always permission and
+      // Background location is NOT shipped (derive.ts BACKGROUND_LOCATION_SHIPPED):
+      // stop any OS updates an older build started, and clear the preference, so a
+      // phone that had it on stops draining on this launch.
+      const mig = backgroundMigration(p)
+      if (IS_NATIVE && mig.stopUpdates) void stopBackgroundUpdates()
+      if (mig.clearPref) {
+        const cleared: ContextPrefs = {...p, backgroundEnabled: false}
+        if (!cancelled) setPrefs(cleared)
+        await savePrefs(cleared)
+      }
+      // Phase 1.5 (only if ever shipped again): re-check Always permission and
       // (re)start the background updates so they survive an app/device restart.
-      if (IS_NATIVE && p.backgroundEnabled) {
+      if (IS_NATIVE && p.backgroundEnabled && !mig.clearPref) {
         const bg = await getBackgroundPermissionGranted()
         if (cancelled) return
         setBackgroundPermissionGranted(bg)

@@ -170,13 +170,11 @@ module.exports = function (_config) {
           // too, it's a one-line swap to try another.
           CFBundleDisplayName: 'authority-one',
           CADisableMinimumFrameDurationOnPhone: true,
-          // Authority One Context Engine PHASE 1.5 (feat/context-engine-background
-          // branch ONLY): 'location' enables background location updates so the agent
-          // can derive all-day place context (CONCLUSIONS only — never a GPS trail).
-          // This is a SEPARATE, OFF-by-default opt-in; it does add App Store review
-          // scrutiny, which is why it stays off the shippable build (see
-          // CONTEXT-ENGINE-PHASE-1.5-README.md).
-          UIBackgroundModes: ['remote-notification', 'location'],
+          // No 'location' background mode (2026-10-23): Context Engine Phase 1.5's
+          // background location held a 48 h iOS location subscription and drained the
+          // battery. It is not shipped — see src/lib/contextEngine/derive.ts
+          // BACKGROUND_LOCATION_SHIPPED and CONTEXT-ENGINE-PHASE-1.5-README.md.
+          UIBackgroundModes: ['remote-notification'],
           NSUserActivityTypes: ['INSendMessageIntent'],
           NSCameraUsageDescription:
             'Used for profile pictures, posts, and other kinds of content.',
@@ -188,12 +186,6 @@ module.exports = function (_config) {
             'Used to save images to your library.',
           NSPhotoLibraryUsageDescription:
             'Used for profile pictures, posts, and other kinds of content',
-          // Context Engine Phase 1.5 (branch only). Honest justification: all-day place
-          // context for your agent. We turn your location into coarse CONCLUSIONS on
-          // your device (like "home", "a venue", or how long you stayed) and store only
-          // those — never a continuous location trail. Off by default; you turn it on.
-          NSLocationAlwaysAndWhenInUseUsageDescription:
-            'Authority One uses your location in the background to recognize the coarse places you spend time (like “home”, “work”, or a venue) so your agent has all-day context. It stores only these conclusions on your device, never a continuous location trail, and you can turn it off any time.',
           CFBundleSpokenName: 'Authority One',
           CFBundleLocalizations: [
             'en',
@@ -538,20 +530,16 @@ module.exports = function (_config) {
           },
         ],
         ['expo-screen-orientation', {initialOrientation: 'PORTRAIT_UP'}],
-        // Context Engine Phase 1.5 (feat/context-engine-background branch ONLY):
-        // enable iOS background location + the Always usage string. The
-        // isIosBackgroundLocationEnabled flag is what makes expo-location add the
-        // background-location capability; UIBackgroundModes 'location' is also set in
-        // infoPlist above. OFF-by-default in-app opt-in gates whether it ever runs.
+        // expo-location: WHEN-IN-USE only (2026-10-23). Background location (Phase 1.5)
+        // is not shipped — it held a 48 h iOS location subscription and drained the
+        // battery. No Always permission, no background capability on iOS or Android.
         [
           'expo-location',
           {
-            locationAlwaysAndWhenInUsePermission:
-              'Authority One uses your location in the background to recognize the coarse places you spend time (like “home”, “work”, or a venue) so your agent has all-day context. It stores only these conclusions on your device, never a continuous location trail, and you can turn it off any time.',
             locationWhenInUsePermission:
               'Authority One uses your location while the app is open to recognize the coarse places you spend time, so your agent has context. It stores only conclusions on your device, never a continuous location trail.',
-            isIosBackgroundLocationEnabled: true,
-            isAndroidBackgroundLocationEnabled: true,
+            isIosBackgroundLocationEnabled: false,
+            isAndroidBackgroundLocationEnabled: false,
           },
         ],
         [
