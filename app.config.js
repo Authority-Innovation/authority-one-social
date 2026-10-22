@@ -170,11 +170,15 @@ module.exports = function (_config) {
           // too, it's a one-line swap to try another.
           CFBundleDisplayName: 'authority-one',
           CADisableMinimumFrameDurationOnPhone: true,
-          // No 'location' background mode (2026-10-23): Context Engine Phase 1.5's
-          // background location held a 48 h iOS location subscription and drained the
-          // battery. It is not shipped — see src/lib/contextEngine/derive.ts
-          // BACKGROUND_LOCATION_SHIPPED and CONTEXT-ENGINE-PHASE-1.5-README.md.
-          UIBackgroundModes: ['remote-notification'],
+          // BACKGROUND LOCATION IS OFF IN CODE (2026-10-23; derive.ts
+          // BACKGROUND_LOCATION_SHIPPED = false): it held a 48 h iOS location subscription
+          // and drained the battery. The 'location' mode STAYS for ONE release on purpose:
+          // expo-task-manager restores a previously started location task natively at
+          // launch (before any JS) and sets allowsBackgroundLocationUpdates — without the
+          // mode iOS throws and the app crash-loops on upgrade. This release's JS stops and
+          // unregisters that task on launch; the NEXT release removes the mode, the Always
+          // string and the expo-location background flags (two-step removal).
+          UIBackgroundModes: ['remote-notification', 'location'],
           NSUserActivityTypes: ['INSendMessageIntent'],
           NSCameraUsageDescription:
             'Used for profile pictures, posts, and other kinds of content.',
@@ -530,16 +534,20 @@ module.exports = function (_config) {
           },
         ],
         ['expo-screen-orientation', {initialOrientation: 'PORTRAIT_UP'}],
-        // expo-location: WHEN-IN-USE only (2026-10-23). Background location (Phase 1.5)
-        // is not shipped — it held a 48 h iOS location subscription and drained the
-        // battery. No Always permission, no background capability on iOS or Android.
+        // expo-location: background capability KEPT FOR ONE RELEASE (see UIBackgroundModes
+        // above) so a restored task doesn't crash on iOS or Android; nothing in this
+        // build starts location updates (derive.ts BACKGROUND_LOCATION_SHIPPED = false)
+        // and launch stops any restored one. Next release: drop the Always string (pass
+        // locationAlwaysAndWhenInUsePermission: false) and set both flags false.
         [
           'expo-location',
           {
+            locationAlwaysAndWhenInUsePermission:
+              'Authority One uses your location in the background to recognize the coarse places you spend time (like “home”, “work”, or a venue) so your agent has all-day context. It stores only these conclusions on your device, never a continuous location trail, and you can turn it off any time.',
             locationWhenInUsePermission:
               'Authority One uses your location while the app is open to recognize the coarse places you spend time, so your agent has context. It stores only conclusions on your device, never a continuous location trail.',
-            isIosBackgroundLocationEnabled: false,
-            isAndroidBackgroundLocationEnabled: false,
+            isIosBackgroundLocationEnabled: true,
+            isAndroidBackgroundLocationEnabled: true,
           },
         ],
         [
