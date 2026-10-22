@@ -2,6 +2,8 @@ import {describe, expect, it} from '@jest/globals'
 
 import {
   advanceDwell,
+  BACKGROUND_LOCATION_SHIPPED,
+  backgroundMigration,
   closeDwell,
   isInTransit,
   shouldCaptureBackground,
@@ -17,13 +19,29 @@ const BEYOND = {lat: ANCHOR.lat + 0.002, lng: ANCHOR.lng}
 const MIN = 60_000
 
 describe('shouldCaptureBackground (Phase 1.5 gate)', () => {
-  it('captures ONLY when background opt-in AND Always permission are both on', () => {
+  it('captures NOTHING while background location is not shipped — even with opt-in AND Always permission', () => {
+    expect(BACKGROUND_LOCATION_SHIPPED).toBe(false)
     expect(
       shouldCaptureBackground({
         backgroundEnabled: true,
         backgroundPermissionGranted: true,
       }),
-    ).toBe(true)
+    ).toBe(false)
+  })
+
+  it('launch migration: an install that had background ON stops updates and clears the pref; others still stop any leftover updates', () => {
+    expect(backgroundMigration({backgroundEnabled: true})).toEqual({
+      stopUpdates: true,
+      clearPref: true,
+    })
+    expect(backgroundMigration({backgroundEnabled: false})).toEqual({
+      stopUpdates: true,
+      clearPref: false,
+    })
+    expect(backgroundMigration({})).toEqual({
+      stopUpdates: true,
+      clearPref: false,
+    })
   })
 
   it('captures nothing when off or permission missing', () => {

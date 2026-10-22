@@ -4,6 +4,7 @@ import * as TaskManager from 'expo-task-manager'
 import {fetchNearbyPoi, postContextEvents} from '#/lib/agent-runtime'
 import {
   advanceDwell,
+  BACKGROUND_LOCATION_SHIPPED,
   derivePlace,
   isInTransit,
   needsPoiLookup,
@@ -66,6 +67,14 @@ function normalizeGeocode(
  * fires once `startLocationUpdatesAsync` has been called.
  */
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
+  // Not shipped (derive.ts BACKGROUND_LOCATION_SHIPPED): ANY wake — even an error or an
+  // empty batch — stops and unregisters the updates an older build started.
+  if (!BACKGROUND_LOCATION_SHIPPED) {
+    await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(
+      () => {},
+    )
+    return
+  }
   if (error) {
     logger.warn('contextEngine: background task error', {
       safeMessage: String(error.message),
@@ -133,7 +142,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
 })
 
 export function backgroundLocationSupported(): boolean {
-  return true
+  return BACKGROUND_LOCATION_SHIPPED
 }
 
 export async function getBackgroundPermissionGranted(): Promise<boolean> {
@@ -171,6 +180,7 @@ export async function isBackgroundUpdatesRunning(): Promise<boolean> {
 }
 
 export async function startBackgroundUpdates(): Promise<boolean> {
+  if (!BACKGROUND_LOCATION_SHIPPED) return false
   try {
     if (await isBackgroundUpdatesRunning()) return true
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {

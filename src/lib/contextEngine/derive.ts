@@ -211,9 +211,35 @@ export function shouldCaptureBackground(state: {
   backgroundPermissionGranted: boolean
 }): boolean {
   return (
+    BACKGROUND_LOCATION_SHIPPED &&
     state.backgroundEnabled === true &&
     state.backgroundPermissionGranted === true
   )
+}
+
+/**
+ * BACKGROUND LOCATION IS NOT SHIPPED (2026-10-23). Phase 1.5's continuous background
+ * location updates (expo-location startLocationUpdatesAsync) held an iOS location
+ * subscription for 48 h and drained Elliott's battery to empty: iOS ignores the
+ * "deferred updates" coalescing it relied on, and every wake did network lookups. It
+ * was meant to be branch-only but reached main. With this false: the toggle is hidden,
+ * nothing starts background updates, and a phone that had it on stops (and unregisters)
+ * them on the next launch. The native capability stays ONE release so a restored task
+ * can't crash on upgrade (app.config.js); the next release removes it. Turn
+ * back on only with a visit-grade (CLVisit / significant-change) source.
+ */
+export const BACKGROUND_LOCATION_SHIPPED = false
+
+/**
+ * Launch-time migration for installs that had background context ON: stop the OS
+ * updates and clear the preference when background location is not shipped. PURE.
+ */
+export function backgroundMigration(prefs: {backgroundEnabled?: boolean}): {
+  stopUpdates: boolean
+  clearPref: boolean
+} {
+  if (BACKGROUND_LOCATION_SHIPPED) return {stopUpdates: false, clearPref: false}
+  return {stopUpdates: true, clearPref: prefs.backgroundEnabled === true}
 }
 
 /**

@@ -153,7 +153,7 @@ module.exports = function (_config) {
         // NOTE: App Store Connect reported the last uploaded build as 20 (2026-07-03),
         // so uploads bumped past this file without being committed. Trust ASC's
         // "must be higher than N" error over this value when they disagree.
-        buildNumber: '32',
+        buildNumber: '33',
         // Signing team for xcodebuild; prebuild --clean drops the Xcode-GUI-set
         // DEVELOPMENT_TEAM without this.
         appleTeamId: '4TKU6PS7ZS',
@@ -170,12 +170,14 @@ module.exports = function (_config) {
           // too, it's a one-line swap to try another.
           CFBundleDisplayName: 'authority-one',
           CADisableMinimumFrameDurationOnPhone: true,
-          // Authority One Context Engine PHASE 1.5 (feat/context-engine-background
-          // branch ONLY): 'location' enables background location updates so the agent
-          // can derive all-day place context (CONCLUSIONS only — never a GPS trail).
-          // This is a SEPARATE, OFF-by-default opt-in; it does add App Store review
-          // scrutiny, which is why it stays off the shippable build (see
-          // CONTEXT-ENGINE-PHASE-1.5-README.md).
+          // BACKGROUND LOCATION IS OFF IN CODE (2026-10-23; derive.ts
+          // BACKGROUND_LOCATION_SHIPPED = false): it held a 48 h iOS location subscription
+          // and drained the battery. The 'location' mode STAYS for ONE release on purpose:
+          // expo-task-manager restores a previously started location task natively at
+          // launch (before any JS) and sets allowsBackgroundLocationUpdates — without the
+          // mode iOS throws and the app crash-loops on upgrade. This release's JS stops and
+          // unregisters that task on launch; the NEXT release removes the mode, the Always
+          // string and the expo-location background flags (two-step removal).
           UIBackgroundModes: ['remote-notification', 'location'],
           NSUserActivityTypes: ['INSendMessageIntent'],
           NSCameraUsageDescription:
@@ -188,12 +190,6 @@ module.exports = function (_config) {
             'Used to save images to your library.',
           NSPhotoLibraryUsageDescription:
             'Used for profile pictures, posts, and other kinds of content',
-          // Context Engine Phase 1.5 (branch only). Honest justification: all-day place
-          // context for your agent. We turn your location into coarse CONCLUSIONS on
-          // your device (like "home", "a venue", or how long you stayed) and store only
-          // those — never a continuous location trail. Off by default; you turn it on.
-          NSLocationAlwaysAndWhenInUseUsageDescription:
-            'Authority One uses your location in the background to recognize the coarse places you spend time (like “home”, “work”, or a venue) so your agent has all-day context. It stores only these conclusions on your device, never a continuous location trail, and you can turn it off any time.',
           CFBundleSpokenName: 'Authority One',
           CFBundleLocalizations: [
             'en',
@@ -538,11 +534,11 @@ module.exports = function (_config) {
           },
         ],
         ['expo-screen-orientation', {initialOrientation: 'PORTRAIT_UP'}],
-        // Context Engine Phase 1.5 (feat/context-engine-background branch ONLY):
-        // enable iOS background location + the Always usage string. The
-        // isIosBackgroundLocationEnabled flag is what makes expo-location add the
-        // background-location capability; UIBackgroundModes 'location' is also set in
-        // infoPlist above. OFF-by-default in-app opt-in gates whether it ever runs.
+        // expo-location: background capability KEPT FOR ONE RELEASE (see UIBackgroundModes
+        // above) so a restored task doesn't crash on iOS or Android; nothing in this
+        // build starts location updates (derive.ts BACKGROUND_LOCATION_SHIPPED = false)
+        // and launch stops any restored one. Next release: drop the Always string (pass
+        // locationAlwaysAndWhenInUsePermission: false) and set both flags false.
         [
           'expo-location',
           {
