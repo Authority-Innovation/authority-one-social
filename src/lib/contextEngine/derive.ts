@@ -222,9 +222,10 @@ export function shouldCaptureBackground(state: {
  * location updates (expo-location startLocationUpdatesAsync) held an iOS location
  * subscription for 48 h and drained Elliott's battery to empty: iOS ignores the
  * "deferred updates" coalescing it relied on, and every wake did network lookups. It
- * was meant to be branch-only but reached main. With this false: the build carries no
- * background-location capability (app.config.js), the toggle is hidden, nothing starts
- * background updates, and a phone that had it on stops them on the next launch. Turn
+ * was meant to be branch-only but reached main. With this false: the toggle is hidden,
+ * nothing starts background updates, and a phone that had it on stops (and unregisters)
+ * them on the next launch. The native capability stays ONE release so a restored task
+ * can't crash on upgrade (app.config.js); the next release removes it. Turn
  * back on only with a visit-grade (CLVisit / significant-change) source.
  */
 export const BACKGROUND_LOCATION_SHIPPED = false

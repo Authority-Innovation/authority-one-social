@@ -67,6 +67,12 @@ function normalizeGeocode(
  * fires once `startLocationUpdatesAsync` has been called.
  */
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
+  // Not shipped (derive.ts BACKGROUND_LOCATION_SHIPPED): ANY wake — even an error or an
+  // empty batch — stops and unregisters the updates an older build started.
+  if (!BACKGROUND_LOCATION_SHIPPED) {
+    await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {})
+    return
+  }
   if (error) {
     logger.warn('contextEngine: background task error', {
       safeMessage: String(error.message),
@@ -77,12 +83,6 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
   if (!locations || locations.length === 0) return
 
   try {
-    // Not shipped (derive.ts BACKGROUND_LOCATION_SHIPPED): a wake queued by an older
-    // build stops the updates and captures nothing.
-    if (!BACKGROUND_LOCATION_SHIPPED) {
-      await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {})
-      return
-    }
     // DEFENCE IN DEPTH: re-check the opt-in inside the task. If the user turned
     // background context off after the OS queued this wake, capture nothing.
     const prefs = await loadPrefs()
