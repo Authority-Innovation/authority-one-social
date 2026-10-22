@@ -47,7 +47,14 @@ export function AOSignatureShell({gate}: {gate: 'loading' | 'shell'}) {
         paddingBottom: insets.bottom,
       }}>
       {record.needsAgent ? (
-        <AOAgentPicker token={record.token} sid={record.sid} />
+        <AOAgentPicker
+          // One picker per AO session: a session swap (new sign-in,
+          // reverify) remounts it, so no state or in-flight answer from the
+          // previous session survives.
+          key={record.sid}
+          token={record.token}
+          sid={record.sid}
+        />
       ) : (
         <View style={[a.p_xl, a.gap_lg]}>
           <Text style={[a.text_2xl, a.font_bold]}>

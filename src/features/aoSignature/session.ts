@@ -8,6 +8,7 @@ import {AOSignatureError} from './errors'
 import {
   type AORecord,
   clearAORecordIf,
+  clearAORecordIfSignIn,
   getAOState,
   isCurrentSession,
   patchAORecordIf,
@@ -77,9 +78,14 @@ export type RefreshOutcome =
  *  · network / 5xx / timeout → `backoff` (the caller pauses; session kept).
  *
  * RACE RULE (every action below): the result is applied only if the record is
- * still the session the action STARTED from (same sid + token). A late answer
- * for a session since replaced — another sign-in, another account — or
- * already cleared is dropped (`stale`), never written over the current one.
+ * still the session the action STARTED from. A late answer for a session since
+ * replaced — another sign-in, another account — or already cleared is dropped
+ * (`stale`), never written over the current one.
+ *  · server-driven results (refresh, sync, 403 attribution) match sid + TOKEN:
+ *    a refresh that rotated the token makes an older answer stale;
+ *  · USER-initiated ends (sign out, everywhere, unlink, PDS sign-out) match
+ *    sid + DID only: the runtime revoked the sid, so a token a concurrent
+ *    refresh rotated in must go too — the person stays signed out.
  */
 export async function refreshAOSession(
   client: AOClient,
@@ -147,7 +153,7 @@ export async function signOutAO(
   } catch {
     serverConfirmed = false
   }
-  await clearAORecordIf(ref)
+  await clearAORecordIfSignIn(ref)
   return {serverConfirmed}
 }
 
@@ -158,7 +164,7 @@ export async function signOutEverywhereAO(client: AOClient): Promise<void> {
   if (!record) return
   const ref = sessionRef(record)
   await client.signoutEverywhere(record.token)
-  await clearAORecordIf(ref)
+  await clearAORecordIfSignIn(ref)
 }
 
 /** Owner self-unlink: this Signature identity stops signing in to this account
@@ -168,7 +174,7 @@ export async function unlinkAO(client: AOClient): Promise<void> {
   if (!record) return
   const ref = sessionRef(record)
   await client.unlink(record.token)
-  await clearAORecordIf(ref)
+  await clearAORecordIfSignIn(ref)
 }
 
 /**

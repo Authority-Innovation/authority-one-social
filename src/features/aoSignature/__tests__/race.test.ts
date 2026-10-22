@@ -122,6 +122,27 @@ describe('late answers for a replaced session are dropped', () => {
     expect(getAOState().record).toEqual(b)
   })
 
+  it('a refresh that rotates the token mid sign-out still signs out (sid revoked)', async () => {
+    for (const run of [
+      (d: Promise<void>) => signOutAO(client({signout: () => d})),
+      (d: Promise<void>) =>
+        signOutEverywhereAO(client({signoutEverywhere: () => d})),
+      (d: Promise<void>) => unlinkAO(client({unlink: () => d})),
+    ]) {
+      await setAORecord(A())
+      const d = deferred<void>()
+      const p = run(d.promise)
+      // The refresh lands first: same sid, NEW token (T2).
+      await refreshAOSession(
+        client({refresh: () => Promise.resolve(mintedSession(DID, 'sid-a'))}),
+      )
+      expect(getAOState().record?.sid).toBe('sid-a')
+      d.resolve()
+      await p
+      expect(getAOState().record).toBeNull()
+    }
+  })
+
   it('sign out everywhere / unlink of A leave B alone', async () => {
     for (const run of [
       (d: Promise<void>) =>

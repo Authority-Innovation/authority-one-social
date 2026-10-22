@@ -75,9 +75,12 @@ function ArmedLifecycle() {
     // ONE flight at a time: the boot run and any AppState `active` tick that
     // fires during it share a single refresh/sync, never two in parallel.
     let booted = false
-    void boot().then(() => {
-      booted = true
-    })
+    // `finally`: a boot that failed still lets later foreground ticks run.
+    void boot()
+      .catch(() => {})
+      .finally(() => {
+        booted = true
+      })
     const sub = AppState.addEventListener('change', next => {
       if (next !== 'active') return
       // During boot, the boot's own tick covers it.

@@ -52,11 +52,82 @@ const HURRICANES_FONT_PRESENT = fs.existsSync(
   path.join(__dirname, HURRICANES_FONT),
 )
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Signature sign-in (P2b, dark): the native bounce scheme to register, or null.
+// It MIRRORS parseAOSignatureConfig (src/features/aoSignature/config.ts) for the
+// native platforms: this file runs in plain node at build time and can't import
+// that TS module, so a parity test
+// (src/features/aoSignature/__tests__/appConfigParity.test.ts) runs both over
+// the same env matrix and requires them to agree. Any mismatch or partial
+// config ⇒ null ⇒ the scheme stays exactly 'one'.
+//   `platform`: EAS_BUILD_PLATFORM ('ios' | 'android'); unset (a local
+//   prebuild) ⇒ armed if EITHER native platform's config is complete.
+// ─────────────────────────────────────────────────────────────────────────────
+const AO_SIGNATURE_DEFAULT_RUNTIME =
+  'https://authority-one-agent-runtime.e-479.workers.dev' // = AGENT_RUNTIME_SERVICE
+
+/**
+ * @param {Record<string, string | undefined>} rawEnv
+ * @param {string | undefined} platform
+ * @returns {string | null}
+ */
+function aoSignatureNativeScheme(rawEnv, platform) {
+  /** @param {string} k */
+  const env = k => String(rawEnv[k] ?? '').trim()
+  /** @param {string} raw @returns {URL | null} */
+  const httpsUrl = raw => {
+    if (!raw || raw.includes('?') || raw.includes('#')) return null
+    try {
+      const u = new URL(raw)
+      return u.protocol === 'https:' && u.host && !u.search && !u.hash
+        ? u
+        : null
+    } catch {
+      return null
+    }
+  }
+  /** @param {string} raw */
+  const originOf = raw => {
+    try {
+      return new URL(raw).origin
+    } catch {
+      return null
+    }
+  }
+  const issuer = httpsUrl(env('EXPO_PUBLIC_AO_SIGNATURE_ISSUER'))
+  const runtime = httpsUrl(
+    env('EXPO_PUBLIC_AO_SIGNATURE_RUNTIME_URL').replace(/\/+$/, ''),
+  )
+  if (!issuer || !runtime) return null
+  const agentRuntime =
+    rawEnv.EXPO_PUBLIC_AGENT_RUNTIME_URL ?? AO_SIGNATURE_DEFAULT_RUNTIME
+  if (runtime.origin !== originOf(agentRuntime)) return null
+  const authorizeBase = env('EXPO_PUBLIC_AO_SIGNATURE_AUTHORIZE_BASE')
+  if (authorizeBase && !httpsUrl(authorizeBase)) return null
+  const scheme = env('EXPO_PUBLIC_AO_SIGNATURE_SCHEME')
+  if (!['authorityone', 'authorityone-dev'].includes(scheme)) return null
+  const redirect = httpsUrl(env('EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI'))
+  if (
+    !redirect ||
+    (redirect.pathname !== '/auth/janus/app-callback' &&
+      redirect.pathname !== '/auth/janus/android-callback')
+  ) {
+    return null
+  }
+  /** @param {string} id */
+  const clientOk = id => Boolean(id) && !/\s|,/.test(id)
+  const ios = clientOk(env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS'))
+  const android = clientOk(env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID'))
+  const armed =
+    platform === 'ios' ? ios : platform === 'android' ? android : ios || android
+  return armed ? scheme : null
+}
+
 /**
  * @param {import('@expo/config-types').ExpoConfig} _config
  * @returns {{ expo: import('@expo/config-types').ExpoConfig }}
  */
-module.exports = function (_config) {
+function appConfig(_config) {
   /**
    * App version number. Should be incremented as part of a release cycle.
    */
@@ -70,38 +141,11 @@ module.exports = function (_config) {
   const PLATFORM = process.env.EAS_BUILD_PLATFORM ?? 'web'
 
   const IS_TESTFLIGHT = process.env.EXPO_PUBLIC_ENV === 'testflight'
-  // Signature sign-in (P2b, dark): register the bounce scheme ONLY when the
-  // full native config is present (mirrors src/features/aoSignature/config.ts
-  // for the native platforms) — a scheme-only env must not register a URL
-  // scheme while the JS lane stays dark.
-  const AO_SIGNATURE_SCHEME = (() => {
-    /** @param {string} k */
-    const env = k => String(process.env[k] ?? '').trim()
-    /** @param {string} v */
-    const https = v => {
-      try {
-        const u = new URL(v)
-        return u.protocol === 'https:' && !u.search && !u.hash
-      } catch {
-        return false
-      }
-    }
-    const scheme = env('EXPO_PUBLIC_AO_SIGNATURE_SCHEME')
-    const redirect = env('EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI')
-    const armed =
-      ['authorityone', 'authorityone-dev'].includes(scheme) &&
-      https(env('EXPO_PUBLIC_AO_SIGNATURE_ISSUER')) &&
-      https(env('EXPO_PUBLIC_AO_SIGNATURE_RUNTIME_URL').replace(/\/+$/, '')) &&
-      https(redirect) &&
-      /\/auth\/janus\/(app|android)-callback$/.test(
-        new URL(redirect).pathname,
-      ) &&
-      Boolean(
-        env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS') ||
-        env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID'),
-      )
-    return armed ? scheme : null
-  })()
+  // Signature sign-in (P2b, dark): see aoSignatureNativeScheme below.
+  const AO_SIGNATURE_SCHEME = aoSignatureNativeScheme(
+    process.env,
+    process.env.EAS_BUILD_PLATFORM,
+  )
   const IS_PRODUCTION = process.env.EXPO_PUBLIC_ENV === 'production'
   const IS_DEV = !IS_TESTFLIGHT && !IS_PRODUCTION
 
@@ -606,3 +650,6 @@ module.exports = function (_config) {
     },
   }
 }
+
+appConfig.aoSignatureNativeScheme = aoSignatureNativeScheme
+module.exports = appConfig

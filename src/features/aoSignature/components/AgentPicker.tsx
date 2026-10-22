@@ -23,7 +23,7 @@ import {usePickerMachine} from './usePickerMachine'
 export function AOAgentPicker({token, sid}: {token: string; sid: string}) {
   const t = useTheme()
   const {_, i18n} = useLingui()
-  const [state, dispatch] = usePickerMachine(token, aoClient())
+  const [state, dispatch] = usePickerMachine(token, sid, aoClient())
   const [name, setName] = useState('')
 
   useEffect(() => {

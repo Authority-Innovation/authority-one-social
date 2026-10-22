@@ -129,10 +129,11 @@ export async function patchAORecord(patch: Partial<AORecord>): Promise<void> {
 export interface AOSessionRef {
   sid: string
   token: string
+  did: string
 }
 
 export function sessionRef(r: AORecord): AOSessionRef {
-  return {sid: r.sid, token: r.token}
+  return {sid: r.sid, token: r.token, did: r.did}
 }
 
 /** Is `ref` still the session on this device? A late network answer for a
@@ -141,6 +142,26 @@ export function sessionRef(r: AORecord): AOSessionRef {
 export function isCurrentSession(ref: AOSessionRef): boolean {
   const r = state.record
   return !!r && r.sid === ref.sid && r.token === ref.token
+}
+
+/** Is the session on this device still the SIGN-IN `ref` started from (same
+ *  sid + did), even if a refresh has since rotated its token? This is the
+ *  test for USER-initiated ends (sign out, sign out everywhere, unlink): the
+ *  runtime revoked the sid, so every token of that sid must go. */
+export function isSameSignIn(ref: AOSessionRef): boolean {
+  const r = state.record
+  return !!r && r.sid === ref.sid && r.did === ref.did
+}
+
+/** Clear the record if it is still the same sign-in (sid + did), whatever
+ *  token a refresh rotated in meanwhile. */
+export async function clearAORecordIfSignIn(
+  ref: AOSessionRef,
+  notice: MessageDescriptor | null = null,
+): Promise<boolean> {
+  if (!isSameSignIn(ref)) return false
+  await setAORecord(null, notice)
+  return true
 }
 
 /** Patch the record only if it is still the session `ref` names. */

@@ -25,8 +25,12 @@ export type TokenProvider = () => Promise<string | null>
 export function getAgentRuntimeAccessToken(
   /** Where the token is about to go. The AO session is only ever sent to the
    *  pinned agent runtime; any other host (e.g. a separately configured game
-   *  server) gets the PDS token. Omitted ⇒ the agent runtime (every /app/*
-   *  client builds its URL from AGENT_RUNTIME_BASE_URL). */
+   *  server) gets the PDS token.
+   *  OMITTED ⇒ "the agent runtime": ~25 /app/* clients rely on this default
+   *  and build every URL from AGENT_RUNTIME_BASE_URL (which the Signature
+   *  config pins to the AO runtime origin). A client on ANY other base MUST
+   *  pass its URL — src/features/aoSignature/__tests__/bearerCallSites.test.ts
+   *  enforces this over the source tree. */
   targetUrl?: string,
 ): Promise<string | null> {
   try {

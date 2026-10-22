@@ -79,7 +79,7 @@ EXPO_PUBLIC_AO_SIGNATURE_WEB_REDIRECT_URI=https://<dev web app host>/auth/janus/
 - `AO_SIGNIN_V2=1` and `AO_SESSION_SECRET` are set.
 
 ## Tests
-`npx jest src/features/aoSignature`: **14 suites, 143 tests, all pass.** The full suite: **136 suites, 1523 passed (28 todo), 0 failed.** (The first commit had 10 suites / 119 tests; the review fixes below added 24 tests and 4 suites.)
+`npx jest src/features/aoSignature`: **18 suites, 169 tests, all pass.** The full suite: **140 suites, 1549 passed (28 todo), 0 failed.** (First commit: 10 suites / 119 tests. First review round: 14 / 143. Second round: 18 / 169.)
 
 | Suite | Covers |
 |---|---|
@@ -92,10 +92,14 @@ EXPO_PUBLIC_AO_SIGNATURE_WEB_REDIRECT_URI=https://<dev web app host>/auth/janus/
 | `picker` | The full state machine: null primary re-read with a note, a local invalid name, select limited to the set, busy phases ignore taps, effects per phase. |
 | `errors` | Every refusal's words (Studio parity) and the picker words. |
 | `browserWeb` | sessionStorage only; the callback taken into memory and wiped from the URL and storage; an expired attempt dropped; an off-site `returnTo` never followed; other paths untouched. |
-| `race` | Late answers for a replaced session are dropped: refresh 200, refresh 401, reverify, sign-out, sign out everywhere, unlink, sync 200 and sync 401 for account A never touch account B's record. The picker's primary only lands on the session it ran for. A new sign-in revokes the old sid first, best effort. |
+| `race` | A refresh that rotates the token mid sign-out / everywhere / unlink still ends signed out. Late answers for a replaced session are dropped: refresh 200, refresh 401, reverify, sign-out, sign out everywhere, unlink, sync 200 and sync 401 for account A never touch account B's record. The picker's primary only lands on the session it ran for. A new sign-in revokes the old sid first, best effort. |
 | `bearerHosts` | Which hosts get the AO bearer: the pinned runtime origin only. A foreign origin, a look-alike host, http, and garbage all get the PDS token. `createLiveMatch` to a game server on another origin sends the PDS token; to the runtime itself, the AO session. |
+| `lifecycle` | The armed lifecycle's wiring: a foreground during boot doesn't tick, boot ticks once, later foregrounds tick; a FAILED boot still lets foreground ticks run; overlapping foregrounds share one tick. |
+| `shellPickerKey` | A session swap remounts the picker (`key={record.sid}`); fails without the key. |
+| `bearerCallSites` | Source scan: every no-URL call of the bearer getter is in a client built on the agent-runtime config (no literal hosts, no other base env, no game-server base); `createMatch` passes its URL. |
+| `appConfigParity` | `app.config.js`'s scheme registration agrees with `parseAOSignatureConfig` over 17 env cases × iOS / Android / local prebuild. |
 | `singleFlight` | Overlapping calls share one run; a failed run releases the guard. |
-| `usePickerMachine` | A token rotation while `creating` never re-POSTs `/app/agents`; the next phase uses the current token. |
+| `usePickerMachine` | Under a real `<StrictMode>`: one load, a token rotation while `creating` never re-POSTs `/app/agents`, the next phase uses the current token, and an answer for session A that lands after a swap to B is dropped. |
 | `dark` | Config unset: no client; button, account section and lifecycle render `null`; the gate is always null; `getAgentRuntimeAccessToken()` returns the PDS token; store writes are inert; zero `fetch`; `expo-secure-store` and `expo-crypto` never required. |
 
 **Checks on changed files:**
@@ -121,6 +125,23 @@ No device or simulator run: no native builds were allowed.
 7. **Old session on re-sign-in (LOW).** A new sign-in, or a reverify "Continue", revokes the previous sid first (`adoptRedeem`). This is best effort: a failure never blocks the new session, and the same sid is never revoked.
 
 **Not changed, on purpose:** the web PKCE attempt in sessionStorage (verifier, state, nonce, and the minting PDS jwt in link mode). That is for the user to sign off.
+
+## Review fixes, round 2 (third commit, after the review of `18cfda2fe`)
+1. **M1: a user's sign-out could lose to a refresh.**
+   - **The bug:** user-initiated ends matched sid AND token. A refresh keeps the sid and rotates the token, so a sign-out racing a refresh was dropped as stale, and the device kept the new token for a revoked sid.
+   - **The fix:** sign out, sign out everywhere and unlink (and the PDS sign-out cascade, which goes through sign out) now clear by **sid + DID** (`clearAORecordIfSignIn`).
+   - **Unchanged:** server-driven results (refresh, sync, the 401 end) and 403 attribution still match sid + token.
+2. **M2: picker state could survive a session swap.** `AOAgentPicker` is keyed `key={record.sid}`. `usePickerMachine` also captures the sid when each phase starts and drops an answer that lands after the session changed, so A's primary can never land on B.
+3. **L2: app.config arming didn't fully mirror config.ts.** It is now one helper, `aoSignatureNativeScheme`, which mirrors `parseAOSignatureConfig` for native:
+   - the runtime must be on the same origin as `EXPO_PUBLIC_AGENT_RUNTIME_URL` (or its default);
+   - the client id is platform-specific via `EAS_BUILD_PLATFORM` (either platform for a local prebuild);
+   - a client id containing whitespace or a comma is refused;
+   - `?`/`#` are rejected; the authorize base, scheme and bounce path are checked.
+
+   It can't be literally shared, because `app.config.js` is plain node and can't import the TS module, so `appConfigParity.test.ts` holds the two together. Any mismatch keeps `scheme 'one'`.
+4. **L3: a failed boot blocked foreground ticks.** `booted` is now set in `.finally`, after a `.catch`. Wiring test added.
+5. **L4: StrictMode wasn't really exercised.** The picker hook test now renders under a real `<StrictMode>`.
+6. **L1: the no-URL default stays.** About 25 runtime clients rely on it, so it is unchanged. `authToken.ts` now documents the rule, and `bearerCallSites.test.ts` enforces it over the source tree.
 
 ## Open items
 1. **Runtime CORS for web (blocks web).** `/auth/janus/session` and `/auth/ao/*` send no CORS headers, so the browser can't call them from the web app's origin.
