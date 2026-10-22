@@ -30,9 +30,18 @@ describe('shouldCaptureBackground (Phase 1.5 gate)', () => {
   })
 
   it('launch migration: an install that had background ON stops updates and clears the pref; others still stop any leftover updates', () => {
-    expect(backgroundMigration({backgroundEnabled: true})).toEqual({stopUpdates: true, clearPref: true})
-    expect(backgroundMigration({backgroundEnabled: false})).toEqual({stopUpdates: true, clearPref: false})
-    expect(backgroundMigration({})).toEqual({stopUpdates: true, clearPref: false})
+    expect(backgroundMigration({backgroundEnabled: true})).toEqual({
+      stopUpdates: true,
+      clearPref: true,
+    })
+    expect(backgroundMigration({backgroundEnabled: false})).toEqual({
+      stopUpdates: true,
+      clearPref: false,
+    })
+    expect(backgroundMigration({})).toEqual({
+      stopUpdates: true,
+      clearPref: false,
+    })
   })
 
   it('captures nothing when off or permission missing', () => {

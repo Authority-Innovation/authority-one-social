@@ -70,7 +70,9 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
   // Not shipped (derive.ts BACKGROUND_LOCATION_SHIPPED): ANY wake — even an error or an
   // empty batch — stops and unregisters the updates an older build started.
   if (!BACKGROUND_LOCATION_SHIPPED) {
-    await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => {})
+    await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(
+      () => {},
+    )
     return
   }
   if (error) {

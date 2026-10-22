@@ -5,7 +5,8 @@
  * in `backgroundLocation.native.ts`.
  */
 
-export const BACKGROUND_LOCATION_TASK = 'authority-one-context-background-location'
+export const BACKGROUND_LOCATION_TASK =
+  'authority-one-context-background-location'
 
 export function backgroundLocationSupported(): boolean {
   return false

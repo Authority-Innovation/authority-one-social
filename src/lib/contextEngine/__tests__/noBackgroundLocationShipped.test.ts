@@ -20,7 +20,10 @@ const provider = read('src/state/contextEngine/ContextEngineProvider.tsx')
 describe('background location: off in code, capability kept one release', () => {
   it('nothing ships background capture', () => {
     expect(BACKGROUND_LOCATION_SHIPPED).toBe(false)
-    expect(backgroundMigration({backgroundEnabled: true})).toEqual({stopUpdates: true, clearPref: true})
+    expect(backgroundMigration({backgroundEnabled: true})).toEqual({
+      stopUpdates: true,
+      clearPref: true,
+    })
   })
 
   it('crash safety: the iOS location background mode is still declared this release', () => {
@@ -31,12 +34,18 @@ describe('background location: off in code, capability kept one release', () => 
 
   it('the native controller refuses to start, reports unsupported, and a queued wake stops updates', () => {
     expect(controller).toContain('return BACKGROUND_LOCATION_SHIPPED')
-    expect(controller).toContain('if (!BACKGROUND_LOCATION_SHIPPED) return false')
-    expect(controller).toContain('await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)')
+    expect(controller).toContain(
+      'if (!BACKGROUND_LOCATION_SHIPPED) return false',
+    )
+    expect(controller).toContain(
+      'await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)',
+    )
   })
 
   it('launch stops any restored task and clears the pref', () => {
     expect(provider).toContain('const mig = backgroundMigration(p)')
-    expect(provider).toContain('if (IS_NATIVE && mig.stopUpdates) void stopBackgroundUpdates()')
+    expect(provider).toContain(
+      'if (IS_NATIVE && mig.stopUpdates) void stopBackgroundUpdates()',
+    )
   })
 })
