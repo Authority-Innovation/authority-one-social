@@ -35,6 +35,7 @@ import {
   requestBackgroundPermission,
   startBackgroundUpdates,
   stopBackgroundUpdates,
+  stopRestoredBackgroundUpdatesOnce,
 } from './backgroundLocation'
 import {
   appendEvent,
@@ -45,6 +46,7 @@ import {
   loadPrefs,
   savePrefs,
 } from './store'
+import {runOnceWhenForeground} from './whenForeground'
 
 /**
  * Drives the Context Engine: foreground (when-in-use) location sampling while the
@@ -164,10 +166,9 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
         if (!cancelled) setPermissionGranted(perm?.granted === true)
       }
       // Background location is NOT shipped (derive.ts BACKGROUND_LOCATION_SHIPPED):
-      // stop any OS updates an older build started, and clear the preference, so a
-      // phone that had it on stops draining on this launch.
+      // clear the preference. Stopping the OS updates is the separate foreground-only
+      // effect below.
       const mig = backgroundMigration(p)
-      if (IS_NATIVE && mig.stopUpdates) void stopBackgroundUpdates()
       if (mig.clearPref) {
         const cleared: ContextPrefs = {...p, backgroundEnabled: false}
         if (!cancelled) setPrefs(cleared)
@@ -185,6 +186,17 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // Launch migration (not shipped): stop + unregister any background location updates
+  // an older build started, ONLY once the app is in the FOREGROUND. On iOS the whole
+  // app (and this provider) also boots when the OS relaunches it in the background to
+  // deliver a location; unregistering there is what crashed build 33, so a background
+  // launch waits for 'active'. backgroundMigration's stopUpdates does not depend on
+  // prefs, so this needn't wait for the prefs load.
+  useEffect(() => {
+    if (!IS_NATIVE || !backgroundMigration({}).stopUpdates) return
+    return runOnceWhenForeground(stopRestoredBackgroundUpdatesOnce)
   }, [])
 
   const active = shouldCapture({enabled: prefs.enabled, permissionGranted})
