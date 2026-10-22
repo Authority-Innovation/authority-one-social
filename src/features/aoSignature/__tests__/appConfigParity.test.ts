@@ -113,8 +113,40 @@ const cases: Array<[string, Record<string, string | undefined>]> = [
   ],
 ]
 
+const D = 'authorityone-dev'
+const OFF = [null, null, null] as const
+/** The EXPECTED scheme per case: [iOS build, Android build, local prebuild].
+ *  Agreement alone could be two copies of the same bug, so pin the answers. */
+const expected: Record<string, readonly (string | null)[]> = {
+  full: [D, D, D],
+  unset: OFF,
+  'scheme only': OFF,
+  'android-callback path': [D, D, D],
+  'foreign redirect path': OFF,
+  'redirect with ?': OFF,
+  'issuer with #': OFF,
+  'http issuer': OFF,
+  'runtime on another origin': OFF,
+  'agent runtime overridden to match': [D, D, D],
+  'agent runtime overridden, AO not': OFF,
+  'client id list': OFF,
+  'iOS client only': [D, null, D],
+  'Android client only': [null, D, D],
+  'bad scheme': OFF,
+  'bad authorize base': OFF,
+  'good authorize base': [D, D, D],
+}
+
 describe('app.config.js scheme registration mirrors config.ts', () => {
-  it.each(cases)('%s', (_name, raw) => {
+  it('every case has a pinned expectation', () => {
+    expect(Object.keys(expected).sort()).toEqual(cases.map(c => c[0]).sort())
+  })
+
+  it.each(cases)('%s', (name, raw) => {
+    const [ios, android, local] = expected[name]
+    expect(appConfig.aoSignatureNativeScheme(raw, 'ios')).toBe(ios)
+    expect(appConfig.aoSignatureNativeScheme(raw, 'android')).toBe(android)
+    expect(appConfig.aoSignatureNativeScheme(raw, undefined)).toBe(local)
     const agentRuntime = raw.EXPO_PUBLIC_AGENT_RUNTIME_URL ?? RT
     for (const platform of ['ios', 'android'] as const) {
       const ts = parseAOSignatureConfig(toEnv(raw), platform, agentRuntime)

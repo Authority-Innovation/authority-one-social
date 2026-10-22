@@ -129,14 +129,19 @@ describe('late answers for a replaced session are dropped', () => {
         signOutEverywhereAO(client({signoutEverywhere: () => d})),
       (d: Promise<void>) => unlinkAO(client({unlink: () => d})),
     ]) {
-      await setAORecord(A())
+      const a = A()
+      await setAORecord(a)
       const d = deferred<void>()
       const p = run(d.promise)
-      // The refresh lands first: same sid, NEW token (T2).
-      await refreshAOSession(
-        client({refresh: () => Promise.resolve(mintedSession(DID, 'sid-a'))}),
-      )
+      // The refresh lands first: same sid, a GENUINELY new token (T2).
+      const t2 = mintedSession(DID, 'sid-a', 3600 * 1000)
+      expect(t2.token).not.toBe(a.token)
+      await expect(
+        refreshAOSession(client({refresh: () => Promise.resolve(t2)})),
+      ).resolves.toBe('refreshed')
       expect(getAOState().record?.sid).toBe('sid-a')
+      expect(getAOState().record?.token).toBe(t2.token)
+      expect(getAOState().record?.token).not.toBe(a.token)
       d.resolve()
       await p
       expect(getAOState().record).toBeNull()
@@ -199,6 +204,33 @@ describe('late answers for a replaced session are dropped', () => {
       primary: 'steve.pds.test',
       needsAgent: false,
     })
+  })
+})
+
+describe('a refresh never adopts a different sid', () => {
+  it('a re-mint under another sid ends the session instead of adopting it', async () => {
+    await setAORecord(A())
+    const other = mintedSession(DID, 'sid-other', 1000)
+    await expect(
+      refreshAOSession(client({refresh: () => Promise.resolve(other)})),
+    ).resolves.toBe('ended')
+    expect(getAOState().record).toBeNull()
+    expect(getAOState().notice).not.toBeNull()
+  })
+
+  it("the client's sid-mismatch refusal also ends it", async () => {
+    await setAORecord(A())
+    await expect(
+      refreshAOSession(
+        client({
+          refresh: () =>
+            Promise.reject(
+              new AOSignatureError('refused', 502, 'sid-mismatch'),
+            ),
+        }),
+      ),
+    ).resolves.toBe('ended')
+    expect(getAOState().record).toBeNull()
   })
 })
 

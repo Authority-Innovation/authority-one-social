@@ -79,7 +79,7 @@ EXPO_PUBLIC_AO_SIGNATURE_WEB_REDIRECT_URI=https://<dev web app host>/auth/janus/
 - `AO_SIGNIN_V2=1` and `AO_SESSION_SECRET` are set.
 
 ## Tests
-`npx jest src/features/aoSignature`: **18 suites, 169 tests, all pass.** The full suite: **140 suites, 1549 passed (28 todo), 0 failed.** (First commit: 10 suites / 119 tests. First review round: 14 / 143. Second round: 18 / 169.)
+`npx jest src/features/aoSignature`: **18 suites, 174 tests, all pass.** The full suite: **140 suites, 1554 passed (28 todo), 0 failed.** (First commit: 10 suites / 119 tests. Review rounds: 14 / 143, then 18 / 169, then 18 / 174.)
 
 | Suite | Covers |
 |---|---|
@@ -94,10 +94,10 @@ EXPO_PUBLIC_AO_SIGNATURE_WEB_REDIRECT_URI=https://<dev web app host>/auth/janus/
 | `browserWeb` | sessionStorage only; the callback taken into memory and wiped from the URL and storage; an expired attempt dropped; an off-site `returnTo` never followed; other paths untouched. |
 | `race` | A refresh that rotates the token mid sign-out / everywhere / unlink still ends signed out. Late answers for a replaced session are dropped: refresh 200, refresh 401, reverify, sign-out, sign out everywhere, unlink, sync 200 and sync 401 for account A never touch account B's record. The picker's primary only lands on the session it ran for. A new sign-in revokes the old sid first, best effort. |
 | `bearerHosts` | Which hosts get the AO bearer: the pinned runtime origin only. A foreign origin, a look-alike host, http, and garbage all get the PDS token. `createLiveMatch` to a game server on another origin sends the PDS token; to the runtime itself, the AO session. |
-| `lifecycle` | The armed lifecycle's wiring: a foreground during boot doesn't tick, boot ticks once, later foregrounds tick; a FAILED boot still lets foreground ticks run; overlapping foregrounds share one tick. |
-| `shellPickerKey` | A session swap remounts the picker (`key={record.sid}`); fails without the key. |
+| `lifecycle` | Under a real `<StrictMode>`: StrictMode's double effect and a remount still boot ONCE; a failed boot is logged by kind only (no token). The armed lifecycle's wiring: a foreground during boot doesn't tick, boot ticks once, later foregrounds tick; a FAILED boot still lets foreground ticks run; overlapping foregrounds share one tick. |
+| `shellPickerKey` | Under `<StrictMode>`: after a session swap, sid-b never renders in a picker instance that rendered sid-a (instance ids from a `useState` initializer). Mutation-checked: fails without `key={record.sid}`. |
 | `bearerCallSites` | Source scan: every no-URL call of the bearer getter is in a client built on the agent-runtime config (no literal hosts, no other base env, no game-server base); `createMatch` passes its URL. |
-| `appConfigParity` | `app.config.js`'s scheme registration agrees with `parseAOSignatureConfig` over 17 env cases × iOS / Android / local prebuild. |
+| `appConfigParity` | `app.config.js`'s scheme registration agrees with `parseAOSignatureConfig` over 17 env cases × iOS / Android / local prebuild, AND each case's answer is pinned (e.g. `full` → `authorityone-dev` everywhere, iOS-client-only → iOS + local only). |
 | `singleFlight` | Overlapping calls share one run; a failed run releases the guard. |
 | `usePickerMachine` | Under a real `<StrictMode>`: one load, a token rotation while `creating` never re-POSTs `/app/agents`, the next phase uses the current token, and an answer for session A that lands after a swap to B is dropped. |
 | `dark` | Config unset: no client; button, account section and lifecycle render `null`; the gate is always null; `getAgentRuntimeAccessToken()` returns the PDS token; store writes are inert; zero `fetch`; `expo-secure-store` and `expo-crypto` never required. |
@@ -142,6 +142,18 @@ No device or simulator run: no native builds were allowed.
 4. **L3: a failed boot blocked foreground ticks.** `booted` is now set in `.finally`, after a `.catch`. Wiring test added.
 5. **L4: StrictMode wasn't really exercised.** The picker hook test now renders under a real `<StrictMode>`.
 6. **L1: the no-URL default stays.** About 25 runtime clients rely on it, so it is unchanged. `authToken.ts` now documents the rule, and `bearerCallSites.test.ts` enforces it over the source tree.
+
+## Review fixes, round 3 (fourth commit, after the review of `5474618ef`)
+The code fixes of round 2 were right, but two regression tests passed with the fix removed. Both now fail on the mutant, and each fix below was mutation-checked: break it, see the test fail, restore.
+
+| Fix | Mutation check (with the fix removed) |
+|---|---|
+| **Rotation race test.** The "rotated" token was minted in the same second as A's, so it was byte-identical. The refresh now returns a genuinely different token (`mintedSession(…, laterMs)`), and the test asserts the token changed before the sign-out resolves. | Reverting each of sign out, sign out everywhere and unlink to `clearAORecordIf`, one at a time: the test **fails** each time. |
+| **Shell key test.** The mock's `[sid]` effect logged the same thing with or without the key. It now uses an instance id from a `useState` initializer and renders under `<StrictMode>`. | Deleting `key={record.sid}`: the test **fails**. |
+| **One boot.** The lifecycle moved to `lifecycle.ts`. `bootAOLifecycle()` is idempotent (one promise per app run: one store read, one web-callback redeem). The tick is single-flight; `booted` is set in `.finally`. | Making boot non-idempotent: **2 fail**. Setting `booted` in `.then`: **2 fail**. |
+| **Refresh sid hardening.** `decodeMintedSession(…, expectedSid)` and `client.refresh(token, did, sid)` refuse a re-mint under another sid (`sid-mismatch`). `refreshAOSession` treats a different sid as a session end: cleared, "sign in again". | Dropping the session-level check: the race test **fails**. |
+| **Parity test.** The expected answer is now pinned per case, not just agreement between the two implementations. | — |
+| **Boot errors are logged, not swallowed.** `logger.warn` with the error's `kind:status:code` (or its class name) only. A test checks no `aos1.` appears in the log. | — |
 
 ## Open items
 1. **Runtime CORS for web (blocks web).** `/auth/janus/session` and `/auth/ao/*` send no CORS headers, so the browser can't call them from the web app's origin.

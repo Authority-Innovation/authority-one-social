@@ -137,6 +137,12 @@ describe('runtime client wire', () => {
     await expect(c.refresh('aos1.x.y', DID)).rejects.toBeInstanceOf(
       AOSignatureError,
     )
+    // A re-mint under another sid is refused when the sid is named.
+    next = res(200, {ok: true, aoSession: mintedSession(DID, 'sid-other')})
+    const e = (await c
+      .refresh('aos1.x.y', DID, 'sid-1')
+      .catch(x => x as AOSignatureError)) as AOSignatureError
+    expect(e.code).toBe('sid-mismatch')
   })
 
   it('link-code: PDS bearer only, and the answer is checked', async () => {

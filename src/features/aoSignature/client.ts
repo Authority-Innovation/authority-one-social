@@ -43,7 +43,9 @@ export interface AOClient {
     link?: AOLinkProof | null,
   ): Promise<AORedeemResult>
   linkCode(pdsAccessJwt: string): Promise<AOLinkCode>
-  refresh(token: string, did: string): Promise<AOMintedSession>
+  /** `sid`: the session being slid — a re-mint under any other sid is
+   *  refused (`sid-mismatch`). */
+  refresh(token: string, did: string, sid?: string): Promise<AOMintedSession>
   introspect(token: string): Promise<AOPickerList & {did: string | null}>
   signout(token: string): Promise<void>
   signoutEverywhere(token: string): Promise<void>
@@ -164,7 +166,7 @@ export function createAOClient(
       return {did, linkCode: code, expiresAt: exp}
     },
 
-    async refresh(token, did) {
+    async refresh(token, did, sid) {
       const json = (await call(
         ctx,
         `${base}/auth/ao/session/refresh`,
@@ -173,6 +175,9 @@ export function createAOClient(
       )) as Record<string, unknown> | null
       const minted = decodeMintedSession(json?.aoSession, did)
       if (!minted) throw new AOSignatureError('refused', 502, 'unavailable')
+      if (sid !== undefined && minted.sid !== sid) {
+        throw new AOSignatureError('refused', 502, 'sid-mismatch')
+      }
       return minted
     },
 

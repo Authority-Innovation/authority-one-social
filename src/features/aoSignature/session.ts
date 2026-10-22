@@ -95,7 +95,12 @@ export async function refreshAOSession(
   if (!record) return 'skipped'
   const ref = sessionRef(record)
   try {
-    const minted = await client.refresh(record.token, record.did)
+    const minted = await client.refresh(record.token, record.did, record.sid)
+    if (minted.sid !== record.sid) {
+      // A refresh slides the SAME sid. Another sid is not this session any
+      // more: never adopted — the session ends (sign in again).
+      return (await clearAORecordIf(ref, SESSION_ENDED)) ? 'ended' : 'stale'
+    }
     const applied = await patchAORecordIf(ref, {
       token: minted.token,
       sid: minted.sid,
@@ -105,6 +110,9 @@ export async function refreshAOSession(
     })
     return applied ? 'refreshed' : 'stale'
   } catch (e) {
+    if (e instanceof AOSignatureError && e.code === 'sid-mismatch') {
+      return (await clearAORecordIf(ref, SESSION_ENDED)) ? 'ended' : 'stale'
+    }
     if (
       e instanceof AOSignatureError &&
       e.kind === 'refused' &&

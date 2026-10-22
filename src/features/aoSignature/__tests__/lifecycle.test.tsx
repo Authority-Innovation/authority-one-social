@@ -1,3 +1,4 @@
+import {StrictMode} from 'react'
 import {AppState} from 'react-native'
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {act, render} from '@testing-library/react-native'
@@ -12,6 +13,10 @@ jest.mock('../components/AccountSection', () => ({}))
 jest.mock('../components/Shell', () => ({}))
 jest.mock('../components/SignInButton', () => ({}))
 jest.mock('../hooks', () => ({persistedPdsPort: {}}))
+const mockWarn = jest.fn()
+jest.mock('#/logger', () => ({
+  logger: {warn: (...a: unknown[]) => mockWarn(...a)},
+}))
 
 const mockBoot = {
   load: jest.fn<() => Promise<void>>(),
@@ -37,6 +42,16 @@ jest.mock('../session', () => ({
 }))
 
 import {AOSignatureLifecycle} from '../index'
+import {_resetAOLifecycleForTests} from '../lifecycle'
+
+/** Always under a real <StrictMode> (double-invoked mount effects). */
+function mount() {
+  return render(
+    <StrictMode>
+      <AOSignatureLifecycle />
+    </StrictMode>,
+  )
+}
 
 let onChange: ((s: string) => void) | null = null
 function deferred<T>() {
@@ -50,6 +65,8 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+  _resetAOLifecycleForTests()
+  mockWarn.mockReset()
   onChange = null
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_t, h) => {
     onChange = h as (s: string) => void
@@ -61,10 +78,29 @@ beforeEach(() => {
 })
 
 describe('lifecycle wiring', () => {
+  it('StrictMode (double effect) and a remount still boot ONCE', async () => {
+    const first = mount()
+    await act(async () => {})
+    first.unmount()
+    mount()
+    await act(async () => {})
+    expect(mockBoot.load).toHaveBeenCalledTimes(1)
+    expect(mockBoot.web).toHaveBeenCalledTimes(1)
+    expect(mockBoot.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed boot is logged with its kind only — never a token', async () => {
+    mockBoot.load.mockRejectedValue(new Error('aos1.SECRET.TOKEN'))
+    mount()
+    await act(async () => {})
+    expect(mockWarn).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(mockWarn.mock.calls)).not.toContain('aos1.')
+  })
+
   it('a foreground during boot does not tick; boot ticks once; later foregrounds tick', async () => {
     const web = deferred<boolean>()
     mockBoot.web.mockReturnValue(web.promise)
-    render(<AOSignatureLifecycle />)
+    mount()
     await act(async () => {})
     act(() => onChange?.('active'))
     expect(mockBoot.refresh).not.toHaveBeenCalled()
@@ -82,7 +118,7 @@ describe('lifecycle wiring', () => {
 
   it('a FAILED boot still lets foreground ticks run (booted in finally)', async () => {
     mockBoot.load.mockRejectedValue(new Error('keychain'))
-    render(<AOSignatureLifecycle />)
+    mount()
     await act(async () => {})
     expect(mockBoot.refresh).not.toHaveBeenCalled()
     await act(() => {
@@ -93,7 +129,7 @@ describe('lifecycle wiring', () => {
   })
 
   it('overlapping foregrounds share one tick', async () => {
-    render(<AOSignatureLifecycle />)
+    mount()
     await act(async () => {})
     expect(mockBoot.refresh).toHaveBeenCalledTimes(1)
     const slow = deferred<string>()

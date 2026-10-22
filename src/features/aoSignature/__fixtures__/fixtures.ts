@@ -53,8 +53,10 @@ export function pdsJwt(did: string, expS: number): string {
 
 export const DID = 'did:plc:owner1234'
 
-export function mintedSession(did = DID, sid = 'sid-1') {
-  const exp = Date.now() + 30 * 24 * 3600 * 1000
+/** `laterMs` shifts exp, so two sessions minted in the same second still get
+ *  genuinely DIFFERENT tokens (a real refresh rotates the token). */
+export function mintedSession(did = DID, sid = 'sid-1', laterMs = 0) {
+  const exp = Date.now() + 30 * 24 * 3600 * 1000 + laterMs
   return {
     token: aosToken({did, sid, exp: Math.floor(exp / 1000)}),
     sid,

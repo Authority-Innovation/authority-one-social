@@ -1,3 +1,4 @@
+import {StrictMode} from 'react'
 import {describe, expect, it, jest} from '@jest/globals'
 import {act, render} from '@testing-library/react-native'
 
@@ -36,19 +37,19 @@ jest.mock('#/view/com/auth/LoggedOut', () => ({LoggedOut: () => null}))
 jest.mock('../components/AccountActions', () => ({
   AOAccountActions: () => null,
 }))
-const mockMounts: string[] = []
+// Every render logs WHICH component instance rendered which sid. The instance
+// id comes from a useState initializer, so it belongs to the instance: a
+// remount (new key) gets new ids, a mere re-render keeps the old one.
+const mockRenders: Array<{id: number; sid: string}> = []
+let mockNextId = 0
 jest.mock('../components/AgentPicker', () => {
-  const {useEffect} = require('react') as {
-    useEffect: (f: () => () => void, d: unknown[]) => void
+  const {useState} = require('react') as {
+    useState: <T>(init: () => T) => [T, unknown]
   }
   return {
     AOAgentPicker: ({sid}: {sid: string}) => {
-      useEffect(() => {
-        mockMounts.push(`mount:${sid}`)
-        return () => {
-          mockMounts.push(`unmount:${sid}`)
-        }
-      }, [sid])
+      const [id] = useState(() => ++mockNextId)
+      mockRenders.push({id, sid})
       return null
     },
   }
@@ -73,10 +74,21 @@ function needsAgent(sid: string) {
 describe('Shell picker per session', () => {
   it('a session swap remounts the picker (no state carries over)', async () => {
     await setAORecord(needsAgent('sid-a'))
-    render(<AOSignatureShell gate="shell" />)
+    render(
+      <StrictMode>
+        <AOSignatureShell gate="shell" />
+      </StrictMode>,
+    )
     await act(async () => {
       await setAORecord(needsAgent('sid-b'))
     })
-    expect(mockMounts).toEqual(['mount:sid-a', 'unmount:sid-a', 'mount:sid-b'])
+    const idsFor = (sid: string) =>
+      new Set(mockRenders.filter(r => r.sid === sid).map(r => r.id))
+    const a = idsFor('sid-a')
+    const b = idsFor('sid-b')
+    expect(a.size).toBeGreaterThan(0)
+    expect(b.size).toBeGreaterThan(0)
+    // sid-b never renders in an instance that rendered sid-a.
+    expect([...b].filter(id => a.has(id))).toEqual([])
   })
 })
