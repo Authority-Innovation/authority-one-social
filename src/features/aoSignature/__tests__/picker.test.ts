@@ -124,10 +124,10 @@ describe('picker state machine', () => {
       },
     } as unknown as AOClient
     expect(
-      await pickerEffect(initialPickerState, client, 'aos1.t.x'),
+      await pickerEffect(initialPickerState.phase, client, 'aos1.t.x'),
     ).toMatchObject({type: 'loaded'})
     const creating = pickerReducer(choosing, {type: 'create', name: 'Ron'})
-    expect(await pickerEffect(creating, client, 'aos1.t.x')).toEqual({
+    expect(await pickerEffect(creating.phase, client, 'aos1.t.x')).toEqual({
       type: 'created',
       primary: null,
     })
@@ -135,11 +135,26 @@ describe('picker state machine', () => {
       type: 'select',
       handle: 'bob.pds.test',
     })
-    expect(await pickerEffect(selecting, client, 'aos1.t.x')).toMatchObject({
+    expect(
+      await pickerEffect(selecting.phase, client, 'aos1.t.x'),
+    ).toMatchObject({
       type: 'select-failed',
     })
-    expect(await pickerEffect(choosing, client, 'aos1.t.x')).toBeNull()
+    expect(await pickerEffect(choosing.phase, client, 'aos1.t.x')).toBeNull()
     expect(calls).toEqual(['list', 'create:ron:Ron', 'choose:bob.pds.test'])
+  })
+
+  it('a late load answer never overrides a later phase', () => {
+    const creating = pickerReducer(choosing, {type: 'create', name: 'Ron'})
+    expect(
+      pickerReducer(creating, {
+        type: 'loaded',
+        list: {agents, primary: 'bob.pds.test', needsAgent: false},
+      }),
+    ).toBe(creating)
+    expect(
+      pickerReducer(creating, {type: 'load-failed', error: new Error('x')}),
+    ).toBe(creating)
   })
 
   it('helpers', () => {

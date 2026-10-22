@@ -14,7 +14,12 @@ import {
 
 export type AOFetch = (
   url: string,
-  init: {method: string; headers: Record<string, string>; body?: string},
+  init: {
+    method: string
+    headers: Record<string, string>
+    body?: string
+    signal?: AbortSignal
+  },
 ) => Promise<{status: number; ok: boolean; json(): Promise<unknown>}>
 
 export interface AOLinkProof {
@@ -51,31 +56,57 @@ export interface AOClient {
   choosePrimary(token: string, handle: string): Promise<string>
 }
 
+/** Every runtime call is leashed: a hung request is `transport` (and aborted)
+ *  instead of an action that never settles. */
+export const AO_REQUEST_TIMEOUT_MS = 20_000
+
+interface CallCtx {
+  doFetch: AOFetch
+  timeoutMs: number
+}
+
 async function call(
-  doFetch: AOFetch,
+  ctx: CallCtx,
   url: string,
   method: string,
   headers: Record<string, string>,
   body?: unknown,
 ): Promise<unknown> {
-  let res
+  const abort =
+    typeof AbortController !== 'undefined' ? new AbortController() : null
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      abort?.abort()
+      reject(new AOSignatureError('transport', 0, 'timeout'))
+    }, ctx.timeoutMs)
+  })
   try {
-    res = await doFetch(url, {
-      method,
-      headers:
-        body === undefined
-          ? headers
-          : {...headers, 'Content-Type': 'application/json'},
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-  } catch {
-    throw new AOSignatureError('transport')
+    const attempt = (async () => {
+      let res
+      try {
+        res = await ctx.doFetch(url, {
+          method,
+          headers:
+            body === undefined
+              ? headers
+              : {...headers, 'Content-Type': 'application/json'},
+          body: body === undefined ? undefined : JSON.stringify(body),
+          ...(abort ? {signal: abort.signal} : {}),
+        })
+      } catch {
+        throw new AOSignatureError('transport')
+      }
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw AOSignatureError.fromResponse(res.status, runtimeErrorCode(json))
+      }
+      return json
+    })()
+    return await Promise.race([attempt, timeout])
+  } finally {
+    clearTimeout(timer)
   }
-  const json = await res.json().catch(() => null)
-  if (!res.ok) {
-    throw AOSignatureError.fromResponse(res.status, runtimeErrorCode(json))
-  }
-  return json
 }
 
 /** `Authorization: Bearer aos1…` — and NO `X-Authority-Auth`, which names a
@@ -84,8 +115,16 @@ function aoBearer(token: string): Record<string, string> {
   return {Authorization: `Bearer ${token}`}
 }
 
-export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
+export function createAOClient(
+  runtimeUrl: string,
+  doFetch: AOFetch,
+  opts: {timeoutMs?: number} = {},
+): AOClient {
   const base = runtimeUrl.replace(/\/+$/, '')
+  const ctx: CallCtx = {
+    doFetch,
+    timeoutMs: opts.timeoutMs ?? AO_REQUEST_TIMEOUT_MS,
+  }
   return {
     async redeem(grant, nonce, link) {
       // A normal sign-in carries NO Authorization. Link mode adds the SAME PDS
@@ -99,7 +138,7 @@ export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
       const body: Record<string, unknown> = {grant, nonce}
       if (link) body.link_code = link.linkCode
       const json = await call(
-        doFetch,
+        ctx,
         `${base}/auth/janus/session`,
         'POST',
         headers,
@@ -109,7 +148,7 @@ export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
     },
 
     async linkCode(pdsAccessJwt) {
-      const json = (await call(doFetch, `${base}/auth/ao/link-code`, 'POST', {
+      const json = (await call(ctx, `${base}/auth/ao/link-code`, 'POST', {
         Authorization: `Bearer ${pdsAccessJwt}`,
       })) as Record<string, unknown> | null
       const did = typeof json?.did === 'string' ? json.did : ''
@@ -127,7 +166,7 @@ export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
 
     async refresh(token, did) {
       const json = (await call(
-        doFetch,
+        ctx,
         `${base}/auth/ao/session/refresh`,
         'POST',
         aoBearer(token),
@@ -139,7 +178,7 @@ export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
 
     async introspect(token) {
       const json = (await call(
-        doFetch,
+        ctx,
         `${base}/auth/ao/session`,
         'GET',
         aoBearer(token),
@@ -151,12 +190,12 @@ export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
     },
 
     async signout(token) {
-      await call(doFetch, `${base}/auth/ao/signout`, 'POST', aoBearer(token))
+      await call(ctx, `${base}/auth/ao/signout`, 'POST', aoBearer(token))
     },
 
     async signoutEverywhere(token) {
       await call(
-        doFetch,
+        ctx,
         `${base}/auth/ao/signout-everywhere`,
         'POST',
         aoBearer(token),
@@ -164,18 +203,18 @@ export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
     },
 
     async unlink(token) {
-      await call(doFetch, `${base}/auth/ao/unlink`, 'POST', aoBearer(token))
+      await call(ctx, `${base}/auth/ao/unlink`, 'POST', aoBearer(token))
     },
 
     async listAgents(token) {
       return decodePickerList(
-        await call(doFetch, `${base}/app/agents`, 'GET', aoBearer(token)),
+        await call(ctx, `${base}/app/agents`, 'GET', aoBearer(token)),
       )
     },
 
     async createAgent(token, input) {
       const json = (await call(
-        doFetch,
+        ctx,
         `${base}/app/agents`,
         'POST',
         aoBearer(token),
@@ -194,7 +233,7 @@ export function createAOClient(runtimeUrl: string, doFetch: AOFetch): AOClient {
 
     async choosePrimary(token, handle) {
       const json = (await call(
-        doFetch,
+        ctx,
         `${base}/app/agents/primary`,
         'POST',
         aoBearer(token),

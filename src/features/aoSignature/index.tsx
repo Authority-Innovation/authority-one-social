@@ -15,7 +15,14 @@ import {
   refreshDecision,
   syncAOSession,
 } from './session'
-import {getAOState, loadAOSession, patchAORecord, setAORecord} from './store'
+import {singleFlight} from './singleFlight'
+import {
+  getAOState,
+  loadAOSession,
+  patchAORecordIf,
+  sessionRef,
+  setAORecord,
+} from './store'
 
 export {AOSignatureAccountSection} from './components/AccountSection'
 export {AOSignatureShell} from './components/Shell'
@@ -33,13 +40,14 @@ function ArmedLifecycle() {
 
   useEffect(() => {
     let cancelled = false
-    const tick = async () => {
+    const tickOnce = singleFlight(async () => {
       const client = aoClient()
       if (!client || cancelled) return
       const now = Date.now()
-      const d = refreshDecision(getAOState().record, now, backoffUntil.current)
-      if (d === 'reverify') {
-        await patchAORecord({reverify: true})
+      const record = getAOState().record
+      const d = refreshDecision(record, now, backoffUntil.current)
+      if (d === 'reverify' && record) {
+        await patchAORecordIf(sessionRef(record), {reverify: true})
       } else if (d === 'refresh') {
         const out = await refreshAOSession(client, now)
         if (out === 'backoff') backoffUntil.current = now + REFRESH_BACKOFF_MS
@@ -48,7 +56,7 @@ function ArmedLifecycle() {
         lastSync.current = now
         await syncAOSession(client)
       }
-    }
+    })
     const boot = async () => {
       await loadAOSession()
       try {
@@ -62,11 +70,18 @@ function ArmedLifecycle() {
           ),
         )
       }
-      await tick()
+      await tickOnce()
     }
-    void boot()
+    // ONE flight at a time: the boot run and any AppState `active` tick that
+    // fires during it share a single refresh/sync, never two in parallel.
+    let booted = false
+    void boot().then(() => {
+      booted = true
+    })
     const sub = AppState.addEventListener('change', next => {
-      if (next === 'active') void tick()
+      if (next !== 'active') return
+      // During boot, the boot's own tick covers it.
+      if (booted) void tickOnce()
     })
     return () => {
       cancelled = true

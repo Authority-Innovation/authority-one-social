@@ -14,7 +14,7 @@ import {AO_SIGNATURE_CONFIG} from './config'
 import {getCryptoPort} from './cryptoPort'
 import {AOSignatureError} from './errors'
 import {buildAuthorizeUrl, createFlow} from './pkce'
-import {onPdsLogout, recordFromRedeem} from './session'
+import {adoptRedeem, onPdsLogout} from './session'
 import {
   type AOPdsPort,
   type AOSignInDeps,
@@ -22,7 +22,7 @@ import {
   redeemCallback,
   signInNative,
 } from './signIn'
-import {getAOState, setAORecord} from './store'
+import {getAOState} from './store'
 
 export {captureAOSignatureWebCallback}
 
@@ -66,7 +66,7 @@ export async function startAOSignature(
     getNativeBrowser(),
     prep && pds ? {prep, pds} : null,
   )
-  await setAORecord(recordFromRedeem(result))
+  await adoptRedeem(d.client, result)
 }
 
 /** Web: finish a sign-in/link that Janus just returned from. Null when this
@@ -86,7 +86,7 @@ export async function completeWebSignIn(
     cb.url,
     link && pds ? {prep: link, pds} : null,
   )
-  await setAORecord(recordFromRedeem(result))
+  await adoptRedeem(d.client, result)
   return true
 }
 

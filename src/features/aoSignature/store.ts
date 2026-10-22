@@ -6,7 +6,7 @@
 // `aoRuntimeBearer` always answers null — the PDS bearer path is untouched.
 import {type MessageDescriptor} from '@lingui/core'
 
-import {isAOSignatureArmed} from './config'
+import {AO_SIGNATURE_CONFIG, isAOSignatureArmed} from './config'
 import {
   clearStoredSession,
   readStoredSession,
@@ -125,6 +125,44 @@ export async function patchAORecord(patch: Partial<AORecord>): Promise<void> {
   await setAORecord({...state.record, ...patch}, state.notice)
 }
 
+/** The session an async action started from (its identity: sid + token). */
+export interface AOSessionRef {
+  sid: string
+  token: string
+}
+
+export function sessionRef(r: AORecord): AOSessionRef {
+  return {sid: r.sid, token: r.token}
+}
+
+/** Is `ref` still the session on this device? A late network answer for a
+ *  session that was since replaced (another sign-in, another account) or
+ *  cleared must never touch the record that is there now. */
+export function isCurrentSession(ref: AOSessionRef): boolean {
+  const r = state.record
+  return !!r && r.sid === ref.sid && r.token === ref.token
+}
+
+/** Patch the record only if it is still the session `ref` names. */
+export async function patchAORecordIf(
+  ref: AOSessionRef,
+  patch: Partial<AORecord>,
+): Promise<boolean> {
+  if (!isCurrentSession(ref)) return false
+  await patchAORecord(patch)
+  return true
+}
+
+/** Clear the record only if it is still the session `ref` names. */
+export async function clearAORecordIf(
+  ref: AOSessionRef,
+  notice: MessageDescriptor | null = null,
+): Promise<boolean> {
+  if (!isCurrentSession(ref)) return false
+  await setAORecord(null, notice)
+  return true
+}
+
 export function clearAONotice(): void {
   if (state.notice) emit({notice: null})
 }
@@ -135,17 +173,35 @@ export function clearAONotice(): void {
  * in to the social app (or nobody is — the Signature-only shell). A PDS account
  * with a DIFFERENT DID keeps its own PDS bearer: one person's AO session never
  * speaks for another account. Null ⇒ the caller uses the PDS token as before.
+ *
+ * `targetUrl`: where the caller is about to send it. The AO bearer goes ONLY
+ * to the pinned runtime origin (the config refuses to arm unless that is the
+ * agent runtime); any other host — e.g. a separately configured game server
+ * (EXPO_PUBLIC_GAME_SERVER_URL) — gets null and so the PDS token, as before.
+ * An unparseable target is treated as foreign.
  */
 export function aoRuntimeBearer(
   pdsDid: string | null | undefined,
   now: number = Date.now(),
+  targetUrl?: string,
 ): string | null {
   if (!isAOSignatureArmed()) return null
+  if (targetUrl !== undefined && !isPinnedRuntime(targetUrl)) return null
   const r = state.record
   if (!r) return null
   if (Date.parse(r.expiresAt) <= now) return null
   if (pdsDid && pdsDid !== r.did) return null
   return r.token
+}
+
+function isPinnedRuntime(url: string): boolean {
+  const pinned = AO_SIGNATURE_CONFIG?.runtimeUrl
+  if (!pinned) return false
+  try {
+    return new URL(url).origin === new URL(pinned).origin
+  } catch {
+    return false
+  }
 }
 
 /** Test seam. */

@@ -70,11 +70,38 @@ module.exports = function (_config) {
   const PLATFORM = process.env.EAS_BUILD_PLATFORM ?? 'web'
 
   const IS_TESTFLIGHT = process.env.EXPO_PUBLIC_ENV === 'testflight'
-  const AO_SIGNATURE_SCHEME = ['authorityone', 'authorityone-dev'].includes(
-    String(process.env.EXPO_PUBLIC_AO_SIGNATURE_SCHEME ?? '').trim(),
-  )
-    ? String(process.env.EXPO_PUBLIC_AO_SIGNATURE_SCHEME).trim()
-    : null
+  // Signature sign-in (P2b, dark): register the bounce scheme ONLY when the
+  // full native config is present (mirrors src/features/aoSignature/config.ts
+  // for the native platforms) — a scheme-only env must not register a URL
+  // scheme while the JS lane stays dark.
+  const AO_SIGNATURE_SCHEME = (() => {
+    /** @param {string} k */
+    const env = k => String(process.env[k] ?? '').trim()
+    /** @param {string} v */
+    const https = v => {
+      try {
+        const u = new URL(v)
+        return u.protocol === 'https:' && !u.search && !u.hash
+      } catch {
+        return false
+      }
+    }
+    const scheme = env('EXPO_PUBLIC_AO_SIGNATURE_SCHEME')
+    const redirect = env('EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI')
+    const armed =
+      ['authorityone', 'authorityone-dev'].includes(scheme) &&
+      https(env('EXPO_PUBLIC_AO_SIGNATURE_ISSUER')) &&
+      https(env('EXPO_PUBLIC_AO_SIGNATURE_RUNTIME_URL').replace(/\/+$/, '')) &&
+      https(redirect) &&
+      /\/auth\/janus\/(app|android)-callback$/.test(
+        new URL(redirect).pathname,
+      ) &&
+      Boolean(
+        env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS') ||
+        env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID'),
+      )
+    return armed ? scheme : null
+  })()
   const IS_PRODUCTION = process.env.EXPO_PUBLIC_ENV === 'production'
   const IS_DEV = !IS_TESTFLIGHT && !IS_PRODUCTION
 

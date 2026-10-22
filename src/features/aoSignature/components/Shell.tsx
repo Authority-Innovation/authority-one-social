@@ -47,7 +47,7 @@ export function AOSignatureShell({gate}: {gate: 'loading' | 'shell'}) {
         paddingBottom: insets.bottom,
       }}>
       {record.needsAgent ? (
-        <AOAgentPicker token={record.token} />
+        <AOAgentPicker token={record.token} sid={record.sid} />
       ) : (
         <View style={[a.p_xl, a.gap_lg]}>
           <Text style={[a.text_2xl, a.font_bold]}>

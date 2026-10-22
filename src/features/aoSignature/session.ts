@@ -5,7 +5,15 @@ import {msg} from '@lingui/core/macro'
 
 import {type AOClient} from './client'
 import {AOSignatureError} from './errors'
-import {type AORecord, getAOState, patchAORecord, setAORecord} from './store'
+import {
+  type AORecord,
+  clearAORecordIf,
+  getAOState,
+  isCurrentSession,
+  patchAORecordIf,
+  sessionRef,
+  setAORecord,
+} from './store'
 import {type AORedeemResult, aoSessionClaims} from './wire'
 
 /** Slide at most twice a day (Studio AOSessionRenewal). */
@@ -58,6 +66,7 @@ export type RefreshOutcome =
   | 'ended'
   | 'backoff'
   | 'skipped'
+  | 'stale'
 
 /**
  * Slide the session once. Outcomes:
@@ -65,7 +74,12 @@ export type RefreshOutcome =
  *  · 401 `janus-reverify` → marked; the token keeps working until its exp;
  *  · any other 401 → the session is over (signed out, revoked, epoch bumped):
  *    cleared here, the person is told;
- *  · network / 5xx → `backoff` (the caller pauses; the session is kept).
+ *  · network / 5xx / timeout → `backoff` (the caller pauses; session kept).
+ *
+ * RACE RULE (every action below): the result is applied only if the record is
+ * still the session the action STARTED from (same sid + token). A late answer
+ * for a session since replaced — another sign-in, another account — or
+ * already cleared is dropped (`stale`), never written over the current one.
  */
 export async function refreshAOSession(
   client: AOClient,
@@ -73,16 +87,17 @@ export async function refreshAOSession(
 ): Promise<RefreshOutcome> {
   const record = getAOState().record
   if (!record) return 'skipped'
+  const ref = sessionRef(record)
   try {
     const minted = await client.refresh(record.token, record.did)
-    await patchAORecord({
+    const applied = await patchAORecordIf(ref, {
       token: minted.token,
       sid: minted.sid,
       expiresAt: minted.expiresAt,
       refreshedAt: now,
       reverify: false,
     })
-    return 'refreshed'
+    return applied ? 'refreshed' : 'stale'
   } catch (e) {
     if (
       e instanceof AOSignatureError &&
@@ -90,13 +105,13 @@ export async function refreshAOSession(
       e.status === 401
     ) {
       if (e.code === 'janus-reverify') {
-        await patchAORecord({reverify: true})
-        return 'reverify'
+        return (await patchAORecordIf(ref, {reverify: true}))
+          ? 'reverify'
+          : 'stale'
       }
-      await setAORecord(null, SESSION_ENDED)
-      return 'ended'
+      return (await clearAORecordIf(ref, SESSION_ENDED)) ? 'ended' : 'stale'
     }
-    return 'backoff'
+    return isCurrentSession(ref) ? 'backoff' : 'stale'
   }
 }
 
@@ -114,6 +129,7 @@ export async function repairAOUnauthorized(
  * Sign out of Signature on this device: revoke this session's sid at the
  * runtime, then forget it. The device forgets it even when the runtime can't be
  * reached (the person asked to be signed out); `serverConfirmed` says which.
+ * If a DIFFERENT session replaced it meanwhile, that one is left alone.
  *
  * Janus `logout?scope=local` is NOT called: this app never holds a Janus token
  * (the runtime does the code exchange — see the report), so there is nothing on
@@ -124,13 +140,14 @@ export async function signOutAO(
 ): Promise<{serverConfirmed: boolean}> {
   const record = getAOState().record
   if (!record) return {serverConfirmed: true}
+  const ref = sessionRef(record)
   let serverConfirmed = true
   try {
     await client.signout(record.token)
   } catch {
     serverConfirmed = false
   }
-  await setAORecord(null)
+  await clearAORecordIf(ref)
   return {serverConfirmed}
 }
 
@@ -139,8 +156,9 @@ export async function signOutAO(
 export async function signOutEverywhereAO(client: AOClient): Promise<void> {
   const record = getAOState().record
   if (!record) return
+  const ref = sessionRef(record)
   await client.signoutEverywhere(record.token)
-  await setAORecord(null)
+  await clearAORecordIf(ref)
 }
 
 /** Owner self-unlink: this Signature identity stops signing in to this account
@@ -148,8 +166,9 @@ export async function signOutEverywhereAO(client: AOClient): Promise<void> {
 export async function unlinkAO(client: AOClient): Promise<void> {
   const record = getAOState().record
   if (!record) return
+  const ref = sessionRef(record)
   await client.unlink(record.token)
-  await setAORecord(null)
+  await clearAORecordIf(ref)
 }
 
 /**
@@ -176,36 +195,60 @@ export async function onPdsLogout(
 export async function syncAOSession(client: AOClient): Promise<void> {
   const record = getAOState().record
   if (!record) return
+  const ref = sessionRef(record)
   try {
     const s = await client.introspect(record.token)
     if (s.did && s.did !== record.did) {
-      await setAORecord(null, SESSION_ENDED)
+      await clearAORecordIf(ref, SESSION_ENDED)
       return
     }
-    await patchAORecord({primary: s.primary, needsAgent: s.needsAgent})
+    await patchAORecordIf(ref, {primary: s.primary, needsAgent: s.needsAgent})
   } catch (e) {
     if (
       e instanceof AOSignatureError &&
       e.kind === 'refused' &&
       e.status === 401
     ) {
-      await setAORecord(null, SESSION_ENDED)
+      await clearAORecordIf(ref, SESSION_ENDED)
     }
   }
 }
 
 /**
- * The runtime answered 403 `not-provisioned` to an /app/* call made with the
- * AO bearer: the person has no primary agent (any more) — back to the picker.
- * No-op without an AO session (the PDS path's 403 handling is unchanged).
+ * Adopt a fresh redeem. If another session was on the device, its sid is
+ * revoked FIRST (best effort — a failure never blocks the new sign-in), so a
+ * re-sign-in or a reverify "Continue" doesn't leave a live orphan session.
  */
-export function noteAONotProvisioned(): void {
-  const record = getAOState().record
-  if (!record || record.needsAgent) return
-  void patchAORecord({needsAgent: true, primary: null})
+export async function adoptRedeem(
+  client: AOClient,
+  result: AORedeemResult,
+  now: number = Date.now(),
+): Promise<void> {
+  const old = getAOState().record
+  if (old && old.sid !== result.session.sid) {
+    await client.signout(old.token).catch(() => {})
+  }
+  await setAORecord(recordFromRedeem(result, now))
 }
 
-/** The picker finished: this is the person's primary now. */
-export async function adoptPrimary(primary: string): Promise<void> {
-  await patchAORecord({primary, needsAgent: false})
+/**
+ * The runtime answered 403 `not-provisioned` to an /app/* call. Back to the
+ * picker — but ONLY when that call carried THIS AO session's bearer (`token`):
+ * a refusal answered to another account's PDS token says nothing about it.
+ */
+export function noteAONotProvisioned(token: string | null | undefined): void {
+  const record = getAOState().record
+  if (!record || record.needsAgent || !token || token !== record.token) return
+  void patchAORecordIf(sessionRef(record), {needsAgent: true, primary: null})
+}
+
+/** The picker finished: this is the person's primary now — for the session
+ *  (sid) the picker ran for; a different session meanwhile is left alone. */
+export async function adoptPrimary(
+  sid: string,
+  primary: string,
+): Promise<void> {
+  const record = getAOState().record
+  if (!record || record.sid !== sid) return
+  await patchAORecordIf(sessionRef(record), {primary, needsAgent: false})
 }

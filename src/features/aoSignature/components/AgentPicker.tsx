@@ -1,4 +1,4 @@
-import {useEffect, useReducer, useState} from 'react'
+import {useEffect, useState} from 'react'
 import {View} from 'react-native'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
@@ -12,35 +12,23 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {aoClient} from '../controller'
 import {aoPickerErrorWords} from '../errors'
-import {initialPickerState, pickerEffect, pickerReducer} from '../picker'
 import {adoptPrimary} from '../session'
+import {usePickerMachine} from './usePickerMachine'
 
 /**
  * First-run agent picker: "Create my agent" or "Use an agent you've been
  * given" (an agent an operator attached to this person — the Steve case).
  * Shown until the runtime has a primary for this person.
  */
-export function AOAgentPicker({token}: {token: string}) {
+export function AOAgentPicker({token, sid}: {token: string; sid: string}) {
   const t = useTheme()
   const {_, i18n} = useLingui()
-  const [state, dispatch] = useReducer(pickerReducer, initialPickerState)
+  const [state, dispatch] = usePickerMachine(token, aoClient())
   const [name, setName] = useState('')
 
   useEffect(() => {
-    const client = aoClient()
-    if (!client) return
-    let live = true
-    void pickerEffect(state, client, token).then(ev => {
-      if (live && ev) dispatch(ev)
-    })
-    return () => {
-      live = false
-    }
-  }, [state, token])
-
-  useEffect(() => {
-    if (state.phase.name === 'done') void adoptPrimary(state.phase.primary)
-  }, [state.phase])
+    if (state.phase.name === 'done') void adoptPrimary(sid, state.phase.primary)
+  }, [state.phase, sid])
 
   const phase = state.phase
   const busy = phase.name === 'creating' || phase.name === 'selecting'

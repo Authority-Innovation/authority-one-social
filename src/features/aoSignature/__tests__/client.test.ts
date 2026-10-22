@@ -99,6 +99,23 @@ describe('runtime client wire', () => {
     expect(e2.kind).toBe('link-code-unusable')
   })
 
+  it('a hung request times out as `transport` and is aborted', async () => {
+    jest.useFakeTimers()
+    let signal: AbortSignal | undefined
+    const hang = ((_u: string, init: {signal?: AbortSignal}) => {
+      signal = init.signal
+      return new Promise(() => {})
+    }) as unknown as AOFetch
+    const c = createAOClient(RUNTIME, hang, {timeoutMs: 1000})
+    const p = c.refresh('aos1.x.y', DID).catch(x => x as AOSignatureError)
+    jest.advanceTimersByTime(1001)
+    const e = await p
+    expect(e).toBeInstanceOf(AOSignatureError)
+    expect((e as AOSignatureError).kind).toBe('transport')
+    expect(signal?.aborted).toBe(true)
+    jest.useRealTimers()
+  })
+
   it('a thrown fetch is `transport`', async () => {
     const c = createAOClient(RUNTIME, () =>
       Promise.reject(new Error('offline')),

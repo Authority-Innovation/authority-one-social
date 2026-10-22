@@ -56,6 +56,8 @@ const busy = (p: PickerPhase) => p.name === 'creating' || p.name === 'selecting'
 export function pickerReducer(s: PickerState, e: PickerEvent): PickerState {
   switch (e.type) {
     case 'loaded':
+      // Only the load this phase asked for (a late answer is ignored).
+      if (s.phase.name !== 'loading') return s
       // Any primary ends the picker — including one that was already there.
       if (e.list.primary) {
         return {
@@ -66,6 +68,7 @@ export function pickerReducer(s: PickerState, e: PickerEvent): PickerState {
       }
       return {...s, agents: e.list.agents, phase: {name: 'choosing'}}
     case 'load-failed':
+      if (s.phase.name !== 'loading') return s
       return {...s, phase: {name: 'failed', error: e.error}}
     case 'create': {
       if (busy(s.phase) || s.phase.name === 'done') return s
@@ -131,11 +134,10 @@ export function isNotProvisioned(status: number, code: string): boolean {
  * (or null when the phase needs no I/O). The React screen loops this.
  */
 export async function pickerEffect(
-  s: PickerState,
+  p: PickerPhase,
   client: AOClient,
   token: string,
 ): Promise<PickerEvent | null> {
-  const p = s.phase
   try {
     if (p.name === 'loading') {
       return {type: 'loaded', list: await client.listAgents(token)}

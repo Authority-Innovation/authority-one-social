@@ -3,7 +3,7 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 // ARMED for this file: the store/session logic only runs with the lane on.
 jest.mock('../config', () => ({
   isAOSignatureArmed: () => true,
-  AO_SIGNATURE_CONFIG: {platform: 'ios'},
+  AO_SIGNATURE_CONFIG: {platform: 'ios', runtimeUrl: 'https://runtime.test'},
 }))
 const mockStored: {value: string | null} = {value: null}
 jest.mock('../storage', () => ({
@@ -231,7 +231,12 @@ describe('refresh outcomes', () => {
 
   it('a 403 not-provisioned sends the person back to the picker', async () => {
     await setAORecord(record())
-    noteAONotProvisioned()
+    // a 403 answered to ANOTHER bearer (a different account's PDS token) is ignored
+    noteAONotProvisioned('PDS_TOKEN_OF_SOMEONE_ELSE')
+    noteAONotProvisioned(undefined)
+    await Promise.resolve()
+    expect(getAOState().record?.needsAgent).toBe(false)
+    noteAONotProvisioned(getAOState().record!.token)
     await Promise.resolve()
     expect(getAOState().record).toMatchObject({needsAgent: true, primary: null})
   })

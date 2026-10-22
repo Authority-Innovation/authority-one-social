@@ -22,14 +22,24 @@ export type TokenProvider = () => Promise<string | null>
  * authenticates with), or null when signed out. Read from the persisted session so
  * the network layer needs no React context.
  */
-export function getAgentRuntimeAccessToken(): Promise<string | null> {
+export function getAgentRuntimeAccessToken(
+  /** Where the token is about to go. The AO session is only ever sent to the
+   *  pinned agent runtime; any other host (e.g. a separately configured game
+   *  server) gets the PDS token. Omitted ⇒ the agent runtime (every /app/*
+   *  client builds its URL from AGENT_RUNTIME_BASE_URL). */
+  targetUrl?: string,
+): Promise<string | null> {
   try {
     const session = persisted.get('session')
     // SIGNATURE SIGN-IN (P2b, dark unless EXPO_PUBLIC_AO_SIGNATURE_* is set):
     // the person's `aos1.` AO session is the bearer when it belongs to the
     // account signed in here (or nobody is — the Signature-only shell).
     // Dark ⇒ always null ⇒ the PDS token below, exactly as before.
-    const ao = aoRuntimeBearer(session?.currentAccount?.did)
+    const ao = aoRuntimeBearer(
+      session?.currentAccount?.did,
+      Date.now(),
+      targetUrl,
+    )
     if (ao) return Promise.resolve(ao)
     return Promise.resolve(session?.currentAccount?.accessJwt ?? null)
   } catch {
