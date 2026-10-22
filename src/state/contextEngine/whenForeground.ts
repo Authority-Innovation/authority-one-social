@@ -1,4 +1,5 @@
 import {getCurrentState, onAppStateChange} from '#/lib/appState'
+import {logger} from '#/logger'
 
 /**
  * Run `fn` once, but only while the app is in the FOREGROUND ('active'). If JS was
@@ -7,8 +8,19 @@ import {getCurrentState, onAppStateChange} from '#/lib/appState'
  * cancels a pending run.
  */
 export function runOnceWhenForeground(fn: () => unknown): () => void {
+  const run = () => {
+    try {
+      void Promise.resolve(fn()).catch(e =>
+        logger.warn('runOnceWhenForeground: fn failed', {
+          safeMessage: String(e),
+        }),
+      )
+    } catch (e) {
+      logger.warn('runOnceWhenForeground: fn threw', {safeMessage: String(e)})
+    }
+  }
   if (getCurrentState() === 'active') {
-    void fn()
+    run()
     return () => {}
   }
   let done = false
@@ -16,7 +28,7 @@ export function runOnceWhenForeground(fn: () => unknown): () => void {
     if (done || next !== 'active') return
     done = true
     sub.remove()
-    void fn()
+    run()
   })
   return () => {
     if (done) return

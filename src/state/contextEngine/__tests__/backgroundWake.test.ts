@@ -187,6 +187,18 @@ describe('runOnceWhenForeground (AppState gate)', () => {
     expect(mockAppState.listeners).toHaveLength(0)
   })
 
+  it('contains a throwing or rejecting fn', async () => {
+    mockAppState.state = 'active'
+    const {fg} = load()
+    expect(() =>
+      fg.runOnceWhenForeground(() => {
+        throw new Error('sync')
+      }),
+    ).not.toThrow()
+    fg.runOnceWhenForeground(() => Promise.reject(new Error('async')))
+    await flush()
+  })
+
   it('cleanup cancels a pending run', async () => {
     const {mod, fg} = load()
     const cancel = fg.runOnceWhenForeground(
