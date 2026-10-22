@@ -38,6 +38,7 @@ import {SignupQueued} from '#/screens/SignupQueued'
 import {atoms as a, useLayoutBreakpoints} from '#/alf'
 import {PolicyUpdateOverlay} from '#/components/PolicyUpdateOverlay'
 import {IS_NATIVE, IS_WEB} from '#/env'
+import {AOSignatureShell, useAOSignatureGate} from '#/features/aoSignature'
 import {BottomBarWeb} from './bottom-bar/BottomBarWeb'
 import {DesktopLeftNav} from './desktop/LeftNav'
 import {DesktopRightNav} from './desktop/RightNav'
@@ -119,6 +120,9 @@ function NativeStackNavigator({
   const onboardingState = useOnboardingState()
   const {showLoggedOut} = useLoggedOutView()
   const {setShowLoggedOut} = useLoggedOutViewControls()
+  // Signature sign-in (dark unless armed ⇒ always null): a Signature-only
+  // person, or an AO session that still needs its first agent.
+  const aoGate = useAOSignatureGate(hasSession, currentAccount?.did)
   const {isMobile} = useWebMediaQueries()
   const {leftNavMinimal} = useLayoutBreakpoints()
   // GUEST GAME LINKS: a live GameRoom link carrying a capability token
@@ -135,6 +139,9 @@ function NativeStackNavigator({
     guestParams.matchId.length > 0 &&
     typeof guestParams?.t === 'string' &&
     guestParams.t.length > 0
+  if (aoGate !== null && !isGuestGameRoute) {
+    return <AOSignatureShell gate={aoGate} />
+  }
   if (
     !hasSession &&
     !isGuestGameRoute &&

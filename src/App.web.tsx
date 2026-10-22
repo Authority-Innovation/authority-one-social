@@ -72,6 +72,10 @@ import {
   setupDeviceId,
 } from '#/analytics'
 import {
+  AOSignatureLifecycle,
+  captureAOSignatureWebCallback,
+} from '#/features/aoSignature'
+import {
   prefetchLiveEvents,
   Provider as LiveEventsProvider,
 } from '#/features/liveEvents/context'
@@ -79,6 +83,12 @@ import * as Geo from '#/geolocation'
 import {Splash} from '#/Splash'
 import {BackgroundNotificationPreferencesProvider} from '../modules/expo-background-notification-handler/src/BackgroundNotificationHandlerProvider'
 import {Provider as HideBottomBarBorderProvider} from './lib/hooks/useHideBottomBarBorder'
+
+/**
+ * Signature sign-in (dark unless armed): take a Janus callback out of the
+ * address bar before the navigator reads it. No-op while dark.
+ */
+captureAOSignatureWebCallback()
 
 /**
  * Begin geolocation ASAP
@@ -159,6 +169,7 @@ function InnerApp() {
                                                             <IntentDialogProvider>
                                                               <TranslateOnDeviceProvider>
                                                                 <HotkeysProvider>
+                                                                  <AOSignatureLifecycle />
                                                                   <Shell />
                                                                   <ToastOutlet />
                                                                 </HotkeysProvider>
@@ -222,22 +233,22 @@ function App() {
                 <SessionProvider>
                   <SupabaseSessionProvider>
                     <PrefsStateProvider>
-                    <I18nProvider>
-                      <ShellStateProvider>
-                        <ModalStateProvider>
-                          <DialogStateProvider>
-                            <LightboxStateProvider>
-                              <PortalProvider>
-                                <LandingProvider>
-                                  <InnerApp />
-                                </LandingProvider>
-                              </PortalProvider>
-                            </LightboxStateProvider>
-                          </DialogStateProvider>
-                        </ModalStateProvider>
-                      </ShellStateProvider>
-                    </I18nProvider>
-                  </PrefsStateProvider>
+                      <I18nProvider>
+                        <ShellStateProvider>
+                          <ModalStateProvider>
+                            <DialogStateProvider>
+                              <LightboxStateProvider>
+                                <PortalProvider>
+                                  <LandingProvider>
+                                    <InnerApp />
+                                  </LandingProvider>
+                                </PortalProvider>
+                              </LightboxStateProvider>
+                            </DialogStateProvider>
+                          </ModalStateProvider>
+                        </ShellStateProvider>
+                      </I18nProvider>
+                    </PrefsStateProvider>
                   </SupabaseSessionProvider>
                 </SessionProvider>
               </AnalyticsContext>
