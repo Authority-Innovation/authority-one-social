@@ -1,6 +1,20 @@
 import {logger} from '#/logger'
+import {isAOSignatureArmed} from '#/features/aoSignature/config'
+import {noteAONotProvisioned} from '#/features/aoSignature/session'
 import {getSupabaseAccessToken} from './authToken'
 import {AGENTS_ENDPOINT, AGENTS_PAUSE_ENDPOINT} from './config'
+
+/** Signature sign-in (P2b): a 403 `not-provisioned` answered to the AO bearer
+ *  sends the person back to the agent picker. Dark ⇒ returns at once, without
+ *  reading the response. */
+async function noteAONotProvisionedFrom(res: {
+  json(): Promise<unknown>
+}): Promise<void> {
+  if (!isAOSignatureArmed()) return
+  const body = (await res.json().catch(() => null)) as {code?: unknown} | null
+  if (body?.code !== 'not-provisioned') return
+  noteAONotProvisioned()
+}
 
 /**
  * Owner-agents client: the read side that lets an owner CHOOSE one of THEIR agents to add
@@ -241,6 +255,7 @@ export async function fetchOwnerAgents(): Promise<OwnerAgentsResult> {
   if (!headers) return {agents: [], signedOut: true}
   try {
     const res = await fetch(AGENTS_ENDPOINT, {method: 'GET', headers})
+    if (res.status === 403) await noteAONotProvisionedFrom(res)
     if (res.status === 401 || res.status === 403)
       return {agents: [], signedOut: true}
     if (!res.ok)

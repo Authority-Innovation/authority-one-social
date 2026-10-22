@@ -70,6 +70,11 @@ module.exports = function (_config) {
   const PLATFORM = process.env.EAS_BUILD_PLATFORM ?? 'web'
 
   const IS_TESTFLIGHT = process.env.EXPO_PUBLIC_ENV === 'testflight'
+  const AO_SIGNATURE_SCHEME = ['authorityone', 'authorityone-dev'].includes(
+    String(process.env.EXPO_PUBLIC_AO_SIGNATURE_SCHEME ?? '').trim(),
+  )
+    ? String(process.env.EXPO_PUBLIC_AO_SIGNATURE_SCHEME).trim()
+    : null
   const IS_PRODUCTION = process.env.EXPO_PUBLIC_ENV === 'production'
   const IS_DEV = !IS_TESTFLIGHT && !IS_PRODUCTION
 
@@ -133,7 +138,10 @@ module.exports = function (_config) {
       // stays com.authorityone.app (unchanged).
       name: 'Authority-One',
       slug: 'one',
-      scheme: 'one',
+      // Signature sign-in (P2b, dark): the runtime bounce's app scheme is
+      // registered ONLY when EXPO_PUBLIC_AO_SIGNATURE_SCHEME names an allowed
+      // one; unset ⇒ exactly `'one'`, as before.
+      scheme: AO_SIGNATURE_SCHEME ? ['one', AO_SIGNATURE_SCHEME] : 'one',
       owner: 'blueskysocial',
       runtimeVersion: {
         policy: 'appVersion',

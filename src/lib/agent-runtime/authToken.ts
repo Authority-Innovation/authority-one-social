@@ -13,6 +13,7 @@
 // no longer override the atproto token.
 // ─────────────────────────────────────────────────────────────────────────────
 import * as persisted from '#/state/persisted'
+import {aoRuntimeBearer} from '#/features/aoSignature/store'
 
 export type TokenProvider = () => Promise<string | null>
 
@@ -24,6 +25,12 @@ export type TokenProvider = () => Promise<string | null>
 export function getAgentRuntimeAccessToken(): Promise<string | null> {
   try {
     const session = persisted.get('session')
+    // SIGNATURE SIGN-IN (P2b, dark unless EXPO_PUBLIC_AO_SIGNATURE_* is set):
+    // the person's `aos1.` AO session is the bearer when it belongs to the
+    // account signed in here (or nobody is — the Signature-only shell).
+    // Dark ⇒ always null ⇒ the PDS token below, exactly as before.
+    const ao = aoRuntimeBearer(session?.currentAccount?.did)
+    if (ao) return Promise.resolve(ao)
     return Promise.resolve(session?.currentAccount?.accessJwt ?? null)
   } catch {
     return Promise.resolve(null)
