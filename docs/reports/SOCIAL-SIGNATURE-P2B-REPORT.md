@@ -79,7 +79,7 @@ EXPO_PUBLIC_AO_SIGNATURE_WEB_REDIRECT_URI=https://<dev web app host>/auth/janus/
 - `AO_SIGNIN_V2=1` and `AO_SESSION_SECRET` are set.
 
 ## Tests
-`npx jest src/features/aoSignature`: **18 suites, 174 tests, all pass.** The full suite: **140 suites, 1554 passed (28 todo), 0 failed.** (First commit: 10 suites / 119 tests. Review rounds: 14 / 143, then 18 / 169, then 18 / 174.)
+`npx jest src/features/aoSignature`: **18 suites, 181 tests, all pass.** The full suite (`pnpm test`): **140 suites, 1561 passed (28 todo), 0 failed.** (First commit: 10 suites / 119 tests. Review rounds: 14 / 143, 18 / 169, 18 / 174, then 18 / 181.)
 
 | Suite | Covers |
 |---|---|
@@ -151,9 +151,16 @@ The code fixes of round 2 were right, but two regression tests passed with the f
 | **Rotation race test.** The "rotated" token was minted in the same second as A's, so it was byte-identical. The refresh now returns a genuinely different token (`mintedSession(…, laterMs)`), and the test asserts the token changed before the sign-out resolves. | Reverting each of sign out, sign out everywhere and unlink to `clearAORecordIf`, one at a time: the test **fails** each time. |
 | **Shell key test.** The mock's `[sid]` effect logged the same thing with or without the key. It now uses an instance id from a `useState` initializer and renders under `<StrictMode>`. | Deleting `key={record.sid}`: the test **fails**. |
 | **One boot.** The lifecycle moved to `lifecycle.ts`. `bootAOLifecycle()` is idempotent (one promise per app run: one store read, one web-callback redeem). The tick is single-flight; `booted` is set in `.finally`. | Making boot non-idempotent: **2 fail**. Setting `booted` in `.then`: **2 fail**. |
-| **Refresh sid hardening.** `decodeMintedSession(…, expectedSid)` and `client.refresh(token, did, sid)` refuse a re-mint under another sid (`sid-mismatch`). `refreshAOSession` treats a different sid as a session end: cleared, "sign in again". | Dropping the session-level check: the race test **fails**. |
+| **Refresh sid hardening.** `client.refresh(token, did, sid)` refuses a re-mint under another sid (`sid-mismatch`); round 4 made this the single place. `refreshAOSession` treats a different sid as a session end: cleared, "sign in again". | Dropping the session-level check: the race test **fails**. |
 | **Parity test.** The expected answer is now pinned per case, not just agreement between the two implementations. | — |
 | **Boot errors are logged, not swallowed.** `logger.warn` with the error's `kind:status:code` (or its class name) only. A test checks no `aos1.` appears in the log. | — |
+
+## Review follow-ups, round 4 (fifth commit, after the approval of `ad03a41f3`)
+| Follow-up | Mutation check (with the fix removed) |
+|---|---|
+| **Per-session timers.** The refresh backoff and last-sync stamps in `lifecycle.ts` are now keyed by `sid|did` and reset whenever the record changes. A's backoff (up to 15 min) or last sync can't delay B after an account switch. Test: A backs off, then a switch to B, then B's foreground tick refreshes and syncs. | Removing the reset: the test **fails**. |
+| **One sid check.** The unused `expectedSid` parameter was removed from `decodeMintedSession`. The refresh sid check lives only in `client.refresh` (`sid-mismatch`). | Removing it: the client test **fails**. |
+| **Clamped log lines.** `safeErrorSummary` logs `kind:status:code`, with kind, code and an error name each clamped to `/^[a-z0-9_-]{1,40}$/i` (else `other`). Tests cover hostile codes (a 200-char string, an `aos1.`-like token, an email, a URL) and an end-to-end boot failure. | Removing the clamp: **6 fail**. |
 
 ## Open items
 1. **Runtime CORS for web (blocks web).** `/auth/janus/session` and `/auth/ao/*` send no CORS headers, so the browser can't call them from the web app's origin.

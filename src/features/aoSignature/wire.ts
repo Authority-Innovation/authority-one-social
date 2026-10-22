@@ -71,8 +71,6 @@ export function decodeMintedSession(
   raw: unknown,
   did: string,
   now: number = Date.now(),
-  /** A REFRESH re-mints the same sid; any other sid is refused. */
-  expectedSid?: string,
 ): AOMintedSession | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
@@ -84,7 +82,6 @@ export function decodeMintedSession(
   // Belt: the signed payload must name the same person and session.
   const c = aoSessionClaims(r.token)
   if (c.did !== did || c.sid !== r.sid) return null
-  if (expectedSid !== undefined && r.sid !== expectedSid) return null
   return {token: r.token, sid: r.sid, expiresAt: r.expiresAt}
 }
 

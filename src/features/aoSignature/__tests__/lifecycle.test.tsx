@@ -22,27 +22,36 @@ const mockBoot = {
   load: jest.fn<() => Promise<void>>(),
   web: jest.fn<() => Promise<boolean>>(),
   refresh: jest.fn<() => Promise<string>>(),
+  sync: jest.fn<() => Promise<void>>(),
+  record: {sid: 's', token: 't', did: 'did:plc:x'} as {
+    sid: string
+    token: string
+    did: string
+  } | null,
 }
 jest.mock('../controller', () => ({
   aoClient: () => ({}),
   completeWebSignIn: () => mockBoot.web(),
 }))
 jest.mock('../store', () => ({
-  getAOState: () => ({record: {sid: 's', token: 't', did: 'did:plc:x'}}),
+  getAOState: () => ({record: mockBoot.record}),
   loadAOSession: () => mockBoot.load(),
   patchAORecordIf: jest.fn(),
   sessionRef: (r: unknown) => r,
   setAORecord: jest.fn(),
 }))
 jest.mock('../session', () => ({
-  refreshDecision: () => 'refresh',
+  // The real policy's backoff rule: inside the backoff window, no refresh.
+  refreshDecision: (_r: unknown, now: number, backoffUntil: number) =>
+    now < backoffUntil ? 'none' : 'refresh',
   refreshAOSession: () => mockBoot.refresh(),
-  syncAOSession: () => Promise.resolve(),
-  REFRESH_BACKOFF_MS: 1000,
+  syncAOSession: () => mockBoot.sync(),
+  REFRESH_BACKOFF_MS: 15 * 60 * 1000,
 }))
 
+import {AOSignatureError} from '../errors'
 import {AOSignatureLifecycle} from '../index'
-import {_resetAOLifecycleForTests} from '../lifecycle'
+import {_resetAOLifecycleForTests, safeErrorSummary} from '../lifecycle'
 
 /** Always under a real <StrictMode> (double-invoked mount effects). */
 function mount() {
@@ -75,6 +84,8 @@ beforeEach(() => {
   mockBoot.load.mockReset().mockResolvedValue()
   mockBoot.web.mockReset().mockResolvedValue(false)
   mockBoot.refresh.mockReset().mockResolvedValue('refreshed')
+  mockBoot.sync.mockReset().mockResolvedValue()
+  mockBoot.record = {sid: 's', token: 't', did: 'did:plc:x'}
 })
 
 describe('lifecycle wiring', () => {
@@ -145,5 +156,65 @@ describe('lifecycle wiring', () => {
       return Promise.resolve()
     })
     expect(mockBoot.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it("A's refresh backoff and last sync never delay B after an account switch", async () => {
+    mockBoot.refresh.mockResolvedValue('backoff')
+    mount()
+    await act(async () => {})
+    expect(mockBoot.refresh).toHaveBeenCalledTimes(1) // boot: A backs off
+    expect(mockBoot.sync).toHaveBeenCalledTimes(1) // boot: A synced
+    await act(() => {
+      onChange?.('active')
+      return Promise.resolve()
+    })
+    expect(mockBoot.refresh).toHaveBeenCalledTimes(1) // A still in backoff
+
+    mockBoot.record = {sid: 'sid-b', token: 'tb', did: 'did:plc:b'}
+    mockBoot.refresh.mockResolvedValue('refreshed')
+    await act(() => {
+      onChange?.('active')
+      return Promise.resolve()
+    })
+    expect(mockBoot.refresh).toHaveBeenCalledTimes(2) // B's tick refreshes
+    expect(mockBoot.sync).toHaveBeenCalledTimes(2) // and B's first sync runs
+  })
+})
+
+describe('boot-error log lines', () => {
+  it.each([
+    ['a long string', 'x'.repeat(200)],
+    ['a token-like code', 'aos1.eyJkaWQiOiJkaWQ6cGxjOngifQ.deadbeef'],
+    ['an email', 'owner@example.com'],
+    ['a URL', 'https://evil.test/?t=1'],
+  ])('a hostile server code (%s) is logged as "other"', (_n, code) => {
+    const line = safeErrorSummary(new AOSignatureError('refused', 401, code))
+    expect(line).toBe('refused:401:other')
+    expect(line).not.toContain(code)
+  })
+
+  it('short identifiers pass; a hostile error name is clamped too', () => {
+    expect(
+      safeErrorSummary(new AOSignatureError('refused', 409, 'already-bound')),
+    ).toBe('refused:409:already-bound')
+    expect(safeErrorSummary(new AOSignatureError('transport'))).toBe(
+      'transport:0:',
+    )
+    const e = new Error('x')
+    e.name = 'aos1.secret.token'
+    expect(safeErrorSummary(e)).toBe('other')
+  })
+
+  it('end to end: a boot failure with a hostile code logs no part of it', async () => {
+    const hostile = 'aos1.SECRET.TOKEN owner@example.com'
+    mockBoot.load.mockRejectedValue(
+      new AOSignatureError('refused', 500, hostile),
+    )
+    mount()
+    await act(async () => {})
+    const logged = JSON.stringify(mockWarn.mock.calls)
+    expect(logged).toContain('refused:500:other')
+    expect(logged).not.toContain('aos1.')
+    expect(logged).not.toContain('@example.com')
   })
 })

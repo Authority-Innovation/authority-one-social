@@ -24,22 +24,45 @@ import {
 /** Re-read the session from the runtime at most this often on foreground. */
 const SYNC_EVERY_MS = 10 * 60 * 1000
 
+// Per-SESSION timers: keyed by `sid|did`, reset whenever the record on this
+// device changes (another account, a new sign-in) — A's refresh backoff or
+// last sync must never delay B's.
+let timersFor: string | null = null
 let backoffUntil = 0
 let lastSync = 0
 let booted = false
 let bootPromise: Promise<void> | null = null
 
-/** What may be logged about a failure: its kind/status/code, never a token. */
-function safe(e: unknown): string {
-  if (e instanceof AOSignatureError) return e.message // `kind:status:code`
-  return e instanceof Error ? e.name : typeof e
+const LOGGABLE = /^[a-z0-9_-]{1,40}$/i
+
+/** A short identifier as-is; anything else (long, a token, an email, a URL)
+ *  becomes 'other'. */
+function clamp(v: unknown): string {
+  return typeof v === 'string' && LOGGABLE.test(v) ? v : 'other'
 }
+
+/** What may be logged about a failure: kind/status/code, each clamped to a
+ *  short identifier — the code is a server string and could carry anything. */
+export function safeErrorSummary(e: unknown): string {
+  if (e instanceof AOSignatureError) {
+    const status = Number.isInteger(e.status) ? e.status : 0
+    return `${clamp(e.kind)}:${status}:${e.code ? clamp(e.code) : ''}`
+  }
+  return e instanceof Error ? clamp(e.name) : typeof e
+}
+const safe = safeErrorSummary
 
 const tick = singleFlight(async () => {
   const client = aoClient()
   if (!client) return
   const now = Date.now()
   const record = getAOState().record
+  const key = record ? `${record.sid}|${record.did}` : null
+  if (key !== timersFor) {
+    timersFor = key
+    backoffUntil = 0
+    lastSync = 0
+  }
   const d = refreshDecision(record, now, backoffUntil)
   if (d === 'reverify' && record) {
     await patchAORecordIf(sessionRef(record), {reverify: true})
@@ -98,6 +121,7 @@ export function onAOAppStateChange(next: string): void {
 
 /** Test seam. */
 export function _resetAOLifecycleForTests(): void {
+  timersFor = null
   backoffUntil = 0
   lastSync = 0
   booted = false

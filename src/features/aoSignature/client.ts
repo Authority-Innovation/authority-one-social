@@ -175,6 +175,7 @@ export function createAOClient(
       )) as Record<string, unknown> | null
       const minted = decodeMintedSession(json?.aoSession, did)
       if (!minted) throw new AOSignatureError('refused', 502, 'unavailable')
+      // THE refresh sid check (one place): a refresh slides the SAME sid.
       if (sid !== undefined && minted.sid !== sid) {
         throw new AOSignatureError('refused', 502, 'sid-mismatch')
       }
