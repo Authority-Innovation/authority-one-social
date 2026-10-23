@@ -153,7 +153,7 @@ module.exports = function (_config) {
         // NOTE: App Store Connect reported the last uploaded build as 20 (2026-07-03),
         // so uploads bumped past this file without being committed. Trust ASC's
         // "must be higher than N" error over this value when they disagree.
-        buildNumber: '35',
+        buildNumber: '36',
         // Signing team for xcodebuild; prebuild --clean drops the Xcode-GUI-set
         // DEVELOPMENT_TEAM without this.
         appleTeamId: '4TKU6PS7ZS',
@@ -446,6 +446,10 @@ module.exports = function (_config) {
         './plugins/withAndroidManifestIntentQueriesPlugin.js',
         './plugins/withAndroidStylesAccentColorPlugin.js',
         './plugins/withAndroidNoJitpackPlugin.js',
+        // Authority One: iOS UIScene lifecycle adoption (UIApplicationSceneManifest +
+        // SceneDelegate). Required since builds moved to the iOS 27 SDK: without it UIKit
+        // traps on background (Non-UI) launches. See plugins/uiSceneLifecycle.
+        './plugins/uiSceneLifecycle/withUISceneLifecycle.js',
         [
           'expo-font',
           {
