@@ -11,6 +11,11 @@
  * This drives the real Home hooks (usePreferencesQuery, usePinnedFeedsInfos),
  * the real app QueryClient defaults, the real agent fetch wrapper and the real
  * connectivity checker, on fake time.
+ *
+ * Note: this scenario is fixed by either networkMode 'offlineFirst' or the
+ * latch fix alone (latch-only still shows paused samples, so it fails the
+ * "never paused" assertion). The latch itself is pinned separately by
+ * src/lib/__tests__/react-query-online.test.ts.
  */
 import {type ReactNode} from 'react'
 import {AppState} from 'react-native'

@@ -109,5 +109,8 @@ describe('createQueryClient defaults', () => {
     expect(queryFn).toHaveBeenCalledTimes(1)
     expect(result.data).toBe('cached')
     expect(result.fetchStatus).toBe('idle')
+    // Behaviour change vs 'online' mode (where it would sit 'paused' with
+    // status 'success'): the failed revalidation is an error, data is kept.
+    expect(result.status).toBe('error')
   })
 })

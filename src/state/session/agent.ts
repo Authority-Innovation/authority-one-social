@@ -394,14 +394,25 @@ export const AGENT_REQUEST_TIMEOUT_MS = 15e3
 /**
  * Calls that legitimately move a lot of bytes and must not be cut off by the
  * per-request timeout. They still honour any caller-provided AbortSignal.
+ * Note: on React Native (whatwg-fetch over XHR) fetch only resolves once the
+ * whole body has arrived, so the timeout covers the full download there.
  */
 const NO_TIMEOUT_XRPC_METHODS = new Set([
   'com.atproto.repo.uploadBlob',
   'com.atproto.repo.importRepo',
   'com.atproto.sync.getRepo',
   'com.atproto.sync.getBlob',
+  'chat.bsky.actor.exportAccountData',
   'app.bsky.video.uploadVideo',
 ])
+
+// The in-app system log is a 500-entry ring buffer (logger/logDump.ts) that
+// receives every level. Log every successful request only during the
+// cold-start window being diagnosed; after that, only slow ones. Failures,
+// timeouts and online/offline transitions are always logged.
+const LOG_ALL_REQUESTS_FOR_MS = 2 * 60e3
+const SLOW_REQUEST_MS = 2000
+const moduleLoadedAt = Date.now()
 
 /** Thrown when an agent request exceeds {@link AGENT_REQUEST_TIMEOUT_MS}. */
 export class AgentRequestTimeoutError extends Error {
@@ -493,10 +504,10 @@ export async function agentFetch(
           controller.abort()
         }, timeoutMs)
       : undefined
-  const onCallerAbort = () => controller.abort()
+  const onCallerAbort = () => controller.abort(callerSignal?.reason)
   if (callerSignal) {
     if (callerSignal.aborted) {
-      controller.abort()
+      controller.abort(callerSignal.reason)
     } else {
       callerSignal.addEventListener('abort', onCallerAbort)
     }
@@ -508,13 +519,19 @@ export async function agentFetch(
       ...reqInit,
       signal: controller.signal,
     })
-    networkLogger.debug('agent request', {
-      nsid,
-      host,
-      method,
-      status: res.status,
-      ms: Date.now() - start,
-    })
+    const ms = Date.now() - start
+    if (
+      ms >= SLOW_REQUEST_MS ||
+      Date.now() - moduleLoadedAt < LOG_ALL_REQUESTS_FOR_MS
+    ) {
+      networkLogger.debug('agent request', {
+        nsid,
+        host,
+        method,
+        status: res.status,
+        ms,
+      })
+    }
     emitNetworkConfirmed()
     return res
   } catch (e) {

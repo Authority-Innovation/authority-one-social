@@ -88,8 +88,22 @@ function setOnline(next: boolean, reason: string) {
   onlineManager.setOnline(next)
 }
 
+// A transport failure right after our PDS answered a probe is more likely a
+// single bad route/host than a lost connection. Going offline there would flap
+// (offline -> probe ok -> online -> refetchOnReconnect storm -> offline ...),
+// so instead mark the state unclear and let the next probe (<= 2 s) decide.
+const LOST_GRACE_AFTER_HEALTHY_PROBE_MS = 3000
+let lastHealthyProbeAt = -Infinity
+
 listenNetworkLost(() => {
   receivedNetworkLost = true
+  if (
+    onlineManager.isOnline() &&
+    Date.now() - lastHealthyProbeAt < LOST_GRACE_AFTER_HEALTHY_PROBE_MS
+  ) {
+    setNetworkStateUnclear(true, 'network-lost-just-after-healthy-probe')
+    return
+  }
   setOnline(false, 'agent-network-lost')
 })
 
@@ -119,6 +133,7 @@ function checkIsOnlineIfNeeded() {
       if (receivedNetworkLost) {
         networkLogger.info('health ok despite network-lost during check')
       }
+      lastHealthyProbeAt = Date.now()
       setNetworkStateUnclear(false, 'health-check-ok')
       setOnline(true, 'health-check-ok')
       return

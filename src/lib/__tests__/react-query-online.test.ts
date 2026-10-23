@@ -100,6 +100,9 @@ afterEach(async () => {
   while (pendingHealth.length) answerHealth({ok: true})
   events.emitNetworkConfirmed()
   await tick(2500)
+  // Step past the post-healthy-probe grace window so the next test's
+  // network-lost really takes us offline.
+  await tick(4000)
   autoHealth = undefined
   pendingHealth = []
   healthCalls.length = 0
@@ -164,7 +167,7 @@ describe('react-query onlineManager heuristics', () => {
     expect(healthCalls.length).toBeGreaterThanOrEqual(3)
   })
 
-  it('a confirmed request clears an unclear state (failed probe + successful request)', async () => {
+  it('failed probe + successful request -> unclear (stay online, keep probing); a healthy probe clears it', async () => {
     events.emitNetworkLost()
     await tick(2000)
     // A real request succeeds while the probe is in flight...
@@ -183,6 +186,36 @@ describe('react-query onlineManager heuristics', () => {
     const callsAfterSettle = healthCalls.length
     await tick(6000)
     expect(healthCalls.length).toBe(callsAfterSettle)
+  })
+
+  it('a network-lost just after a healthy probe does not flap offline; the next probe decides', async () => {
+    const transitions: boolean[] = []
+    const unsub = onlineManager.subscribe(online => transitions.push(online))
+    autoHealth = {ok: true}
+    events.emitNetworkLost()
+    await tick(2000) // probe ok -> online
+    expect(onlineManager.isOnline()).toBe(true)
+    // One flaky host keeps failing right after each healthy probe.
+    for (let i = 0; i < 5; i++) {
+      events.emitNetworkLost()
+      expect(onlineManager.isOnline()).toBe(true)
+      await tick(2000)
+    }
+    // Exactly one offline->online cycle (the initial one), no storm.
+    expect(transitions).toEqual([false, true])
+    unsub()
+  })
+
+  it('a network-lost just after a healthy probe still goes offline if the next probe fails', async () => {
+    autoHealth = {ok: true}
+    events.emitNetworkLost()
+    await tick(2000)
+    expect(onlineManager.isOnline()).toBe(true)
+    autoHealth = {ok: false}
+    events.emitNetworkLost()
+    expect(onlineManager.isOnline()).toBe(true)
+    await tick(2000)
+    expect(onlineManager.isOnline()).toBe(false)
   })
 
   it('network-confirmed always restores online, even mid-check', async () => {
