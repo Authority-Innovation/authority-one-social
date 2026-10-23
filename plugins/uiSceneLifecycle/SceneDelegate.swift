@@ -11,7 +11,6 @@
 //     to the AppDelegate methods that UIKit no longer calls once scenes are adopted, so
 //     RCTLinkingManager and the Expo AppDelegate subscribers keep working unchanged.
 
-import React
 import UIKit
 
 // No @objc(...) rename: Info.plist names it "$(PRODUCT_MODULE_NAME).SceneDelegate".
@@ -37,7 +36,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     let window: UIWindow
     if let early = appDelegate.window {
       // Debug + expo-dev-launcher: the AppDelegate had to create the window inside
-      // didFinishLaunching (the dev launcher's subscriber requires one). Attach it here.
+      // didFinishLaunching (the dev launcher's subscriber requires one, and keeps driving
+      // it). Attach it here — also on a reconnect, see sceneDidDisconnect.
       early.windowScene = windowScene
       window = early
     } else {
@@ -69,8 +69,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
   func sceneDidDisconnect(_ scene: UIScene) {
     NSLog("[UIScene] didDisconnect")
-    // Keep the React instance alive (one scene, no multi-window); just release the window
-    // so a reconnecting scene can re-host the same root view controller.
+    // Keep the React instance alive (one scene, no multi-window).
+    if AppDelegate.devLauncherNeedsEarlyWindow {
+      // expo-dev-launcher holds on to the early window and keeps setting its root view
+      // controller (launcher UI, reloads), so keep that window and its root intact; the
+      // next scene re-attaches it.
+      window = nil
+      return
+    }
+    // Release the window so a reconnecting scene re-hosts the same root view controller.
     if let appDelegate = appDelegate, appDelegate.window === window {
       appDelegate.window = nil
     }
@@ -88,6 +95,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     appDelegate?.applicationWillResignActive(UIApplication.shared)
   }
 
+  // Note: UIKit also calls this on the initial foreground connect, which the app-delegate
+  // lifecycle never did. No Expo subscriber in this app implements it, and RN's AppState
+  // listens to the UIApplication notifications (unchanged), so the extra call is harmless.
   func sceneWillEnterForeground(_ scene: UIScene) {
     appDelegate?.applicationWillEnterForeground(UIApplication.shared)
   }

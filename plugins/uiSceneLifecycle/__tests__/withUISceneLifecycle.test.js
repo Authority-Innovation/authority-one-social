@@ -113,6 +113,12 @@ describe('withUISceneLifecycle — AppDelegate.swift', () => {
     expect(out).toContain(
       'DispatchQueue.main.asyncAfter(deadline: .now() + Self.sceneConnectGracePeriod)',
     )
+    expect(out).toMatch(
+      /\} else if Self\.isBackgroundEventLaunch\(launchOptions\) \{\s*\n[^\n]*\n\s*_ = startReactNativeIfNeeded\(launchOptions: launchOptions\)/,
+    )
+    expect(out).toContain(
+      '.location, .remoteNotification, .bluetoothCentrals, .bluetoothPeripherals',
+    )
     expect(out).toContain('var reactRootViewController: UIViewController?')
     expect(out).toContain(
       'var reactLaunchOptions: [UIApplication.LaunchOptionsKey: Any]?',
@@ -252,6 +258,10 @@ describe('withUISceneLifecycle — SceneDelegate.swift injection', () => {
       'func scene(_ scene: UIScene, continue userActivity: NSUserActivity)',
     )
     expect(src).toContain('performActionFor shortcutItem')
+    // Debug + expo-dev-launcher keeps (and re-attaches) its early window across a disconnect.
+    expect(src).toMatch(
+      /func sceneDidDisconnect[\s\S]*?if AppDelegate\.devLauncherNeedsEarlyWindow \{[\s\S]*?return\s*\n\s*\}/,
+    )
     for (const cb of [
       'applicationDidBecomeActive',
       'applicationWillResignActive',

@@ -29,6 +29,7 @@ const fs = require('fs')
 const path = require('path')
 const {
   withAppDelegate,
+  withDangerousMod,
   withInfoPlist,
   withXcodeProject,
   IOSConfig,
@@ -92,12 +93,15 @@ const LAUNCH_BLOCK = `#if os(iOS) || os(tvOS)
     ${LAUNCH.begin}
     // UIScene lifecycle: no window here — SceneDelegate creates it (and builds the RN root
     // with the scene's cold-start URL / user activity merged into the launch options) when a
-    // window scene connects. On iOS 27 UIKit connects a scene even for background launches,
-    // but if none connects React Native is still started off-screen (as before) so JS /
-    // TaskManager work runs. The grace period matters: on a normal foreground launch the
-    // scene connects a few tens of ms after didFinishLaunching (measured on the iOS 27
-    // simulator, after the next main-queue turn), and starting React Native before it would
-    // drop the cold-start deep link from Linking.getInitialURL().
+    // window scene connects. When no scene connects (background launches on iOS 17-26; iOS
+    // 27 connects one even then) React Native is still started off-screen, as before, so JS /
+    // TaskManager work runs:
+    //  - immediately for launches iOS marks as background events (location, push, BLE) —
+    //    they never carry a deep link;
+    //  - otherwise (e.g. background fetch) after a grace period. On a normal foreground launch
+    //    the scene connects a few tens of ms after didFinishLaunching (measured on the iOS 27
+    //    simulator, after the next main-queue turn); starting React Native before it would
+    //    drop the cold-start deep link from Linking.getInitialURL().
     reactLaunchOptions = launchOptions
     if Self.devLauncherNeedsEarlyWindow {
       // Debug + expo-dev-launcher: its AppDelegate subscriber needs a window (and the RN
@@ -105,6 +109,9 @@ const LAUNCH_BLOCK = `#if os(iOS) || os(tvOS)
       // attached to the scene in SceneDelegate.
       window = UIWindow(frame: UIScreen.main.bounds)
       window?.rootViewController = startReactNativeIfNeeded(launchOptions: launchOptions)
+    } else if Self.isBackgroundEventLaunch(launchOptions) {
+      NSLog("[UIScene] background-event launch; starting React Native off-screen")
+      _ = startReactNativeIfNeeded(launchOptions: launchOptions)
     } else {
       DispatchQueue.main.asyncAfter(deadline: .now() + Self.sceneConnectGracePeriod) { [weak self] in
         guard let self = self, self.reactRootViewController == nil else { return }
@@ -139,6 +146,15 @@ const METHODS_BLOCK = `  ${METHODS.begin}
     delegate.setRootView(rootView, toRootViewController: rootViewController)
     reactRootViewController = rootViewController
     return rootViewController
+  }
+
+  /// Launches iOS performs for a background event; these never carry a cold-start URL.
+  static func isBackgroundEventLaunch(_ launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    guard let launchOptions = launchOptions else { return false }
+    let keys: [UIApplication.LaunchOptionsKey] = [
+      .location, .remoteNotification, .bluetoothCentrals, .bluetoothPeripherals,
+    ]
+    return keys.contains { launchOptions[$0] != nil }
   }
 
   /// How long didFinishLaunching waits for a window scene before starting React Native
@@ -231,11 +247,21 @@ const withUISceneLifecycle = config => {
     return cfg
   })
 
+  config = withDangerousMod(config, [
+    'ios',
+    cfg => {
+      const projectName = IOSConfig.XcodeUtils.getProjectName(
+        cfg.modRequest.projectRoot,
+      )
+      writeSceneDelegate(cfg.modRequest.projectRoot, projectName)
+      return cfg
+    },
+  ])
+
   config = withXcodeProject(config, cfg => {
     const projectName = IOSConfig.XcodeUtils.getProjectName(
       cfg.modRequest.projectRoot,
     )
-    writeSceneDelegate(cfg.modRequest.projectRoot, projectName)
     cfg.modResults = addSceneDelegateToProject(cfg.modResults, projectName)
     return cfg
   })
