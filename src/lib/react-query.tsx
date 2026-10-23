@@ -9,7 +9,9 @@ import {
   type PersistQueryClientProviderProps,
 } from '@tanstack/react-query-persist-client'
 
+import {AUTHORITY_ONE_SERVICE} from '#/lib/constants'
 import {createPersistedQueryStorage} from '#/lib/persisted-query-storage'
+import {Logger} from '#/logger'
 import {listenNetworkConfirmed, listenNetworkLost} from '#/state/events'
 import {isQueryPersisted} from '#/state/queries/util'
 import * as env from '#/env'
@@ -22,24 +24,42 @@ declare global {
   }
 }
 
+const networkLogger = Logger.create(Logger.Context.Network)
+
+// Health probe for the connectivity checker. Authority One talks to its own
+// PDS, so probe that rather than Bluesky's public AppView (which may be
+// reachable when our PDS is not, or vice versa). Returns `{version}`.
+const PDS_ORIGIN: string = AUTHORITY_ONE_SERVICE
+const HEALTH_CHECK_URL = `${PDS_ORIGIN.replace(/\/+$/, '')}/xrpc/_health`
+const HEALTH_CHECK_TIMEOUT_MS = 15e3
+
 async function checkIsOnline(): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => {
+    controller.abort()
+  }, HEALTH_CHECK_TIMEOUT_MS)
+  const start = Date.now()
   try {
-    const controller = new AbortController()
-    setTimeout(() => {
-      controller.abort()
-    }, 15e3)
-    const res = await fetch('https://public.api.bsky.app/xrpc/_health', {
+    const res = await fetch(HEALTH_CHECK_URL, {
       cache: 'no-store',
       signal: controller.signal,
     })
-    const json = await res.json()
-    if (json.version) {
-      return true
-    } else {
-      return false
-    }
+    const json = (await res.json()) as {version?: unknown} | null
+    const ok = !!json?.version
+    networkLogger.debug('health check', {
+      ok,
+      status: res.status,
+      ms: Date.now() - start,
+    })
+    return ok
   } catch (e) {
+    networkLogger.info('health check failed', {
+      error: e instanceof Error ? e.name : typeof e,
+      ms: Date.now() - start,
+    })
     return false
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -47,14 +67,37 @@ let receivedNetworkLost = false
 let receivedNetworkConfirmed = false
 let isNetworkStateUnclear = false
 
+function setNetworkStateUnclear(next: boolean, reason: string) {
+  if (isNetworkStateUnclear !== next) {
+    networkLogger.info('isNetworkStateUnclear changed', {
+      unclear: next,
+      reason,
+    })
+  }
+  isNetworkStateUnclear = next
+}
+
+function setOnline(next: boolean, reason: string) {
+  const prev = onlineManager.isOnline()
+  if (prev !== next) {
+    networkLogger.info('onlineManager transition', {
+      online: next,
+      reason,
+    })
+  }
+  onlineManager.setOnline(next)
+}
+
 listenNetworkLost(() => {
   receivedNetworkLost = true
-  onlineManager.setOnline(false)
+  setOnline(false, 'agent-network-lost')
 })
 
 listenNetworkConfirmed(() => {
   receivedNetworkConfirmed = true
-  onlineManager.setOnline(true)
+  // A request just completed, so whatever made the state "unclear" is moot.
+  setNetworkStateUnclear(false, 'agent-network-confirmed')
+  setOnline(true, 'agent-network-confirmed')
 })
 
 let checkPromise: Promise<void> | undefined
@@ -66,15 +109,28 @@ function checkIsOnlineIfNeeded() {
   receivedNetworkConfirmed = false
   checkPromise = checkIsOnline().then(nextIsOnline => {
     checkPromise = undefined
-    if (nextIsOnline && receivedNetworkLost) {
-      isNetworkStateUnclear = true
+    if (nextIsOnline) {
+      // The health probe reached our PDS: that is direct evidence of
+      // connectivity, even if some other request failed while the probe was
+      // in flight (receivedNetworkLost). Previously that race set
+      // isNetworkStateUnclear and nothing ever reset it, so the app stayed
+      // offline (and Home's queries stayed paused) until an unrelated
+      // background poll happened to succeed up to a minute later.
+      if (receivedNetworkLost) {
+        networkLogger.info('health ok despite network-lost during check')
+      }
+      setNetworkStateUnclear(false, 'health-check-ok')
+      setOnline(true, 'health-check-ok')
+      return
     }
-    if (!nextIsOnline && receivedNetworkConfirmed) {
-      isNetworkStateUnclear = true
+    if (receivedNetworkConfirmed) {
+      // Probe failed but a real request succeeded meanwhile; stay online and
+      // keep checking (the interval re-checks while the state is unclear).
+      setNetworkStateUnclear(true, 'health-failed-but-request-ok')
+      return
     }
-    if (!isNetworkStateUnclear) {
-      onlineManager.setOnline(nextIsOnline)
-    }
+    setNetworkStateUnclear(false, 'health-check-failed')
+    setOnline(false, 'health-check-failed')
   })
 }
 
@@ -112,7 +168,7 @@ focusManager.setEventListener(onFocus => {
   }
 })
 
-const createQueryClient = () =>
+export const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
       queries: {
@@ -130,6 +186,12 @@ const createQueryClient = () =>
         // exceptions, and those can be made on a per-query basis. For others, we
         // should give users controls to retry.
         retry: false,
+        // 'offlineFirst': always run the first fetch even when onlineManager
+        // thinks we're offline, so a query settles into data or error rather
+        // than sitting paused (Home's cold-start spinner). onlineManager is
+        // fed by our own heuristics (agent fetch failures, health probe) and
+        // can be wrong; retries (where enabled) still pause while offline.
+        networkMode: 'offlineFirst',
       },
     },
   })
