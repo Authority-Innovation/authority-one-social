@@ -446,6 +446,10 @@ module.exports = function (_config) {
         './plugins/withAndroidManifestIntentQueriesPlugin.js',
         './plugins/withAndroidStylesAccentColorPlugin.js',
         './plugins/withAndroidNoJitpackPlugin.js',
+        // Authority One: iOS UIScene lifecycle adoption (UIApplicationSceneManifest +
+        // SceneDelegate). Required since builds moved to the iOS 27 SDK: without it UIKit
+        // traps on background (Non-UI) launches. See plugins/uiSceneLifecycle.
+        './plugins/uiSceneLifecycle/withUISceneLifecycle.js',
         [
           'expo-font',
           {
