@@ -41,3 +41,12 @@
   - The runtime routes are assumed and still need the server side to match.
   - No `wrangler` or `check:bundle` (deny-listed), and no deploy.
 - **Details:** `docs/communities/W1-T8-communities-client-report.md`
+
+## 2026-10-28 - Communities W2-T17: composer target + fail-closed rule (task f0037cb5)
+
+- Branch `communities/w2-composer-target`, base `569b3b240` + T1, T3, T8 merged (merge commits). Feature head `3ad7673d6`.
+- Changed: pure `resolveTarget` (`src/lib/communities/resolveTarget.ts`); `submitComposerThread` keeps the T3 guard first and routes members/paid only to `communitiesClient.post`/`.reply`; Composer resolves the target (reply inheritance, `LOCKED_COMMUNITY`, `COMMUNITIES_ENABLED`) before any write path; `ComposerOptsPostRef.target`.
+- Tests: base 1387 passed / 1 failed / 28 todo (128 suites); predecessors merged 1480 passed; head 1525 passed / 1 failed / 28 todo (135 suites). Same 3 pre-existing environment-only failing suites throughout.
+- Verdict: done, draft PR, awaiting a separate reviewer.
+- NOT done: no UI sets a target (T12), members media, locked-community tier from config, no `wrangler` / `check:bundle` (deny-listed, not run), no deploy or EAS build.
+- Report: `docs/communities/W2-T17-composer-target-report.md`.
