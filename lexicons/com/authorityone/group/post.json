@@ -1,0 +1,31 @@
+{
+  "lexicon": 1,
+  "id": "com.authorityone.group.post",
+  "description": "Association of an ordinary app.bsky.feed.post to a group's timeline. Lives in the AUTHOR's repo. Keeps the underlying post a standard post (threads/embeds/likes/moderation work unchanged); the group binding is layered metadata. Mirrors app.bsky.graph.listitem, but the subject is a post rather than an actor.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["subject", "group", "createdAt"],
+        "properties": {
+          "subject": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Strong reference to the app.bsky.feed.post being associated. The post lives in the same repo as this record."
+          },
+          "group": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Strong reference to the target com.authorityone.group.profile record."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

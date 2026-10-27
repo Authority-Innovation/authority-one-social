@@ -1,0 +1,160 @@
+{
+  "lexicon": 1,
+  "id": "com.authorityone.group.defs",
+  "description": "Shared definitions and token enums for Authority One Social groups. See groups-lexicon-design.md.",
+  "defs": {
+    "groupViewBasic": {
+      "type": "object",
+      "description": "Lightweight hydrated group view, safe to return to non-members.",
+      "required": ["uri", "cid", "name", "creator"],
+      "properties": {
+        "uri": {"type": "string", "format": "at-uri"},
+        "cid": {"type": "string", "format": "cid"},
+        "creator": {"type": "string", "format": "did", "description": "DID of the repo hosting the group record (owner of record)."},
+        "name": {"type": "string", "maxGraphemes": 64, "maxLength": 640},
+        "purpose": {"type": "ref", "ref": "#purpose"},
+        "visibility": {"type": "ref", "ref": "#visibility"},
+        "admissionPolicy": {"type": "ref", "ref": "#admissionPolicy"},
+        "avatar": {"type": "string", "format": "uri"},
+        "memberCount": {"type": "integer"},
+        "viewer": {"type": "ref", "ref": "#viewerState"},
+        "indexedAt": {"type": "string", "format": "datetime"}
+      }
+    },
+    "groupView": {
+      "type": "object",
+      "description": "Full hydrated group view returned by getGroup.",
+      "required": ["uri", "cid", "name", "creator", "indexedAt"],
+      "properties": {
+        "uri": {"type": "string", "format": "at-uri"},
+        "cid": {"type": "string", "format": "cid"},
+        "creator": {"type": "string", "format": "did", "description": "DID of the repo hosting the group record (owner of record)."},
+        "name": {"type": "string", "maxGraphemes": 64, "maxLength": 640},
+        "purpose": {"type": "ref", "ref": "#purpose"},
+        "description": {"type": "string", "maxGraphemes": 3000, "maxLength": 30000},
+        "descriptionFacets": {"type": "array", "items": {"type": "ref", "ref": "app.bsky.richtext.facet"}},
+        "visibility": {"type": "ref", "ref": "#visibility"},
+        "admissionPolicy": {"type": "ref", "ref": "#admissionPolicy"},
+        "postingPolicy": {"type": "ref", "ref": "#postingPolicy"},
+        "avatar": {"type": "string", "format": "uri"},
+        "banner": {"type": "string", "format": "uri"},
+        "memberCount": {"type": "integer"},
+        "viewer": {"type": "ref", "ref": "#viewerState"},
+        "indexedAt": {"type": "string", "format": "datetime"}
+      }
+    },
+    "viewerState": {
+      "type": "object",
+      "description": "Group-relative state for the requesting viewer, computed by the AppView from effective membership.",
+      "properties": {
+        "membership": {"type": "string", "format": "at-uri", "description": "URI of the viewer's own membership record, if any."},
+        "role": {"type": "ref", "ref": "#role"},
+        "status": {"type": "ref", "ref": "#membershipStatus"},
+        "canPost": {"type": "boolean"},
+        "canJoin": {"type": "boolean"}
+      }
+    },
+    "memberView": {
+      "type": "object",
+      "description": "A member of a group as resolved by the AppView (effective role/status).",
+      "required": ["subject", "role", "status"],
+      "properties": {
+        "subject": {"type": "ref", "ref": "app.bsky.actor.defs#profileView"},
+        "membership": {"type": "string", "format": "at-uri", "description": "URI of the member's membership record."},
+        "role": {"type": "ref", "ref": "#role"},
+        "status": {"type": "ref", "ref": "#membershipStatus"},
+        "createdAt": {"type": "string", "format": "datetime"}
+      }
+    },
+    "membershipView": {
+      "type": "object",
+      "description": "One group the actor is an effective member of, with their resolved role and status. Returned by getMemberships.",
+      "required": ["group", "role", "status"],
+      "properties": {
+        "group": {"type": "ref", "ref": "#groupViewBasic"},
+        "role": {"type": "ref", "ref": "#role"},
+        "status": {"type": "ref", "ref": "#membershipStatus"}
+      }
+    },
+    "purpose": {
+      "type": "string",
+      "description": "What kind of group this is.",
+      "knownValues": [
+        "com.authorityone.group.defs#community",
+        "com.authorityone.group.defs#channel",
+        "com.authorityone.group.defs#private"
+      ]
+    },
+    "community": {"type": "token", "description": "An open-ended community space."},
+    "channel": {"type": "token", "description": "A narrow topical channel."},
+    "private": {"type": "token", "description": "A private, members-only space."},
+    "visibility": {
+      "type": "string",
+      "description": "Who can see the group and read its timeline. Orthogonal to admissionPolicy.",
+      "knownValues": [
+        "com.authorityone.group.defs#public",
+        "com.authorityone.group.defs#unlisted",
+        "com.authorityone.group.defs#visPrivate"
+      ]
+    },
+    "public": {"type": "token", "description": "Indexed and readable by anyone; appears in directory/search."},
+    "unlisted": {"type": "token", "description": "Readable by direct URL but not surfaced in directory/search."},
+    "visPrivate": {"type": "token", "description": "Timeline and member list served by the AppView only to effective members."},
+    "admissionPolicy": {
+      "type": "string",
+      "description": "How a user becomes a member. Orthogonal to visibility.",
+      "knownValues": [
+        "com.authorityone.group.defs#open",
+        "com.authorityone.group.defs#request",
+        "com.authorityone.group.defs#inviteOnly",
+        "com.authorityone.group.defs#closed"
+      ]
+    },
+    "open": {"type": "token", "description": "Anyone may self-join; a membership record is valid on its own."},
+    "request": {"type": "token", "description": "User requests; an admin must approve (invite record / approvedBy)."},
+    "inviteOnly": {"type": "token", "description": "An admin must create an invite record first."},
+    "closed": {"type": "token", "description": "No new members; existing memberships honored."},
+    "postingPolicy": {
+      "type": "string",
+      "description": "Who may associate posts to the group's timeline.",
+      "knownValues": [
+        "com.authorityone.group.defs#postMembers",
+        "com.authorityone.group.defs#postAdmins",
+        "com.authorityone.group.defs#postAnyone"
+      ]
+    },
+    "postMembers": {"type": "token", "description": "Effective members may post (default)."},
+    "postAdmins": {"type": "token", "description": "Only moderators/admins/owner may post."},
+    "postAnyone": {"type": "token", "description": "Anyone who can see the group may post."},
+    "role": {
+      "type": "string",
+      "description": "A member's role within a group.",
+      "knownValues": [
+        "com.authorityone.group.defs#member",
+        "com.authorityone.group.defs#moderator",
+        "com.authorityone.group.defs#admin",
+        "com.authorityone.group.defs#owner"
+      ]
+    },
+    "member": {"type": "token", "description": "Ordinary member."},
+    "moderator": {"type": "token", "description": "Can moderate content within the group."},
+    "admin": {"type": "token", "description": "Can manage members and invites."},
+    "owner": {"type": "token", "description": "Full control; the group record host."},
+    "membershipStatus": {
+      "type": "string",
+      "description": "Effective membership status computed by the AppView.",
+      "knownValues": [
+        "com.authorityone.group.defs#active",
+        "com.authorityone.group.defs#pending",
+        "com.authorityone.group.defs#invited",
+        "com.authorityone.group.defs#banned",
+        "com.authorityone.group.defs#left"
+      ]
+    },
+    "active": {"type": "token", "description": "An effective member in good standing."},
+    "pending": {"type": "token", "description": "Requested to join; awaiting admin approval."},
+    "invited": {"type": "token", "description": "Invited by an admin; not yet accepted/active."},
+    "banned": {"type": "token", "description": "Removed and barred by an admin."},
+    "left": {"type": "token", "description": "Voluntarily left."}
+  }
+}
