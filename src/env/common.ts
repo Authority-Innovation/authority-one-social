@@ -178,3 +178,38 @@ export const APP_CONFIG_URL =
     : IS_DEV
       ? (APP_CONFIG_DEV_URL ?? APP_CONFIG_PROD_URL)
       : APP_CONFIG_PROD_URL
+
+/**
+ * Authority One Communities. Every flag below defaults OFF (or empty) so a
+ * build that does not set them behaves exactly as before.
+ *
+ * COMMUNITIES_ENABLED gates the whole feature, including the `/c/:id` routes:
+ * with it off, a deep link to a community lands on Home.
+ */
+export const COMMUNITIES_ENABLED: boolean =
+  process.env.EXPO_PUBLIC_COMMUNITIES_ENABLED === '1' ||
+  process.env.EXPO_PUBLIC_COMMUNITIES_ENABLED === 'true'
+
+/**
+ * Shows the community switcher. Has no effect unless COMMUNITIES_ENABLED.
+ */
+export const COMMUNITY_SWITCHER: boolean =
+  process.env.EXPO_PUBLIC_COMMUNITY_SWITCHER === '1' ||
+  process.env.EXPO_PUBLIC_COMMUNITY_SWITCHER === 'true'
+
+/**
+ * Pins a brand build to a single community (its id). Empty means not locked.
+ */
+export const LOCKED_COMMUNITY: string =
+  process.env.EXPO_PUBLIC_LOCKED_COMMUNITY || ''
+
+/**
+ * The brand this build ships as.
+ */
+export const BRAND: string = process.env.EXPO_PUBLIC_BRAND || 'authority-one'
+
+/**
+ * Full-app reskin for a brand build. Empty means no reskin - the AO app only
+ * ever applies a community's accent to that community's header.
+ */
+export const BRAND_SKIN: string = process.env.EXPO_PUBLIC_BRAND_SKIN || ''
