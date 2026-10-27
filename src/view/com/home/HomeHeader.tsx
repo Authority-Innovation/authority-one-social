@@ -5,6 +5,7 @@ import {type NavigationProp} from '#/lib/routes/types'
 import {type FeedSourceInfo} from '#/state/queries/feed'
 import {useSession} from '#/state/session'
 import {type RenderTabBarFnProps} from '#/view/com/pager/Pager'
+import {CommunitySwitcher} from '#/features/communities/switcher'
 import {TabBar} from '../pager/TabBar'
 import {HomeHeaderLayout} from './HomeHeaderLayout'
 
@@ -52,6 +53,7 @@ export function HomeHeader(
 
   return (
     <HomeHeaderLayout tabBarAnchor={props.tabBarAnchor}>
+      {hasSession && <CommunitySwitcher />}
       <TabBar
         key={items.join(',')}
         onPressSelected={props.onPressSelected}
