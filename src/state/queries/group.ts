@@ -33,6 +33,8 @@ import {uploadBlob} from '#/lib/api'
 import {until} from '#/lib/async/until'
 import {
   type ComAuthorityoneGroupDefs,
+  type ComAuthorityoneGroupGetMemberships,
+  type ComAuthorityoneGroupGetTimeline,
   type ComAuthorityoneGroupProfile,
 } from '#/lib/lexicon/generated'
 import {type ImageMeta} from '#/state/gallery'
@@ -86,6 +88,33 @@ async function callGroupAppView<T>(
   return res.data as T
 }
 
+/**
+ * One page of a group's public-tier timeline from our AppView. Plain function
+ * so feed APIs (see lib/api/feed/communities.ts) can share the transport.
+ */
+export function fetchGroupTimeline(
+  agent: ReturnType<typeof useAgent>,
+  {group, cursor, limit = 50}: {group: string; cursor?: string; limit?: number},
+) {
+  return callGroupAppView<ComAuthorityoneGroupGetTimeline.OutputSchema>(
+    agent,
+    'com.authorityone.group.getTimeline',
+    {group, limit, cursor},
+  )
+}
+
+/** The groups an actor is an effective member of (public tier). */
+export function fetchGroupMemberships(
+  agent: ReturnType<typeof useAgent>,
+  {actor, cursor, limit = 50}: {actor: string; cursor?: string; limit?: number},
+) {
+  return callGroupAppView<ComAuthorityoneGroupGetMemberships.OutputSchema>(
+    agent,
+    'com.authorityone.group.getMemberships',
+    {actor, limit, cursor},
+  )
+}
+
 // ===========================================================================
 // READS
 // ===========================================================================
@@ -122,11 +151,7 @@ export function useGroupTimelineQuery(uri?: string) {
     getNextPageParam: last => last.cursor,
     async queryFn({pageParam}) {
       if (!uri) throw new Error('URI not provided')
-      return callGroupAppView(agent, 'com.authorityone.group.getTimeline', {
-        group: uri,
-        limit: 50,
-        cursor: pageParam,
-      })
+      return fetchGroupTimeline(agent, {group: uri, cursor: pageParam})
     },
   })
 }
