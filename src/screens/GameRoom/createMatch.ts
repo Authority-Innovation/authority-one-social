@@ -41,11 +41,14 @@ export async function createLiveMatch(
   baseUrl = GAME_SERVER_BASE_URL,
 ): Promise<CreateMatchResult> {
   try {
-    const token = await getAgentRuntimeAccessToken()
+    const url = `${baseUrl.replace(/\/+$/, '')}/app/games`
+    // The target is passed so a game server on ANOTHER origin
+    // (EXPO_PUBLIC_GAME_SERVER_URL) never receives the Signature AO session.
+    const token = await getAgentRuntimeAccessToken(url)
     if (!token) {
       return {ok: false, error: 'Sign in to start a live match.'}
     }
-    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/app/games`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

@@ -79,6 +79,7 @@ import {
   setupDeviceId,
 } from '#/analytics'
 import {IS_ANDROID, IS_IOS} from '#/env'
+import {AOSignatureLifecycle} from '#/features/aoSignature'
 import {
   prefetchLiveEvents,
   Provider as LiveEventsProvider,
@@ -181,6 +182,7 @@ function InnerApp() {
                                                             <IntentDialogProvider>
                                                               <TranslateOnDeviceProvider>
                                                                 <TestCtrls />
+                                                                <AOSignatureLifecycle />
                                                                 <Shell />
                                                                 <ToastOutlet />
                                                               </TranslateOnDeviceProvider>
@@ -243,27 +245,27 @@ function App() {
                 <SessionProvider>
                   <SupabaseSessionProvider>
                     <PrefsStateProvider>
-                    <I18nProvider>
-                      <ShellStateProvider>
-                        <ModalStateProvider>
-                          <DialogStateProvider>
-                            <LightboxStateProvider>
-                              <PortalProvider>
-                                <BottomSheetProvider>
-                                  <LandingProvider>
-                                    <SafeAreaProvider
-                                      initialMetrics={initialWindowMetrics}>
-                                      <InnerApp />
-                                    </SafeAreaProvider>
-                                  </LandingProvider>
-                                </BottomSheetProvider>
-                              </PortalProvider>
-                            </LightboxStateProvider>
-                          </DialogStateProvider>
-                        </ModalStateProvider>
-                      </ShellStateProvider>
-                    </I18nProvider>
-                  </PrefsStateProvider>
+                      <I18nProvider>
+                        <ShellStateProvider>
+                          <ModalStateProvider>
+                            <DialogStateProvider>
+                              <LightboxStateProvider>
+                                <PortalProvider>
+                                  <BottomSheetProvider>
+                                    <LandingProvider>
+                                      <SafeAreaProvider
+                                        initialMetrics={initialWindowMetrics}>
+                                        <InnerApp />
+                                      </SafeAreaProvider>
+                                    </LandingProvider>
+                                  </BottomSheetProvider>
+                                </PortalProvider>
+                              </LightboxStateProvider>
+                            </DialogStateProvider>
+                          </ModalStateProvider>
+                        </ShellStateProvider>
+                      </I18nProvider>
+                    </PrefsStateProvider>
                   </SupabaseSessionProvider>
                 </SessionProvider>
               </AnalyticsContext>

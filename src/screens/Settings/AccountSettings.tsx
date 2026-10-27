@@ -27,6 +27,7 @@ import {PencilLine_Stroke2_Corner2_Rounded as PencilIcon} from '#/components/ico
 import {ShieldCheck_Stroke2_Corner0_Rounded as ShieldIcon} from '#/components/icons/Shield'
 import {Trash_Stroke2_Corner2_Rounded} from '#/components/icons/Trash'
 import * as Layout from '#/components/Layout'
+import {AOSignatureAccountSection} from '#/features/aoSignature'
 import {ChangeHandleDialog} from './components/ChangeHandleDialog'
 import {ChangePasswordDialog} from './components/ChangePasswordDialog'
 import {DeactivateAccountDialog} from './components/DeactivateAccountDialog'
@@ -165,6 +166,7 @@ export function AccountSettingsScreen({}: Props) {
               </SettingsList.BadgeText>
             )}
           </SettingsList.LinkItem>
+          <AOSignatureAccountSection />
           <SettingsList.Divider />
           <SettingsList.PressableItem
             label={_(msg`Export my data`)}
