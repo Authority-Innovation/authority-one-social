@@ -1,0 +1,47 @@
+{
+  "lexicon": 1,
+  "id": "com.authorityone.group.membership",
+  "description": "A member's self-asserted tie to a group. Lives in the MEMBER's own repo (so it rides their CAR export and leaving == deleting it). Not authoritative alone: the AppView resolves effective membership by joining this against the group's admissionPolicy and owner-side invite/approval. Mirrors app.bsky.graph.listitem, inverted to the member.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["subject", "createdAt"],
+        "properties": {
+          "subject": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Strong reference to the com.authorityone.group.profile record being joined."
+          },
+          "role": {
+            "type": "ref",
+            "ref": "com.authorityone.group.defs#role",
+            "description": "Self-asserted role. Defaults to member. Elevated roles are only effective if corroborated by an owner-side invite/approval (the AppView will not honor a self-claimed admin)."
+          },
+          "status": {
+            "type": "ref",
+            "ref": "com.authorityone.group.defs#membershipStatus",
+            "description": "Self-asserted status (e.g. active for open groups, pending for request groups, left to depart while retaining a record). The AppView may downgrade this to its effective value."
+          },
+          "invitedBy": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the admin whose invite this membership claims to redeem (for invite/request groups). Audit aid; the AppView validates against the actual invite record."
+          },
+          "approvedBy": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the admin who approved a request, if recorded client-side. Audit aid only."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the member created this record (joined-at for active memberships)."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "lexicon": 1,
+  "id": "com.authorityone.group.ban",
+  "description": "Owner-side ban barring an account from a group. Lives in a group admin/owner's repo. The AppView treats a ban as the highest-precedence moderation signal: a banned DID is excluded from the member list and timeline and cannot post, regardless of any membership or invite record. Unban == delete this record.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["group", "subject", "createdAt"],
+        "properties": {
+          "group": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Strong reference to the com.authorityone.group.profile this ban applies to."
+          },
+          "subject": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the account being banned."
+          },
+          "reason": {
+            "type": "string",
+            "maxGraphemes": 300,
+            "maxLength": 3000,
+            "description": "Optional moderator note."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}
