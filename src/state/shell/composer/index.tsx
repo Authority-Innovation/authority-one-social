@@ -9,6 +9,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {useQueryClient} from '@tanstack/react-query'
 
+import {type ComposerTarget} from '#/lib/communities/composerTarget'
 import {useNonReactiveCallback} from '#/lib/hooks/useNonReactiveCallback'
 import {postUriToRelativePath, toBskyAppUrl} from '#/lib/strings/url-helpers'
 import {purgeTemporaryImageFiles} from '#/state/gallery'
@@ -27,6 +28,12 @@ export interface ComposerOptsPostRef {
   author: AppBskyActorDefs.ProfileViewBasic
   embed?: AppBskyFeedDefs.PostView['embed']
   moderation?: ModerationDecision
+  /**
+   * The parent's target. A reply inherits it; when absent, only an
+   * app.bsky.feed.post AT-URI counts as a known (PDS) parent. For a
+   * members/paid parent, `uri` is the runtime post id.
+   */
+  target?: ComposerTarget
 }
 
 export type OnPostSuccessData =
@@ -61,6 +68,11 @@ export interface ComposerOpts {
   replyTo?: ComposerOptsPostRef
   /** When set, publish AS this owned agent via the runtime (never the session). */
   postAs?: ComposerOptsPostAs
+  /**
+   * Where the post is headed. Defaults to the user's own profile. A members or
+   * paid community target never writes to the PDS (see composerTarget.ts).
+   */
+  target?: ComposerTarget
   onPost?: (postUri: string | undefined) => void
   onPostSuccess?: (data: OnPostSuccessData) => void
   quote?: AppBskyFeedDefs.PostView

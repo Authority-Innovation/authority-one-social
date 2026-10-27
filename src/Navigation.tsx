@@ -80,6 +80,8 @@ import {ChatListScreen} from '#/screens/Chats/ChatListScreen'
 import {GroupManageScreen} from '#/screens/Chats/GroupManageScreen'
 import {NewAgentScreen} from '#/screens/Chats/NewAgentScreen'
 import {NewGroupScreen} from '#/screens/Chats/NewGroupScreen'
+import {CommunityMembersScreen, CommunityScreen} from '#/screens/Community'
+import {applyCommunitiesFlag} from '#/screens/Community/linking'
 import {SharedPreferencesTesterScreen} from '#/screens/E2E/SharedPreferencesTesterScreen'
 import {FindContactsFlowScreen} from '#/screens/FindContactsFlowScreen'
 import {ForYouScreen} from '#/screens/ForYou'
@@ -724,6 +726,16 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
           gestureEnabled: false,
         }}
       />
+      <Stack.Screen
+        name="Community"
+        getComponent={() => CommunityScreen}
+        options={{title: title(msg`Community`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="CommunityMembers"
+        getComponent={() => CommunityMembersScreen}
+        options={{title: title(msg`Community members`), requireAuth: true}}
+      />
     </>
   )
 }
@@ -956,7 +968,7 @@ const LINKING = {
   },
 
   getStateFromPath(path: string) {
-    const [name, params] = router.matchPath(path)
+    const [name, params] = applyCommunitiesFlag(router.matchPath(path))
 
     // Any time we receive a url that starts with `intent/` we want to ignore it here. It will be handled in the
     // intent handler hook. We should check for the trailing slash, because if there isn't one then it isn't a valid

@@ -73,6 +73,8 @@ import {EmbeddingDisabledError} from '#/lib/api/resolve'
 import {useAppState} from '#/lib/appState'
 import {retry} from '#/lib/async/retry'
 import {until} from '#/lib/async/until'
+import {guardComposerPdsWrite} from '#/lib/communities/composerTarget'
+import {resolveTarget} from '#/lib/communities/resolveTarget'
 import {
   IMAGE_SIZE_CONFIG_2K_1MB,
   MAX_DRAFT_GRAPHEME_LENGTH,
@@ -150,12 +152,14 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {
+  COMMUNITIES_ENABLED,
   IS_ANDROID,
   IS_IOS,
   IS_LIQUID_GLASS,
   IS_NATIVE,
   IS_WEB,
   IS_WEB_SAFARI,
+  LOCKED_COMMUNITY,
 } from '#/env'
 import {type Gif} from '#/features/gifPicker/types'
 import {BottomSheetPortalProvider} from '../../../../modules/bottom-sheet'
@@ -187,6 +191,7 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from './state/composer'
+import {submitComposerThread} from './state/submit'
 import {
   NO_VIDEO,
   type NoVideoState,
@@ -291,6 +296,7 @@ type Props = ComposerOpts
 export const ComposePost = ({
   replyTo,
   postAs,
+  target: requestedTarget,
   onPost,
   onPostSuccess,
   quote: initQuote,
@@ -312,6 +318,32 @@ export const ComposePost = ({
   const currentDid = currentAccount!.did
   const {closeComposer} = useComposerControls()
   const {t: l, i18n} = useLingui()
+  // Where this submit goes. A reply inherits its parent's target, a locked
+  // build is pinned to its community, and anything undeterminable is refused.
+  const targetResolution = resolveTarget({
+    requested: requestedTarget,
+    parent: replyTo ? {uri: replyTo.uri, target: replyTo.target} : undefined,
+    lockedCommunityId: LOCKED_COMMUNITY,
+    communitiesEnabled: COMMUNITIES_ENABLED,
+  })
+  const target = targetResolution.ok ? targetResolution.target : undefined
+  const targetRefusal = targetResolution.ok
+    ? undefined
+    : targetResolution.error.code === 'unknown-parent-target'
+      ? l`We couldn’t tell where this reply belongs, so it can’t be sent.`
+      : l`This post can’t be published here.`
+  // Members/paid community content must never reach the PDS: drafts, bsky
+  // video upload and the PDS publish path all refuse with this message. An
+  // unresolved target is refused first: the guard treats undefined as the
+  // profile default, so it must not see an unresolved target as "allowed".
+  const pdsWriteDecision = guardComposerPdsWrite(target)
+  const pdsWriteRefusal =
+    targetRefusal ??
+    (pdsWriteDecision.allowed
+      ? undefined
+      : pdsWriteDecision.reason === 'members-write-not-available'
+        ? l`This isn’t available in members-only communities yet.`
+        : l`This post can’t be published here.`)
   const requireAltTextEnabled = useRequireAltTextEnabled()
   const langPrefs = useLanguagePrefs()
   const setLangPrefs = useLanguagePrefsApi()
@@ -535,6 +567,11 @@ export const ComposePost = ({
 
   const selectVideo = useCallback(
     (postId: string, asset: ImagePickerAsset) => {
+      // The bsky video service writes the uploaded blob into the PDS.
+      if (pdsWriteRefusal) {
+        Toast.show(pdsWriteRefusal, {type: 'warning'})
+        return
+      }
       const abortController = new AbortController()
       composerDispatch({
         type: 'update_post',
@@ -563,7 +600,7 @@ export const ComposePost = ({
         i18n,
       )
     },
-    [i18n, agent, currentDid, composerDispatch],
+    [i18n, agent, currentDid, composerDispatch, pdsWriteRefusal],
   )
 
   const onInitVideo = useNonReactiveCallback(() => {
@@ -812,6 +849,11 @@ export const ComposePost = ({
 
   const handleSaveDraft = useCallback(async () => {
     setError('')
+    // Server-side drafts are stored via the PDS, so they are refused too.
+    if (pdsWriteRefusal) {
+      setError(pdsWriteRefusal)
+      return
+    }
     if (!validateDraftTextOrError()) {
       return
     }
@@ -854,6 +896,7 @@ export const ComposePost = ({
     ax,
     validateDraftTextOrError,
     getDraftSaveError,
+    pdsWriteRefusal,
   ])
 
   // Save without closing - for use by DraftsButton
@@ -861,6 +904,10 @@ export const ComposePost = ({
     success: boolean
   }> => {
     setError('')
+    if (pdsWriteRefusal) {
+      setError(pdsWriteRefusal)
+      return {success: false}
+    }
     if (!validateDraftTextOrError()) {
       return {success: false}
     }
@@ -881,6 +928,7 @@ export const ComposePost = ({
     composerDispatch,
     validateDraftTextOrError,
     getDraftSaveError,
+    pdsWriteRefusal,
   ])
 
   // Handle discard action - fires metric and closes composer
@@ -1098,6 +1146,20 @@ export const ComposePost = ({
       return
     }
 
+    // Before ANY write path (PDS record, PDS blob, or post-as-agent): an
+    // unresolvable target is refused here, with nothing sent.
+    if (!targetResolution.ok) {
+      setError(targetRefusal ?? l`This post can’t be published here.`)
+      return
+    }
+    // Members/paid targets have exactly one path: the communities client in
+    // submitComposerThread. Post-as-agent and runtime video are PDS paths.
+    const isCommunityRoute = targetResolution.route === 'communities'
+    if (isCommunityRoute && (postAs || authorityVideo)) {
+      setError(l`This isn’t available in members-only communities yet.`)
+      return
+    }
+
     const {type: emptyType, filteredThread} = getFilteredThread()
 
     if (emptyType === 'non-trailing' && !skipEmptyConfirmedRef.current) {
@@ -1120,6 +1182,39 @@ export const ComposePost = ({
     skipEmptyConfirmedRef.current = false
     setError('')
     setIsPublishing(true)
+
+    if (isCommunityRoute) {
+      try {
+        const result = await submitComposerThread(agent, queryClient, {
+          target: targetResolution.target,
+          thread: filteredThread,
+          replyTo: replyTo?.uri,
+        })
+        if (!result.ok) {
+          setError(
+            'communityError' in result &&
+              result.communityError.kind === 'unsupported-content'
+              ? l`Only text can be posted to members-only communities for now.`
+              : l`Your post couldn’t be sent. Please try again.`,
+          )
+          setIsPublishing(false)
+          return
+        }
+      } catch (e) {
+        logger.error(e as Error, {message: 'Composer: community post failed'})
+        setError(l`Your post couldn’t be sent. Please try again.`)
+        setIsPublishing(false)
+        return
+      }
+      onPost?.(undefined)
+      onClose()
+      setTimeout(() => {
+        Toast.show(replyTo ? l`Your reply was sent` : l`Your post was sent`, {
+          type: 'success',
+        })
+      }, 500)
+      return
+    }
 
     // AUTHORITY ONE VIDEO: only the runtime can build the Cloudflare-Stream-backed
     // video embed, so a video post always talks to the runtime. WHO the post is
@@ -1327,14 +1422,21 @@ export const ComposePost = ({
     let postSuccessData: OnPostSuccessData
     try {
       logger.info(`composer: posting...`)
-      postUri = (
-        await apilib.post(agent, queryClient, {
-          thread: filteredThread,
-          replyTo: replyTo?.uri,
-          onStateChange: setPublishingStage,
-          langs: currentLanguages,
-        })
-      ).uris[0]
+      const result = await submitComposerThread(agent, queryClient, {
+        target,
+        thread: filteredThread,
+        replyTo: replyTo?.uri,
+        onStateChange: setPublishingStage,
+        langs: currentLanguages,
+      })
+      if (!result.ok || result.route !== 'pds') {
+        // Unreachable while the early refusal and the communities branch above
+        // hold; kept so this write path stays guarded on its own.
+        setError(pdsWriteRefusal ?? l`This post can’t be published here.`)
+        setIsPublishing(false)
+        return
+      }
+      postUri = result.uris[0]
 
       /*
        * Wait for app view to have received the post(s). If this fails, it's
@@ -1536,6 +1638,10 @@ export const ComposePost = ({
     getFilteredThread,
     linkQueries,
     authorityVideo,
+    pdsWriteRefusal,
+    target,
+    targetResolution,
+    targetRefusal,
   ])
 
   const handleConfirmSkipEmpty = () => {
