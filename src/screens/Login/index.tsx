@@ -17,6 +17,7 @@ import {SetNewPasswordForm} from '#/screens/Login/SetNewPasswordForm'
 import {atoms as a, native} from '#/alf'
 import {ScreenTransition} from '#/components/ScreenTransition'
 import {useAnalytics} from '#/analytics'
+import {AOSignatureSignInButton} from '#/features/aoSignature'
 import {ChooseAccountForm} from './ChooseAccountForm'
 import * as AuthLayout from './components/AuthLayout'
 import {AuthLayoutNavigationContext} from './components/AuthLayout/context'
@@ -231,6 +232,10 @@ export const Login = ({onPressBack}: {onPressBack: () => void}) => {
                 key={currentForm}
                 direction={screenTransitionDirection}>
                 {content}
+                {currentForm === Forms.Login ||
+                currentForm === Forms.ChooseAccount ? (
+                  <AOSignatureSignInButton />
+                ) : null}
               </ScreenTransition>
             </LayoutAnimationConfig>
           </LoggedOutLayout>

@@ -1,0 +1,33 @@
+{
+  "displayName": "fixture-owner-blueskysocial",
+  "appStoreName": "fixture-owner-blueskysocial",
+  "slug": "fixture-owner-blueskysocial",
+  "scheme": "fixture-owner-blueskysocial",
+  "bundleId": "com.example.fixtureownerblueskysocial",
+  "androidPackage": "com.example.fixtureownerblueskysocial",
+  "easOwner": "blueskysocial",
+  "easProjectId": "00000000-0000-4000-8000-000000000000",
+  "skinId": "",
+  "lockedCommunity": "",
+  "associatedDomains": [],
+  "icons": {
+    "app": "./assets/app-icons/ios_icon_default_next.png",
+    "ios": "./assets/app-icons/ios_icon_default_next.png",
+    "android": "./assets/app-icons/android_icon_default_next.png"
+  },
+  "splash": {
+    "backgroundColor": "#F4F0E8",
+    "darkBackgroundColor": "#110C09"
+  },
+  "legal": {
+    "termsOfService": "https://example.com/terms",
+    "privacyPolicy": "https://example.com/privacy",
+    "support": "https://example.com/support"
+  },
+  "signature": {
+    "schemes": [],
+    "clientIdIos": "",
+    "clientIdAndroid": "",
+    "clientIdWeb": ""
+  }
+}
