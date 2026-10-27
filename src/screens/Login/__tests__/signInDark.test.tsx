@@ -102,7 +102,9 @@ jest.mock('../components/AuthLayout', () => {
 })
 function mockForm(name: string) {
   const {View} = require('react-native')
-  return () => <View testID={name} />
+  return function MockForm() {
+    return <View testID={name} />
+  }
 }
 jest.mock('#/screens/Login/LoginForm', () => ({
   LoginForm: mockForm('loginForm'),
