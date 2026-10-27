@@ -1,7 +1,11 @@
 import {type RouteParams} from '#/lib/routes/types'
 import {COMMUNITIES_ENABLED} from '#/env'
 
-export const COMMUNITY_ROUTE_NAMES = ['Community', 'CommunityMembers']
+export const COMMUNITY_ROUTE_NAMES = [
+  'Community',
+  'CommunityMembers',
+  'CommunityJoin',
+]
 
 /**
  * Applied to every path the app resolves from a deep link. With Communities

@@ -118,4 +118,5 @@ export const router = new Router<AllNavigatableRoutes>({
   // Authority One Communities, dark behind EXPO_PUBLIC_COMMUNITIES_ENABLED
   Community: '/c/:id',
   CommunityMembers: '/c/:id/members',
+  CommunityJoin: '/c/:id/join',
 })

@@ -31,7 +31,7 @@ export function CommunityMembersScreen(
   return null
 }
 
-function useCommunitiesDisabledFallback() {
+export function useCommunitiesDisabledFallback() {
   const navigation = useNavigation<NavigationProp>()
   useEffect(() => {
     if (!COMMUNITIES_ENABLED) {

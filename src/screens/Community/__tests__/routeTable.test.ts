@@ -2,7 +2,7 @@ import {describe, expect, it} from '@jest/globals'
 
 import {router} from '#/routes'
 
-const COMMUNITY_ROUTE_NAMES = ['Community', 'CommunityMembers']
+const COMMUNITY_ROUTE_NAMES = ['Community', 'CommunityMembers', 'CommunityJoin']
 
 describe('route table', () => {
   /*
