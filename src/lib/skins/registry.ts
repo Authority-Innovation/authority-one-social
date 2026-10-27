@@ -1,3 +1,4 @@
+import {afterprideSkin} from '#/lib/skins/afterpride'
 import {authoritySkin} from '#/lib/skins/authority'
 import {hurricanesSkin} from '#/lib/skins/hurricanes'
 import {DEFAULT_SKIN_ID} from '#/lib/skins/ids'
@@ -34,8 +35,15 @@ const defaultSkin: SkinDefinition = {
 
 /**
  * Ordered for display in the picker. `default` first, then brand skins.
+ * `pending` skins (e.g. `afterpride`) are registered but never offered by the
+ * picker -- see `selectableSkins`.
  */
-const SKIN_LIST: SkinDefinition[] = [defaultSkin, authoritySkin, hurricanesSkin]
+const SKIN_LIST: SkinDefinition[] = [
+  defaultSkin,
+  authoritySkin,
+  hurricanesSkin,
+  afterprideSkin,
+]
 
 const SKINS: Record<SkinId, SkinDefinition> = Object.fromEntries(
   SKIN_LIST.map(skin => [skin.id, skin]),

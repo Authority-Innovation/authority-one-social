@@ -1,7 +1,12 @@
 import {Fragment} from 'react'
 import {View} from 'react-native'
 
-import {listSkins, type SkinDefinition, type SkinId} from '#/lib/skins'
+import {
+  listSkins,
+  selectableSkins,
+  type SkinDefinition,
+  type SkinId,
+} from '#/lib/skins'
 import {useSetSkin, useSkinId} from '#/state/skin'
 import {atoms as a, useTheme} from '#/alf'
 import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Check'
@@ -13,7 +18,7 @@ import * as SettingsList from './components/SettingsList'
  * App-theme ("skin") picker. Data-driven from the skin registry (#/lib/skins):
  * every registered skin shows up here with a color swatch and switches the theme
  * live (and, on native, the app icon). Adding a skin requires no change to this
- * file.
+ * file. Skins marked `pending` are filtered out and never offered.
  *
  * Strings here are PLAIN LITERALS on purpose -- brand/skin names are proper
  * nouns and the section copy must not depend on the compiled Lingui catalog
@@ -21,7 +26,8 @@ import * as SettingsList from './components/SettingsList'
  */
 export function SkinPicker() {
   const t = useTheme()
-  const skins = listSkins()
+  // Pending (placeholder) skins are registered but never offered.
+  const skins = selectableSkins(listSkins())
   const activeSkinId = useSkinId()
   const setSkin = useSetSkin()
 

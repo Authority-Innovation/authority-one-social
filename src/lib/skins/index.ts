@@ -8,6 +8,7 @@ export {
   listSkins,
   skinIdFromLegacyThemePack,
 } from '#/lib/skins/registry'
+export {selectableSkins} from '#/lib/skins/selectable'
 export type {
   AlfThemeSet,
   LegacyThemeSet,
