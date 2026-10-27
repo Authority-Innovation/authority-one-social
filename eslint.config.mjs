@@ -294,10 +294,15 @@ export default defineConfig(
   },
 
   /**
-   * bskyogcard, dev-env - server-side, Node.js imports are fine
+   * bskyogcard, dev-env, build-time brand scripts - Node.js imports are fine
    */
   {
-    files: ['bskyogcard/**/*.{js,jsx,ts,tsx}', 'dev-env/**/*.{js,jsx,ts,tsx}'],
+    files: [
+      'bskyogcard/**/*.{js,jsx,ts,tsx}',
+      'dev-env/**/*.{js,jsx,ts,tsx}',
+      'scripts/brand-config/**/*.js',
+      'scripts/lint-brand-config.js',
+    ],
     rules: {
       'import-x/no-nodejs-modules': 'off',
     },
