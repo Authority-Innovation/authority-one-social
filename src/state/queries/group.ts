@@ -11,14 +11,11 @@
  *            NOT the bare PDS and NOT bsky's AppView. Routed through a dedicated
  *            group-AppView service DID (see TODO on `callGroupAppView`).
  *
- * STATUS: interfaces + flow are real; every network call is TODO-marked and the
- * record/response types are hand-written stand-ins.
- *   TODO(codegen): replace the local interfaces below with @atproto/lex-cli
- *   output (ComAuthorityoneGroup*) once the lexicons are wired into codegen.
- *   See groups-lexicon-design.md §7 open question #4.
+ * STATUS: interfaces + flow are real; every network call is TODO-marked. The
+ * record/response types are generated from /lexicons by `pnpm lexgen`
+ * (src/lib/lexicon/generated).
  */
 import {
-  type AppBskyActorDefs,
   type AppBskyFeedDefs,
   AtUri,
   type ComAtprotoRepoStrongRef,
@@ -34,6 +31,10 @@ import {
 
 import {uploadBlob} from '#/lib/api'
 import {until} from '#/lib/async/until'
+import {
+  type ComAuthorityoneGroupDefs,
+  type ComAuthorityoneGroupProfile,
+} from '#/lib/lexicon/generated'
 import {type ImageMeta} from '#/state/gallery'
 import {STALE} from '#/state/queries'
 import {useAgent, useSession} from '#/state/session'
@@ -47,62 +48,16 @@ export const GROUP_POST = 'com.authorityone.group.post'
 export const GROUP_INVITE = 'com.authorityone.group.invite'
 
 // ---------------------------------------------------------------------------
-// Hand-written types — TODO(codegen): replace with generated lexicon types.
+// Types, generated from /lexicons (see scripts/lexgen.mjs). Re-exported under
+// their original names so callers do not change.
 // ---------------------------------------------------------------------------
-export type GroupVisibility =
-  | 'com.authorityone.group.defs#public'
-  | 'com.authorityone.group.defs#unlisted'
-  | 'com.authorityone.group.defs#visPrivate'
-export type AdmissionPolicy =
-  | 'com.authorityone.group.defs#open'
-  | 'com.authorityone.group.defs#request'
-  | 'com.authorityone.group.defs#inviteOnly'
-  | 'com.authorityone.group.defs#closed'
-export type PostingPolicy =
-  | 'com.authorityone.group.defs#postMembers'
-  | 'com.authorityone.group.defs#postAdmins'
-  | 'com.authorityone.group.defs#postAnyone'
-export type GroupRole =
-  | 'com.authorityone.group.defs#member'
-  | 'com.authorityone.group.defs#moderator'
-  | 'com.authorityone.group.defs#admin'
-  | 'com.authorityone.group.defs#owner'
-export type MembershipStatus =
-  | 'com.authorityone.group.defs#active'
-  | 'com.authorityone.group.defs#pending'
-  | 'com.authorityone.group.defs#invited'
-  | 'com.authorityone.group.defs#banned'
-  | 'com.authorityone.group.defs#left'
-
-export interface GroupView {
-  uri: string
-  cid: string
-  creator: string
-  name: string
-  description?: string
-  visibility?: GroupVisibility
-  admissionPolicy?: AdmissionPolicy
-  postingPolicy?: PostingPolicy
-  avatar?: string
-  banner?: string
-  memberCount?: number
-  viewer?: {
-    membership?: string
-    role?: GroupRole
-    status?: MembershipStatus
-    canPost?: boolean
-    canJoin?: boolean
-  }
-  indexedAt: string
-}
-
-export interface MemberView {
-  subject: AppBskyActorDefs.ProfileView
-  membership?: string
-  role: GroupRole
-  status: MembershipStatus
-  createdAt?: string
-}
+export type GroupVisibility = ComAuthorityoneGroupDefs.Visibility
+export type AdmissionPolicy = ComAuthorityoneGroupDefs.AdmissionPolicy
+export type PostingPolicy = ComAuthorityoneGroupDefs.PostingPolicy
+export type GroupRole = ComAuthorityoneGroupDefs.Role
+export type MembershipStatus = ComAuthorityoneGroupDefs.MembershipStatus
+export type GroupView = ComAuthorityoneGroupDefs.GroupView
+export type MemberView = ComAuthorityoneGroupDefs.MemberView
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -223,8 +178,7 @@ export function useCreateGroupMutation() {
     async mutationFn(params) {
       if (!currentAccount) throw new Error('Not signed in')
 
-      // TODO(codegen): type `record` as ComAuthorityoneGroupProfile.Record.
-      const record: Record<string, unknown> = {
+      const record: ComAuthorityoneGroupProfile.Record = {
         $type: GROUP_PROFILE,
         name: params.name,
         description: params.description,
