@@ -114,7 +114,7 @@ export function membersPostToFeedViewPost(
     },
     __source: badge,
   }
-  return view as AppBskyFeedDefs.FeedViewPost
+  return view
 }
 
 export function getMembersPostRef(post: {

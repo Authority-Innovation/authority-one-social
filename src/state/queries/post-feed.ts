@@ -37,18 +37,18 @@ import {aggregateUserInterests} from '#/lib/api/feed/utils'
 import {FeedTuner, type FeedTunerFn} from '#/lib/api/feed-manip'
 import {normalizeLegacyBlobRefs} from '#/lib/api/normalize-blob-refs'
 import {DISCOVER_FEED_URI} from '#/lib/constants'
-import {COMMUNITY_FEED_RQKEY_ROOT} from '#/features/communities/cache'
-import {
-  communityIdFromDescriptor,
-  isCommunityFeedDescriptor,
-} from '#/features/communities/feedDescriptors'
-import {COMMUNITIES_ENABLED} from '#/env'
 import {logger} from '#/logger'
 import {STALE} from '#/state/queries'
 import {DEFAULT_LOGGED_OUT_PREFERENCES} from '#/state/queries/preferences/const'
 import {useAgent, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {KnownError} from '#/view/com/posts/PostFeedErrorMessage'
+import {COMMUNITIES_ENABLED} from '#/env'
+import {COMMUNITY_FEED_RQKEY_ROOT} from '#/features/communities/cache'
+import {
+  communityIdFromDescriptor,
+  isCommunityFeedDescriptor,
+} from '#/features/communities/feedDescriptors'
 import {useFeedTuners} from '../preferences/feed-tuners'
 import {useModerationOpts} from '../preferences/moderation-opts'
 import {usePreferencesQuery} from './preferences'

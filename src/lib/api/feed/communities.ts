@@ -16,12 +16,12 @@
 import {AppBskyFeedDefs, type BskyAgent} from '@atproto/api'
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
+import {logger} from '#/logger'
+import {fetchGroupMemberships, fetchGroupTimeline} from '#/state/queries/group'
 import {
   membersPostToFeedViewPost,
   type ReasonCommunity,
 } from '#/features/communities/membersPost'
-import {logger} from '#/logger'
-import {fetchGroupMemberships, fetchGroupTimeline} from '#/state/queries/group'
 import {FollowingFeedAPI} from './following'
 import {type FeedAPI, type FeedAPIResponse} from './types'
 
@@ -84,7 +84,7 @@ function publicTierFetcher(agent: BskyAgent, source: CommunityFeedSource) {
       cursor,
       limit,
     })
-    const feed = (data.feed ?? []) as unknown as AppBskyFeedDefs.FeedViewPost[]
+    const feed: AppBskyFeedDefs.FeedViewPost[] = data.feed ?? []
     for (const item of feed) {
       // @ts-ignore same side channel as merge.ts `__source`
       item.__source = badge
@@ -297,10 +297,10 @@ export function createCommunityFeedAPI({
 
 /** Used when the feature flag is off: never fetches anything. */
 export class EmptyFeedAPI implements FeedAPI {
-  async peekLatest(): Promise<AppBskyFeedDefs.FeedViewPost> {
-    return undefined as unknown as AppBskyFeedDefs.FeedViewPost
+  peekLatest(): Promise<AppBskyFeedDefs.FeedViewPost> {
+    return Promise.resolve(undefined as unknown as AppBskyFeedDefs.FeedViewPost)
   }
-  async fetch(): Promise<FeedAPIResponse> {
-    return {feed: []}
+  fetch(): Promise<FeedAPIResponse> {
+    return Promise.resolve({feed: []})
   }
 }

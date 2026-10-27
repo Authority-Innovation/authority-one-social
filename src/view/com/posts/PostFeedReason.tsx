@@ -9,11 +9,13 @@ import {createSanitizedDisplayName} from '#/lib/moderation/create-sanitized-disp
 import {makeProfileLink} from '#/lib/routes/links'
 import {useSession} from '#/state/session'
 import {atoms as a, useTheme} from '#/alf'
+import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Pin_Stroke2_Corner0_Rounded as PinIcon} from '#/components/icons/Pin'
 import {Repost_Stroke2_Corner3_Rounded as RepostIcon} from '#/components/icons/Repost'
 import {Link} from '#/components/Link'
 import {ProfileHoverCard} from '#/components/ProfileHoverCard'
 import {Text} from '#/components/Typography'
+import {isReasonCommunity} from '#/features/communities/membersPost'
 import {FeedNameText} from '../util/FeedInfoText'
 
 export function PostFeedReason({
@@ -33,6 +35,30 @@ export function PostFeedReason({
   const {_} = useLingui()
 
   const {currentAccount} = useSession()
+
+  if (isReasonCommunity(reason)) {
+    const name = reason.name || _(msg`a community`)
+    return (
+      <Link
+        style={styles.includeReason}
+        label={_(msg`Go to ${name}`)}
+        to={`/c/${encodeURIComponent(reason.communityId)}`}>
+        {reason.tier === 'members' && (
+          <LockIcon
+            style={[t.atoms.text_contrast_medium, {marginRight: 3}]}
+            width={13}
+            height={13}
+          />
+        )}
+        <Text
+          style={[t.atoms.text_contrast_medium, a.font_medium, a.leading_snug]}
+          numberOfLines={1}
+          emoji>
+          <Trans context="from-community">In {name}</Trans>
+        </Text>
+      </Link>
+    )
+  }
 
   if (isReasonFeedSource(reason)) {
     return (

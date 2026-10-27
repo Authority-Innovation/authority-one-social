@@ -11,15 +11,15 @@ import {
 
 import {AUTHORITY_ONE_SERVICE} from '#/lib/constants'
 import {createPersistedQueryStorage} from '#/lib/persisted-query-storage'
-import {
-  COMMUNITY_FEED_RQKEY_ROOT,
-  CommunityCacheGuard,
-} from '#/features/communities/cache'
 import {Logger} from '#/logger'
 import {listenNetworkConfirmed, listenNetworkLost} from '#/state/events'
 import {isQueryPersisted} from '#/state/queries/util'
 import * as env from '#/env'
 import {IS_NATIVE, IS_WEB} from '#/env'
+import {
+  COMMUNITY_FEED_RQKEY_ROOT,
+  CommunityCacheGuard,
+} from '#/features/communities/cache'
 
 declare global {
   interface Window {
