@@ -41,6 +41,7 @@ export function Composer() {
       <ComposePost
         replyTo={state.replyTo}
         postAs={state.postAs}
+        target={state.target}
         onPost={state.onPost}
         onPostSuccess={state.onPostSuccess}
         quote={state.quote}

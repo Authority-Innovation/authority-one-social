@@ -9,6 +9,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {useQueryClient} from '@tanstack/react-query'
 
+import {type ComposerTarget} from '#/lib/communities/composerTarget'
 import {useNonReactiveCallback} from '#/lib/hooks/useNonReactiveCallback'
 import {postUriToRelativePath, toBskyAppUrl} from '#/lib/strings/url-helpers'
 import {purgeTemporaryImageFiles} from '#/state/gallery'
@@ -61,6 +62,11 @@ export interface ComposerOpts {
   replyTo?: ComposerOptsPostRef
   /** When set, publish AS this owned agent via the runtime (never the session). */
   postAs?: ComposerOptsPostAs
+  /**
+   * Where the post is headed. Defaults to the user's own profile. A members or
+   * paid community target never writes to the PDS (see composerTarget.ts).
+   */
+  target?: ComposerTarget
   onPost?: (postUri: string | undefined) => void
   onPostSuccess?: (data: OnPostSuccessData) => void
   quote?: AppBskyFeedDefs.PostView
