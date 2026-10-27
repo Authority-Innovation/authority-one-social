@@ -29,6 +29,8 @@ interface PostMetaOpts {
   postHref: string
   timestamp: string
   linkDisabled?: boolean
+  /** Members-tier community items have no real profile to preview. */
+  disableHoverCard?: boolean
   showAvatar?: boolean
   avatarSize?: number
   onOpenAuthor?: () => void
@@ -83,7 +85,7 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
         </View>
       )}
       <View style={[a.flex_row, a.align_end, a.flex_shrink]}>
-        <ProfileHoverCard did={author.did}>
+        <ProfileHoverCard did={author.did} disable={opts.disableHoverCard}>
           <View style={[a.flex_row, a.align_end, a.flex_shrink]}>
             <MaybeLinkText
               emoji
@@ -126,7 +128,7 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
                 a.leading_tight,
                 {flexShrink: 10},
               ]}>
-              {NON_BREAKING_SPACE + sanitizeHandle(handle, '@')}
+              {handle ? NON_BREAKING_SPACE + sanitizeHandle(handle, '@') : ''}
             </MaybeLinkText>
           </View>
         </ProfileHoverCard>

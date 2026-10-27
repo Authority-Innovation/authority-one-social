@@ -18,6 +18,12 @@ import {
 } from '@tanstack/react-query'
 
 import {AuthorFeedAPI} from '#/lib/api/feed/author'
+import {
+  CommunitiesMergeFeedAPI,
+  type CommunityFeedSource,
+  createCommunityFeedAPI,
+  EmptyFeedAPI,
+} from '#/lib/api/feed/communities'
 import {CustomFeedAPI} from '#/lib/api/feed/custom'
 import {DemoFeedAPI} from '#/lib/api/feed/demo'
 import {FollowingFeedAPI} from '#/lib/api/feed/following'
@@ -34,9 +40,15 @@ import {DISCOVER_FEED_URI} from '#/lib/constants'
 import {logger} from '#/logger'
 import {STALE} from '#/state/queries'
 import {DEFAULT_LOGGED_OUT_PREFERENCES} from '#/state/queries/preferences/const'
-import {useAgent} from '#/state/session'
+import {useAgent, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {KnownError} from '#/view/com/posts/PostFeedErrorMessage'
+import {COMMUNITIES_ENABLED} from '#/env'
+import {COMMUNITY_FEED_RQKEY_ROOT} from '#/features/communities/cache'
+import {
+  communityIdFromDescriptor,
+  isCommunityFeedDescriptor,
+} from '#/features/communities/feedDescriptors'
 import {useFeedTuners} from '../preferences/feed-tuners'
 import {useModerationOpts} from '../preferences/moderation-opts'
 import {usePreferencesQuery} from './preferences'
@@ -65,17 +77,45 @@ export type FeedDescriptor =
   | `list|${ListUri}`
   | `posts|${PostsUriList}`
   | 'demo'
+  | 'communities'
+  | `community|${string}`
 export interface FeedParams {
   mergeFeedEnabled?: boolean
   mergeFeedSources?: string[]
   feedCacheKey?: 'discover' | 'explore' | undefined
+  /**
+   * `communities` only: the communities to merge. When omitted, the person's
+   * memberships are resolved on the device.
+   */
+  communitySources?: CommunityFeedSource[]
 }
 
 type RQPageParam = {cursor: string | undefined; api: FeedAPI} | undefined
 
 export const RQKEY_ROOT = 'post-feed'
 export function RQKEY(feedDesc: FeedDescriptor, params?: FeedParams) {
-  return [RQKEY_ROOT, feedDesc, params || {}]
+  // Community feeds hold members content, so they get their own root. It is
+  // never persisted and is removed on account switch (features/communities).
+  const root = isCommunityFeedDescriptor(feedDesc)
+    ? COMMUNITY_FEED_RQKEY_ROOT
+    : RQKEY_ROOT
+  return [root, feedDesc, params || {}]
+}
+
+/**
+ * The key usePostFeedQuery uses. Community feeds also carry the account DID,
+ * so two accounts can never share a members-tier cache entry. Prefix matching
+ * means `RQKEY(feedDesc)` still finds it for invalidation.
+ */
+export function feedQueryKey(
+  feedDesc: FeedDescriptor,
+  params: FeedParams | undefined,
+  accountDid: string | undefined,
+) {
+  const key = RQKEY(feedDesc, params)
+  return isCommunityFeedDescriptor(feedDesc)
+    ? [...key, {accountDid: accountDid ?? ''}]
+    : key
 }
 
 export interface FeedPostSliceItem {
@@ -151,6 +191,7 @@ export function usePostFeedQuery(
   // not error. Upstream condition was: following pinned at index 0.
   const enableFollowingToDiscoverFallback = false
   const agent = useAgent()
+  const {currentAccount} = useSession()
   const lastRun = useRef<{
     data: InfiniteData<FeedPageUnselected>
     args: typeof selectArgs
@@ -185,7 +226,7 @@ export function usePostFeedQuery(
   >({
     enabled,
     staleTime: STALE.INFINITY,
-    queryKey: RQKEY(feedDesc, params),
+    queryKey: feedQueryKey(feedDesc, params, currentAccount?.did),
     async queryFn({pageParam}: {pageParam: RQPageParam}) {
       logger.debug('usePostFeedQuery', {feedDesc, cursor: pageParam?.cursor})
       const {api, cursor} = pageParam
@@ -445,13 +486,14 @@ export async function pollLatest(page: FeedPage | undefined) {
   return false
 }
 
-function createApi({
+export function createApi({
   feedDesc,
   feedParams,
   feedTuners,
   userInterests,
   agent,
   enableFollowingToDiscoverFallback,
+  communitiesEnabled = COMMUNITIES_ENABLED,
 }: {
   feedDesc: FeedDescriptor
   feedParams: FeedParams
@@ -459,7 +501,23 @@ function createApi({
   userInterests?: string
   agent: BskyAgent
   enableFollowingToDiscoverFallback: boolean
-}) {
+  communitiesEnabled?: boolean
+}): FeedAPI {
+  if (isCommunityFeedDescriptor(feedDesc)) {
+    if (!communitiesEnabled) {
+      // Not offered with the flag off; a stray descriptor fetches nothing.
+      return new EmptyFeedAPI()
+    }
+    if (feedDesc === 'communities') {
+      return new CommunitiesMergeFeedAPI({
+        agent,
+        sources: feedParams.communitySources,
+      })
+    }
+    const communityId = communityIdFromDescriptor(feedDesc)
+    if (!communityId) return new EmptyFeedAPI()
+    return createCommunityFeedAPI({agent, communityId})
+  }
   if (feedDesc === 'following') {
     if (feedParams.mergeFeedEnabled) {
       return new MergeFeedAPI({

@@ -24,7 +24,11 @@ export function useFeedTuners(feedDesc: FeedDescriptor) {
         FeedTuner.removeMutedThreads,
       ]
     }
-    if (feedDesc === 'following' || feedDesc.startsWith('list')) {
+    if (
+      feedDesc === 'following' ||
+      feedDesc === 'communities' ||
+      feedDesc.startsWith('list')
+    ) {
       const feedTuners = [FeedTuner.removeOrphans]
 
       if (preferences?.feedViewPrefs.hideReposts) {

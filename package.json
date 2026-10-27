@@ -64,6 +64,8 @@
     "lint-native": "swiftlint ./modules && ktlint ./modules",
     "lint-native:fix": "swiftlint --fix ./modules && ktlint --format ./modules",
     "typecheck": "tsgo --project ./tsconfig.check.json",
+    "lexgen": "node scripts/lexgen.mjs",
+    "lexgen:check": "node scripts/lexgen.mjs --check",
     "e2e:mock-server": "cd dev-env && pnpm start",
     "e2e:build": "EXPO_PUBLIC_ENV=e2e NODE_ENV=test RN_SRC_EXT=e2e.ts,e2e.tsx expo run:ios",
     "e2e:build-android": "EXPO_PUBLIC_ENV=e2e NODE_ENV=test RN_SRC_EXT=e2e.ts,e2e.tsx expo run:android",
@@ -255,6 +257,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@atproto/lex-cli": "0.10.16",
     "@babel/core": "^7.26.0",
     "@babel/preset-env": "^7.26.0",
     "@babel/runtime": "^7.26.0",
