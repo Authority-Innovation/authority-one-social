@@ -39,6 +39,7 @@ export default defineConfig(
       '*.e2e.tsx',
       'eslint.config.mjs',
       '.jscodeshift/**',
+      'src/lib/lexicon/generated/**',
     ],
   },
 

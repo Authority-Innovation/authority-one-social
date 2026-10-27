@@ -115,4 +115,7 @@ export const router = new Router<AllNavigatableRoutes>({
   VideoFeed: '/video-feed',
   Bookmarks: '/saved',
   FindContactsFlow: '/find-contacts',
+  // Authority One Communities, dark behind EXPO_PUBLIC_COMMUNITIES_ENABLED
+  Community: '/c/:id',
+  CommunityMembers: '/c/:id/members',
 })
