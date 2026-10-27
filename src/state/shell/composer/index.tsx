@@ -28,6 +28,12 @@ export interface ComposerOptsPostRef {
   author: AppBskyActorDefs.ProfileViewBasic
   embed?: AppBskyFeedDefs.PostView['embed']
   moderation?: ModerationDecision
+  /**
+   * The parent's target. A reply inherits it; when absent, only an
+   * app.bsky.feed.post AT-URI counts as a known (PDS) parent. For a
+   * members/paid parent, `uri` is the runtime post id.
+   */
+  target?: ComposerTarget
 }
 
 export type OnPostSuccessData =
