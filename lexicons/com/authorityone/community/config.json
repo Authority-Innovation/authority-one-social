@@ -1,0 +1,119 @@
+{
+  "lexicon": 1,
+  "id": "com.authorityone.community.config",
+  "description": "[\"draft\": true] DRAFT - shape may change before it is published. Per-community configuration for an Authority One community: access tier, directory listing, header theme, brand, optional agent and moderation routing. Singleton (key: self) in the repo hosting the community's com.authorityone.group.profile. Holds public configuration only: members-tier posts have NO lexicon and never touch a repo.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "literal:self",
+      "record": {
+        "type": "object",
+        "required": ["community", "tier", "consentVersion"],
+        "properties": {
+          "community": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Strong reference to the com.authorityone.group.profile this config applies to."
+          },
+          "tier": {
+            "type": "string",
+            "description": "Access tier of the community.",
+            "knownValues": [
+              "com.authorityone.community.config#public",
+              "com.authorityone.community.config#members",
+              "com.authorityone.community.config#paid"
+            ]
+          },
+          "listing": {
+            "type": "string",
+            "description": "Whether the community appears in the directory. Defaults to listed if absent.",
+            "knownValues": [
+              "com.authorityone.community.config#listed",
+              "com.authorityone.community.config#unlisted"
+            ]
+          },
+          "theme": {"type": "ref", "ref": "#theme"},
+          "brand": {"type": "ref", "ref": "#brand"},
+          "agent": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the community's agent account, if any. Clients label agent content from this DID plus the runtime is_agent flag, never from a handle suffix."
+          },
+          "agentSponsor": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the account accountable for the agent. Required when agent is set (enforced by the AppView; lexicon cannot express conditional requirements)."
+          },
+          "moderation": {"type": "ref", "ref": "#moderation"},
+          "ageNotice": {
+            "type": "string",
+            "maxGraphemes": 300,
+            "maxLength": 3000,
+            "description": "Optional age notice shown before entry."
+          },
+          "consentVersion": {
+            "type": "integer",
+            "description": "Version of the consent wording members agree to. Matches the tenant ledger's wording_version."
+          }
+        }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "description": "Community header theme. Applied to the community header only, never as a whole-app reskin.",
+      "properties": {
+        "primary": {"type": "string", "maxLength": 32, "description": "Primary color, CSS hex (e.g. #RRGGBB)."},
+        "accent": {"type": "string", "maxLength": 32, "description": "Accent color, CSS hex."},
+        "background": {"type": "string", "maxLength": 32, "description": "Background color, CSS hex."},
+        "logo": {
+          "type": "blob",
+          "accept": ["image/png", "image/jpeg"],
+          "maxSize": 1000000
+        },
+        "icon": {
+          "type": "blob",
+          "accept": ["image/png", "image/jpeg"],
+          "maxSize": 1000000
+        },
+        "wordmark": {
+          "type": "string",
+          "maxGraphemes": 64,
+          "maxLength": 640,
+          "description": "Text wordmark shown in the community header."
+        }
+      }
+    },
+    "brand": {
+      "type": "object",
+      "properties": {
+        "displayName": {"type": "string", "maxGraphemes": 64, "maxLength": 640},
+        "legalName": {"type": "string", "maxGraphemes": 128, "maxLength": 1280},
+        "supportUrl": {"type": "string", "format": "uri"},
+        "termsUrl": {"type": "string", "format": "uri"},
+        "privacyUrl": {"type": "string", "format": "uri"}
+      }
+    },
+    "moderation": {
+      "type": "object",
+      "properties": {
+        "labelers": {
+          "type": "array",
+          "maxLength": 20,
+          "items": {"type": "string", "format": "did"},
+          "description": "DIDs of labeler services applied to this community."
+        },
+        "reportTo": {
+          "type": "string",
+          "format": "did",
+          "description": "DID of the moderation service that receives reports for this community."
+        },
+        "rulesUrl": {"type": "string", "format": "uri"}
+      }
+    },
+    "public": {"type": "token", "description": "Readable by anyone."},
+    "members": {"type": "token", "description": "Readable by effective members only. Members content is served off-protocol and never written to a PDS."},
+    "paid": {"type": "token", "description": "Members tier gated by a paid entitlement."},
+    "listed": {"type": "token", "description": "Appears in directory/search."},
+    "unlisted": {"type": "token", "description": "Reachable by direct link only."}
+  }
+}
