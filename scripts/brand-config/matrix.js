@@ -4,7 +4,7 @@
  * is byte-identical to base" test and by `golden.js`, which wrote the golden
  * file from the pre-brand app.config.js.
  */
-const crypto = require('crypto')
+const crypto = require('node:crypto')
 const path = require('path')
 
 const ROOT = path.join(__dirname, '..', '..')

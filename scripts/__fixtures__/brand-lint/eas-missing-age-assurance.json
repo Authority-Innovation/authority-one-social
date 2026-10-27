@@ -1,0 +1,21 @@
+{
+  "build": {
+    "base": {
+      "env": {
+        "EXPO_PUBLIC_BRAND": "authority-one"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "env": {
+        "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1"
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "env": {
+        "EXPO_PUBLIC_ENV": "production"
+      }
+    }
+  }
+}

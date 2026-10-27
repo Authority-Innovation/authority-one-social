@@ -1,0 +1,33 @@
+{
+  "displayName": "fixture-duplicate-bundle-id",
+  "appStoreName": "fixture-duplicate-bundle-id",
+  "slug": "fixture-duplicate-bundle-id",
+  "scheme": "fixture-duplicate-bundle-id",
+  "bundleId": "com.authorityone.app",
+  "androidPackage": "com.example.fixtureduplicatebundleid",
+  "easOwner": "example-owner",
+  "easProjectId": "00000000-0000-4000-8000-000000000000",
+  "skinId": "",
+  "lockedCommunity": "",
+  "associatedDomains": [],
+  "icons": {
+    "app": "./assets/app-icons/ios_icon_default_next.png",
+    "ios": "./assets/app-icons/ios_icon_default_next.png",
+    "android": "./assets/app-icons/android_icon_default_next.png"
+  },
+  "splash": {
+    "backgroundColor": "#F4F0E8",
+    "darkBackgroundColor": "#110C09"
+  },
+  "legal": {
+    "termsOfService": "https://example.com/terms",
+    "privacyPolicy": "https://example.com/privacy",
+    "support": "https://example.com/support"
+  },
+  "signature": {
+    "schemes": [],
+    "clientIdIos": "",
+    "clientIdAndroid": "",
+    "clientIdWeb": ""
+  }
+}

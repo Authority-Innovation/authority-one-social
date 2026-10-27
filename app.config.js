@@ -2,6 +2,10 @@
 const fs = require('fs')
 const path = require('path')
 const pkg = require('./package.json')
+const {
+  loadBrand,
+  resolveBrandName,
+} = require('./scripts/brand-config/loadBrand')
 
 /**
  * Authority One: Fraunces (serif) display face for the AO brand theme's
@@ -124,10 +128,24 @@ function aoSignatureNativeScheme(rawEnv, platform) {
 }
 
 /**
+ * Brand builds: `BRAND` (default `authority-one`) picks
+ * `brands/<BRAND>/brand.json`, which supplies the identity values below (names,
+ * ids, scheme, owner, icons, splash colours, associated domains). The default
+ * brand resolves to exactly the pre-brand config - see
+ * scripts/__tests__/brandConfig.test.js.
+ *
  * @param {import('@expo/config-types').ExpoConfig} _config
  * @returns {{ expo: import('@expo/config-types').ExpoConfig }}
  */
 function appConfig(_config) {
+  return appConfigForBrand(loadBrand(resolveBrandName(process.env)))
+}
+
+/**
+ * @param {import('./scripts/brand-config/loadBrand').Brand} BRAND
+ * @returns {{ expo: import('@expo/config-types').ExpoConfig }}
+ */
+function appConfigForBrand(BRAND) {
   /**
    * App version number. Should be incremented as part of a release cycle.
    */
@@ -182,7 +200,7 @@ function appConfig(_config) {
   // capability), populated for paid builds.
   const ASSOCIATED_DOMAINS = PAID_SIGNING
     ? [
-        'applinks:authority-one.com',
+        ...BRAND.associatedDomains,
         // When testing local services, enter an ngrok (et al) domain here. It must use a standard HTTP/HTTPS port.
         ...(IS_DEV || IS_TESTFLIGHT ? [] : []),
       ]
@@ -196,7 +214,7 @@ function appConfig(_config) {
   // The original fork shipped Apple Icon Composer `.icon` bundles (the Bluesky
   // butterfly); we drop those for the first TestFlight so the One icon is a
   // single, easy-to-replace PNG. Swap ios_icon_default_next.png for final art.
-  const IOS_ICON_FILE = './assets/app-icons/ios_icon_default_next.png'
+  const IOS_ICON_FILE = BRAND.icons.ios
 
   return {
     expo: {
@@ -207,17 +225,19 @@ function appConfig(_config) {
       // Note: CFBundleName is NOT set explicitly, so Expo derives it from this
       // name too ("Authority One"), which is likewise unique. Bundle identifier
       // stays com.authorityone.app (unchanged).
-      name: 'Authority-One',
-      slug: 'one',
+      name: BRAND.appStoreName,
+      slug: BRAND.slug,
       // Signature sign-in (P2b, dark): the runtime bounce's app scheme is
       // registered ONLY when EXPO_PUBLIC_AO_SIGNATURE_SCHEME names an allowed
       // one; unset ⇒ exactly `'one'`, as before.
-      scheme: AO_SIGNATURE_SCHEME ? ['one', AO_SIGNATURE_SCHEME] : 'one',
-      owner: 'blueskysocial',
+      scheme: AO_SIGNATURE_SCHEME
+        ? [BRAND.scheme, AO_SIGNATURE_SCHEME]
+        : BRAND.scheme,
+      owner: BRAND.easOwner,
       runtimeVersion: {
         policy: 'appVersion',
       },
-      icon: './assets/app-icons/ios_icon_default_next.png',
+      icon: BRAND.icons.app,
       userInterfaceStyle: 'automatic',
       primaryColor: '#E8431F', // Authority One brand orange (was Bluesky #006AFF)
       newArchEnabled: false,
@@ -225,7 +245,7 @@ function appConfig(_config) {
         supportsTablet: false,
         // Authority One bundle identifier. Changeable — must match the App ID you
         // register under your Apple Developer team in App Store Connect.
-        bundleIdentifier: 'com.authorityone.app',
+        bundleIdentifier: BRAND.bundleId,
         // Authority One: CFBundleVersion. The first upload defaulted to "1" and
         // was rejected; bumped to "2" so the re-upload isn't treated as a
         // duplicate build. Increment on every subsequent App Store Connect upload.
@@ -247,7 +267,7 @@ function appConfig(_config) {
           // "One" was rejected at upload with ITMS-90129 (name already taken),
           // so this is now the lowercase "authority-one". If Apple rejects this
           // too, it's a one-line swap to try another.
-          CFBundleDisplayName: 'authority-one',
+          CFBundleDisplayName: BRAND.displayName,
           CADisableMinimumFrameDurationOnPhone: true,
           // BACKGROUND LOCATION IS OFF IN CODE (2026-10-23; derive.ts
           // BACKGROUND_LOCATION_SHIPPED = false): it held a 48 h iOS location subscription
@@ -396,14 +416,14 @@ function appConfig(_config) {
         barStyle: 'light-content',
       },
       android: {
-        icon: './assets/app-icons/android_icon_default_next.png',
+        icon: BRAND.icons.android,
         adaptiveIcon: {
           foregroundImage: './assets/icon-android-foreground.png',
           monochromeImage: './assets/icon-android-monochrome.png',
           backgroundColor: '#F4F0E8', // Authority One "paper" cream (windmill mark)
         },
         googleServicesFile: './google-services.json',
-        package: 'com.authorityone.app', // was 'xyz.blueskyweb.app'
+        package: BRAND.androidPackage, // was 'xyz.blueskyweb.app'
         intentFilters: [
           {
             action: 'VIEW',
@@ -558,22 +578,22 @@ function appConfig(_config) {
           {
             ios: {
               enableFullScreenImage_legacy: true, // iOS only
-              backgroundColor: '#F4F0E8', // One "paper" cream (windmill on paper)
+              backgroundColor: BRAND.splash.backgroundColor, // One "paper" cream (windmill on paper)
               image: './assets/splash/splash.png',
               resizeMode: 'cover',
               dark: {
                 enableFullScreenImage_legacy: true, // iOS only
-                backgroundColor: '#110C09', // One warm near-black (dark paper)
+                backgroundColor: BRAND.splash.darkBackgroundColor, // One warm near-black (dark paper)
                 image: './assets/splash/splash-dark.png',
                 resizeMode: 'cover',
               },
             },
             android: {
-              backgroundColor: '#F4F0E8', // One "paper" cream
+              backgroundColor: BRAND.splash.backgroundColor, // One "paper" cream
               image: './assets/splash/android-splash-logo-white.png', // black windmill (on cream)
               imageWidth: 102, // even division of 306px
               dark: {
-                backgroundColor: '#110C09', // One warm near-black
+                backgroundColor: BRAND.splash.darkBackgroundColor, // One warm near-black
                 image: './assets/splash/android-splash-logo-dark.png', // cream windmill (on dark)
                 imageWidth: 102,
               },
@@ -648,7 +668,7 @@ function appConfig(_config) {
           // each extension target doesn't need its own provisioning profile.
           // Re-add it together with the three extension config plugins above to
           // restore the extensions.
-          projectId: '55bd077a-d905-4184-9c7f-94789ba0f302',
+          projectId: BRAND.easProjectId,
         },
       },
     },
@@ -656,4 +676,5 @@ function appConfig(_config) {
 }
 
 appConfig.aoSignatureNativeScheme = aoSignatureNativeScheme
+appConfig.appConfigForBrand = appConfigForBrand
 module.exports = appConfig

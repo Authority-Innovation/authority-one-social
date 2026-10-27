@@ -302,6 +302,7 @@ export default defineConfig(
       'dev-env/**/*.{js,jsx,ts,tsx}',
       'scripts/brand-config/**/*.js',
       'scripts/lint-brand-config.js',
+      'scripts/__tests__/*.js',
     ],
     rules: {
       'import-x/no-nodejs-modules': 'off',
