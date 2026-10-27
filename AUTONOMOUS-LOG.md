@@ -25,3 +25,30 @@
   No deploy, no EAS build, no `wrangler` or `check:bundle` (deny-listed). Not
   reviewed yet: a separate reviewer must review before the PR is marked ready.
 - Full report: `docs/communities/W1-T4-merge-p2b-dark-report.md`.
+
+## 2026-10-28 - Communities W2-T15: brand config + config lint (task 0bf1fa47)
+
+- Branch `communities/w2-brand-config`. Base: `569b3b240` with T1 and T4
+  merged in (`baaf33d39`).
+- Changed:
+  - `brands/authority-one/brand.json` (the default brand).
+  - `app.config.js` reads `brands/$BRAND/brand.json`. `BRAND` unset means
+    `authority-one`. It replaces 16 literals.
+  - `scripts/lint-brand-config.js` (`pnpm lint:brands`), with 5 rules and
+    one fixture per rule.
+  - A test that resolving any brand leaves `src/` byte-identical.
+- Byte compare: the default brand is identical to base in 72 of 72 env cases,
+  as full JSON with nothing masked. The committed golden test masks only the
+  release counters.
+- Tests: +17 (2 suites). Full suite went from 1614 to 1631 passed. The same 2
+  suite failures appear before and after; both are Windows artefacts.
+  Typecheck and ESLint are clean.
+- Verdict: done. Draft PR, awaiting a separate reviewer.
+- NOT done:
+  - No After Pride brand and no locked skin.
+  - No EAS, prebuild or deploy.
+  - No `wrangler` or `check:bundle` (both deny-listed).
+  - `eas.json` was not touched.
+  - `brand.json` `legal`, `signature`, `skinId` and `lockedCommunity` are not
+    read by `app.config.js` yet.
+- Report: `docs/communities/W2-T15-brand-config-report.md`.
