@@ -88,7 +88,6 @@ jest.mock('#/components/Dialog', () => {
   const {useState} = jest.requireActual<typeof import('react')>('react')
   const {View} =
     jest.requireActual<typeof import('react-native')>('react-native')
-  type Control = {isOpen: boolean}
   return {
     useDialogControl: () => {
       const [isOpen, setOpen] = useState(false)
@@ -107,7 +106,7 @@ jest.mock('#/components/Dialog', () => {
       control,
       children,
     }: {
-      control: Control
+      control: {isOpen: boolean}
       children: React.ReactNode
     }) => (control.isOpen ? <>{children}</> : null),
     Handle: () => null,
