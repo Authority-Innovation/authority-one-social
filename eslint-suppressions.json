@@ -1099,9 +1099,6 @@
     "@typescript-eslint/no-explicit-any": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "react-hooks/refs": {
       "count": 1
     }

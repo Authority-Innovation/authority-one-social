@@ -67,14 +67,18 @@ function normalizeGeocode(
  * fires once `startLocationUpdatesAsync` has been called.
  */
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
-  // Not shipped (derive.ts BACKGROUND_LOCATION_SHIPPED): ANY wake — even an error or an
-  // empty batch — stops and unregisters the updates an older build started.
-  if (!BACKGROUND_LOCATION_SHIPPED) {
-    await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(
-      () => {},
-    )
-    return
-  }
+  // Not shipped (derive.ts BACKGROUND_LOCATION_SHIPPED): a background wake does
+  // NOTHING and returns at once: no stop/unregister, no geocode, no network, no
+  // storage. Build 33 called stopLocationUpdatesAsync from INSIDE this callback, which
+  // unregisters (and natively resets) the very task that is still executing, before
+  // expo-task-manager's notifyTaskFinished runs; TestFlight 33 then crashed every ~5
+  // minutes in the background. Stopping happens only in the FOREGROUND, once per
+  // launch (stopRestoredBackgroundUpdatesOnce, from ContextEngineProvider).
+  //
+  // The task stays DEFINED on purpose: an undefined task hits expo-task-manager's
+  // "not defined" path (warn, notifyTaskFinished, then unregisterTaskAsync), which is
+  // still an unregister from a background wake, exactly what this release avoids.
+  if (!BACKGROUND_LOCATION_SHIPPED) return
   if (error) {
     logger.warn('contextEngine: background task error', {
       safeMessage: String(error.message),
@@ -206,6 +210,34 @@ export async function startBackgroundUpdates(): Promise<boolean> {
     })
     return false
   }
+}
+
+let restoredStop: Promise<void> | null = null
+
+/**
+ * Launch migration while background location is not shipped: stop + unregister any
+ * updates an older build started. FOREGROUND ONLY (the provider calls it once the app
+ * is 'active', never from a background launch or from the task callback), at most ONCE
+ * per JS launch, only if updates are actually registered, and never throws.
+ */
+export function stopRestoredBackgroundUpdatesOnce(): Promise<void> {
+  if (!restoredStop) {
+    restoredStop = (async () => {
+      try {
+        const started = await Location.hasStartedLocationUpdatesAsync(
+          BACKGROUND_LOCATION_TASK,
+        )
+        if (started) {
+          await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)
+        }
+      } catch (e) {
+        logger.warn('contextEngine: launch stop of background updates failed', {
+          safeMessage: String(e),
+        })
+      }
+    })()
+  }
+  return restoredStop
 }
 
 export async function stopBackgroundUpdates(): Promise<void> {

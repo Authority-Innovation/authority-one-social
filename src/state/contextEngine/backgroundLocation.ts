@@ -31,3 +31,7 @@ export function stopBackgroundUpdates(): Promise<void> {
 export function isBackgroundUpdatesRunning(): Promise<boolean> {
   return Promise.resolve(false)
 }
+
+export function stopRestoredBackgroundUpdatesOnce(): Promise<void> {
+  return Promise.resolve()
+}

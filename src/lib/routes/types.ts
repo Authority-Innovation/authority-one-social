@@ -157,6 +157,12 @@ export type CommonNavigatorParams = {
   VideoFeed: VideoFeedSourceContext
   Bookmarks: undefined
   FindContactsFlow: undefined
+  // Authority One Communities. `id` = the community id. Dark behind
+  // EXPO_PUBLIC_COMMUNITIES_ENABLED; with it off, links fall back to Home.
+  Community: {id: string}
+  CommunityMembers: {id: string}
+  // `invite` may arrive from an invite link. It never counts as consent.
+  CommunityJoin: {id: string; invite?: string}
 }
 
 export type BottomTabNavigatorParams = CommonNavigatorParams & {
