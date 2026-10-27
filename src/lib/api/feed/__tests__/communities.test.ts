@@ -57,11 +57,13 @@ function membersPost(id: string, createdAt: string) {
  */
 function makeAgent(following: ReturnType<typeof feedPost>[] = []) {
   const touched: string[] = []
-  const getTimeline = jest.fn(async () => ({
-    success: true,
-    headers: {},
-    data: {feed: following, cursor: undefined},
-  }))
+  const getTimeline = jest.fn(() =>
+    Promise.resolve({
+      success: true,
+      headers: {},
+      data: {feed: following, cursor: undefined},
+    }),
+  )
   const agent = new Proxy(
     {getTimeline},
     {
@@ -87,15 +89,17 @@ describe('CommunitiesMergeFeedAPI', () => {
       feedPost('at://did:example:f/app.bsky.feed.post/f1', t(9)),
       feedPost('at://did:example:f/app.bsky.feed.post/f2', t(3)),
     ])
-    mockGetTimeline.mockImplementation(async id => ({
-      ok: true,
-      data: {
-        posts:
-          id === MEMBERS_A
-            ? [membersPost('a1', t(8)), membersPost('a2', t(2))]
-            : [membersPost('b1', t(5))],
-      },
-    }))
+    mockGetTimeline.mockImplementation(id =>
+      Promise.resolve({
+        ok: true,
+        data: {
+          posts:
+            id === MEMBERS_A
+              ? [membersPost('a1', t(8)), membersPost('a2', t(2))]
+              : [membersPost('b1', t(5))],
+        },
+      }),
+    )
     mockGroupTimeline.mockResolvedValue({
       feed: [feedPost('at://did:example:g/app.bsky.feed.post/g1', t(6))],
     })
@@ -118,7 +122,7 @@ describe('CommunitiesMergeFeedAPI', () => {
       'at://did:example:f/app.bsky.feed.post/f2',
       'ao-community://community-a/a2',
     ])
-    const badges = res.feed.map(i => (i as any).__source)
+    const badges = res.feed.map(i => (i as {__source?: unknown}).__source)
     expect(badges).toEqual([
       undefined,
       {
@@ -191,19 +195,24 @@ describe('CommunitiesMergeFeedAPI', () => {
 
   it('pages each source with its own cursor and keeps order across pages', async () => {
     const {agent} = makeAgent()
-    mockGetTimeline.mockImplementation(async (id, cursor) => {
+    mockGetTimeline.mockImplementation((id, cursor) => {
       if (id === MEMBERS_A) {
-        return cursor
-          ? {ok: true, data: {posts: [membersPost('a3', t(1))]}}
-          : {
-              ok: true,
-              data: {
-                posts: [membersPost('a1', t(9)), membersPost('a2', t(7))],
-                cursor: 'a-next',
+        return Promise.resolve(
+          cursor
+            ? {ok: true, data: {posts: [membersPost('a3', t(1))]}}
+            : {
+                ok: true,
+                data: {
+                  posts: [membersPost('a1', t(9)), membersPost('a2', t(7))],
+                  cursor: 'a-next',
+                },
               },
-            }
+        )
       }
-      return {ok: true, data: {posts: [membersPost('b1', t(4))]}}
+      return Promise.resolve({
+        ok: true,
+        data: {posts: [membersPost('b1', t(4))]},
+      })
     })
 
     const api = new CommunitiesMergeFeedAPI({
@@ -255,7 +264,7 @@ describe('CommunitiesMergeFeedAPI', () => {
 
   it('resolves the person’s communities when no sources are given', async () => {
     const {agent} = makeAgent()
-    ;(agent as any).session = {did: 'did:example:viewer'}
+    ;(agent as {session?: {did: string}}).session = {did: 'did:example:viewer'}
     mockListMine.mockResolvedValue({
       ok: true,
       data: [{id: MEMBERS_A, name: 'A'}],

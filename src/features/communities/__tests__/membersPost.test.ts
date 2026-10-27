@@ -49,7 +49,7 @@ describe('membersPostToFeedViewPost', () => {
 
     expect(view.post.uri).toBe('ao-community://community-a/p1')
     expect(isMembersPostUri(view.post.uri)).toBe(true)
-    expect((view as any).__source).toEqual(BADGE)
+    expect((view as {__source?: unknown}).__source).toEqual(BADGE)
     expect(view.post.indexedAt).toBe(POST.createdAt)
     expect((view.post.record as AppBskyFeedPost.Record).text).toBe(POST.body)
 
