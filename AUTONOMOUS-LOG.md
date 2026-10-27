@@ -38,3 +38,13 @@
   - The runtime routes are assumed and still need the server side to match.
   - No `wrangler` or `check:bundle` (deny-listed), and no deploy.
 - **Details:** `docs/communities/W1-T8-communities-client-report.md`
+
+## 2026-10-28 - Communities W2-T10: combined feed adapter (task 0c775985)
+
+- Branch `communities/w2-combined-feed`, base: build line `569b3b240` + T1, T2 and T8 merged with merge commits (`c20cdf753`, `86d248f28`, `43fb2d86e`). Code head `f25848f2d`; this log and the report are in the docs commit that follows.
+- Changed: `communities` / `community|<id>` feed descriptors; `CommunitiesMergeFeedAPI` (`src/lib/api/feed/communities.ts`), which does an on-device reverse-chron merge with one fetch per community, each carrying only its own id; members-tier items mapped to a FeedViewPost view with `ao-community://<id>/<postId>`; one action guard (`src/features/communities/postActionGuard.ts`) applied in PostControls and PostFeedItem; community feeds have their own never-persisted query root with the account DID in the key, removed explicitly on account switch; community badge in PostFeedReason.
+- Cache finding: `src/state/session/` does not reset query roots, but QueryProvider is keyed by DID (new QueryClient per account). Explicit removal was added on top.
+- Tests: +95 (5 suites). Full suite 1479 -> 1574 passed; the same 3 environment suite failures before and after (missing compiled messages, CRLF).
+- Verdict: done, draft PR, awaiting a separate reviewer.
+- NOT done: no switcher UI (T11), no community home or thread (T12/T13), no members media rendering, no members likes (no runtime endpoint), no render test of the members row, no device check. No Cloudflare deploy CLI or check:bundle (deny-listed), no deploy or EAS build, no PDS writes.
+- Report: `docs/communities/W2-T10-combined-feed-report.md`.
