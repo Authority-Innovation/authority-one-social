@@ -52,6 +52,12 @@ import {DiscoverDebug} from '#/components/PostControls/DiscoverDebug'
 import {RichText} from '#/components/RichText'
 import {SubtleHover} from '#/components/SubtleHover'
 import {useAnalytics} from '#/analytics'
+import {isMembersPostUri} from '#/features/communities/membersPost'
+import {
+  doorHref,
+  guardPostAction,
+  isPostActionAllowed,
+} from '#/features/communities/postActionGuard'
 import {useActorStatus} from '#/features/liveNow'
 import * as bsky from '#/types/bsky'
 import {PostFeedReason} from './PostFeedReason'
@@ -173,9 +179,14 @@ let FeedItemInner = ({
   const [hover, setHover] = useState(false)
 
   const [href] = useMemo(() => {
+    // Members-tier items have no at:// uri; opening one goes to the door.
+    const door = doorHref(guardPostAction(post, 'open-thread'))
+    if (door) return [door, undefined]
     const urip = new AtUri(post.uri)
     return [makeProfileLink(post.author, 'post', urip.rkey), urip.rkey]
-  }, [post.uri, post.author])
+  }, [post])
+  const isMembersPost = isMembersPostUri(post.uri)
+  const canOpenAuthor = isPostActionAllowed(post, 'open-author')
   const {sendInteraction, feedSourceInfo, feedDescriptor} =
     useFeedFeedbackContext()
 
@@ -240,6 +251,8 @@ let FeedItemInner = ({
   }
 
   const onBeforePress = () => {
+    // Members-tier ids stay out of interaction and analytics events.
+    if (isMembersPost) return
     sendInteraction({
       item: post.uri,
       event: 'app.bsky.feed.defs#clickthroughItem',
@@ -311,7 +324,9 @@ let FeedItemInner = ({
       ? post.record?.reply?.root?.uri || post.uri
       : undefined
     const isControlledByViewer =
-      rootPostUri && new AtUri(rootPostUri).host === currentAccount?.did
+      rootPostUri &&
+      !isMembersPostUri(rootPostUri) &&
+      new AtUri(rootPostUri).host === currentAccount?.did
     return isControlledByViewer && isPostHiddenByThreadgate
       ? [
           {
@@ -379,6 +394,8 @@ let FeedItemInner = ({
               type={post.author.associated?.labeler ? 'labeler' : 'user'}
               onBeforePress={onOpenAuthor}
               live={live}
+              disableNavigation={!canOpenAuthor}
+              disableHoverCard={!canOpenAuthor}
             />
             {isThreadParent && (
               <View
@@ -411,6 +428,8 @@ let FeedItemInner = ({
               timestamp={post.indexedAt}
               postHref={href}
               onOpenAuthor={onOpenAuthor}
+              linkDisabled={!canOpenAuthor}
+              disableHoverCard={!canOpenAuthor}
             />
             {showReplyTo &&
               (parentAuthor || isParentBlocked || isParentNotFound) && (
@@ -515,7 +534,9 @@ let PostContent = ({
           )}
         </View>
       ) : undefined}
-      {record && <TranslatedPost hideTranslateLink post={post} />}
+      {record && isPostActionAllowed(post, 'translate') && (
+        <TranslatedPost hideTranslateLink post={post} />
+      )}
       {postEmbed ? (
         <View
           style={[

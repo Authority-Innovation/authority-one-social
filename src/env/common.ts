@@ -91,6 +91,22 @@ export const CHAT_PROXY_DID: Did =
   process.env.EXPO_PUBLIC_CHAT_PROXY_DID || 'did:web:api.bsky.chat'
 
 /**
+ * The DID of the Authority One group AppView that `com.authorityone.group.*`
+ * reads are proxied to. No default on purpose: when unset, group reads are
+ * "not available" and are never sent, so they cannot fall through to the PDS
+ * or to the bsky AppView proxy. See `src/state/queries/group.ts`.
+ */
+export const AUTHORITYONE_GROUP_PROXY_DID: string =
+  process.env.EXPO_PUBLIC_AUTHORITYONE_GROUP_PROXY_DID || ''
+
+/**
+ * The service id the group AppView publishes in its DID document, i.e. the
+ * fragment of the `atproto-proxy` header (`<did>#<service id>`).
+ */
+export const AUTHORITYONE_GROUP_SERVICE_ID: string =
+  process.env.EXPO_PUBLIC_AUTHORITYONE_GROUP_SERVICE_ID || 'authority_one_group'
+
+/**
  * Disables the age assurance access gate: signed-in users always get full
  * access and never see the birthdate/verification interstitial. Intended for
  * self-hosted deployments whose AppView serves no region config and whose

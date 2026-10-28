@@ -16,6 +16,10 @@ import {listenNetworkConfirmed, listenNetworkLost} from '#/state/events'
 import {isQueryPersisted} from '#/state/queries/util'
 import * as env from '#/env'
 import {IS_NATIVE, IS_WEB} from '#/env'
+import {
+  COMMUNITY_FEED_RQKEY_ROOT,
+  CommunityCacheGuard,
+} from '#/features/communities/cache'
 
 declare global {
   interface Window {
@@ -222,6 +226,8 @@ const NEVER_PERSIST_QUERY_ROOTS = new Set<unknown>([
   'post-thread-v2',
   'notification-feed',
   'search-posts',
+  // Members-tier community content stays in memory only.
+  COMMUNITY_FEED_RQKEY_ROOT,
 ])
 
 // Bump to drop every previously persisted query cache on next app load.
@@ -317,6 +323,7 @@ function QueryProviderInner({
     <PersistQueryClientProvider
       client={queryClient}
       persistOptions={persistOptions}>
+      <CommunityCacheGuard accountDid={currentDid} />
       {children}
     </PersistQueryClientProvider>
   )

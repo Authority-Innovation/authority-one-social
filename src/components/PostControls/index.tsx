@@ -8,10 +8,12 @@ import {
 } from '@atproto/api'
 import {plural} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react/macro'
+import {useNavigation} from '@react-navigation/native'
 
 import {CountWheel} from '#/lib/custom-animations/CountWheel'
 import {AnimatedLikeIcon} from '#/lib/custom-animations/LikeIcon'
 import {useOpenComposer} from '#/lib/hooks/useOpenComposer'
+import {type NavigationProp} from '#/lib/routes/types'
 import {type Shadow} from '#/state/cache/types'
 import {useFeedFeedbackContext} from '#/state/feed-feedback'
 import {
@@ -24,11 +26,14 @@ import {
   useProgressGuideControls,
 } from '#/state/shell/progress-guide'
 import {atoms as a, useBreakpoints, useTheme} from '#/alf'
+import {Heart2_Stroke2_Corner0_Rounded as HeartIconOutline} from '#/components/icons/Heart2'
 import {Reply as Bubble} from '#/components/icons/Reply'
 import {useFormatPostStatCount} from '#/components/PostControls/util'
 import * as Skele from '#/components/Skeleton'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
+import {isMembersPostUri} from '#/features/communities/membersPost'
+import {guardPostAction} from '#/features/communities/postActionGuard'
 import {BookmarkButton} from './BookmarkButton'
 import {
   PostControlButton,
@@ -39,23 +44,7 @@ import {PostMenuButton} from './PostMenu'
 import {RepostButton} from './RepostButton'
 import {ShareMenuButton} from './ShareMenu'
 
-let PostControls = ({
-  big,
-  post,
-  record,
-  richText,
-  feedContext,
-  reqId,
-  style,
-  onPressReply,
-  onPostReply,
-  logContext,
-  threadgateRecord,
-  onShowLess,
-  viaRepost,
-  variant,
-  forceGoogleTranslate = false,
-}: {
+type PostControlsProps = {
   big?: boolean
   post: Shadow<AppBskyFeedDefs.PostView>
   record: AppBskyFeedPost.Record
@@ -71,7 +60,128 @@ let PostControls = ({
   viaRepost?: {uri: string; cid: string}
   variant?: 'compact' | 'normal' | 'large'
   forceGoogleTranslate?: boolean
-}): React.ReactNode => {
+}
+
+let PostControls = (props: PostControlsProps): React.ReactNode => {
+  // Members-tier items are not atproto records. None of the record-backed
+  // controls below may run for them (see postActionGuard.ts).
+  if (isMembersPostUri(props.post.uri)) {
+    return (
+      <MembersPostControls
+        post={props.post}
+        big={props.big}
+        style={props.style}
+      />
+    )
+  }
+  return <AtprotoPostControls {...props} />
+}
+PostControls = memo(PostControls)
+export {PostControls}
+
+/**
+ * Controls for a members-tier item. Every action goes through
+ * guardPostAction: `door` actions open the community screen, everything else
+ * is shown disabled or not at all. Nothing here calls the agent.
+ */
+function MembersPostControls({
+  post,
+  big,
+  style,
+}: {
+  post: AppBskyFeedDefs.PostView
+  big?: boolean
+  style?: StyleProp<ViewStyle>
+}) {
+  const {t: l} = useLingui()
+  const navigation = useNavigation<NavigationProp>()
+  const formatPostStatCount = useFormatPostStatCount()
+  const reply = guardPostAction(post, 'reply')
+  const like = guardPostAction(post, 'like')
+
+  const onPressReply =
+    reply.kind === 'door'
+      ? () => navigation.navigate('Community', {id: reply.communityId})
+      : undefined
+
+  return (
+    <View
+      style={[a.flex_row, a.align_center, !big && a.pt_2xs, a.gap_md, style]}>
+      <View style={[a.flex_row, a.flex_1, {maxWidth: 320}]}>
+        <View
+          style={[
+            a.flex_1,
+            a.align_start,
+            {marginLeft: big ? -2 : -6},
+            !onPressReply ? {opacity: 0.6} : undefined,
+          ]}>
+          <PostControlButton
+            testID="membersReplyBtn"
+            onPress={onPressReply}
+            disabled={!onPressReply}
+            label={l({
+              message: 'Reply in the community',
+              comment:
+                'Accessibility label for the reply button on a members-only community post. Opens the community.',
+            })}
+            big={big}>
+            <PostControlButtonIcon icon={Bubble} />
+            {typeof post.replyCount !== 'undefined' && post.replyCount > 0 && (
+              <PostControlButtonText>
+                {formatPostStatCount(post.replyCount)}
+              </PostControlButtonText>
+            )}
+          </PostControlButton>
+        </View>
+        <View
+          style={[
+            a.flex_1,
+            a.align_start,
+            like.kind !== 'allow' ? {opacity: 0.6} : undefined,
+          ]}>
+          <PostControlButton
+            testID="membersLikeBtn"
+            big={big}
+            disabled
+            label={l({
+              message: `Likes (${plural(post.likeCount || 0, {
+                one: '# like',
+                other: '# likes',
+              })})`,
+              comment:
+                'Accessibility label for the disabled like count on a members-only community post.',
+            })}>
+            <PostControlButtonIcon icon={HeartIconOutline} />
+            {typeof post.likeCount !== 'undefined' && post.likeCount > 0 && (
+              <PostControlButtonText>
+                {formatPostStatCount(post.likeCount)}
+              </PostControlButtonText>
+            )}
+          </PostControlButton>
+        </View>
+        <View />
+      </View>
+    </View>
+  )
+}
+
+let AtprotoPostControls = ({
+  big,
+  post,
+  record,
+  richText,
+  feedContext,
+  reqId,
+  style,
+  onPressReply,
+  onPostReply,
+  logContext,
+  threadgateRecord,
+  onShowLess,
+  viaRepost,
+  variant,
+  forceGoogleTranslate = false,
+}: PostControlsProps): React.ReactNode => {
   const ax = useAnalytics()
   const t = useTheme()
   const {t: l} = useLingui()
@@ -355,8 +465,7 @@ let PostControls = ({
     </View>
   )
 }
-PostControls = memo(PostControls)
-export {PostControls}
+AtprotoPostControls = memo(AtprotoPostControls)
 
 export function PostControlsSkeleton({
   big,
