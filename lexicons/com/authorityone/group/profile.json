@@ -1,0 +1,70 @@
+{
+  "lexicon": 1,
+  "id": "com.authorityone.group.profile",
+  "description": "Record declaring a group on Authority One Social. The at:// URI of this record is the group's canonical identity. Mirrors app.bsky.graph.list. Lives in the owner's repo.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["name", "createdAt"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxGraphemes": 64,
+            "maxLength": 640,
+            "description": "Display name of the group."
+          },
+          "purpose": {
+            "type": "ref",
+            "ref": "com.authorityone.group.defs#purpose"
+          },
+          "description": {
+            "type": "string",
+            "maxGraphemes": 3000,
+            "maxLength": 30000
+          },
+          "descriptionFacets": {
+            "type": "array",
+            "items": {"type": "ref", "ref": "app.bsky.richtext.facet"}
+          },
+          "visibility": {
+            "type": "ref",
+            "ref": "com.authorityone.group.defs#visibility",
+            "description": "Defaults to public if absent. Who can see/read the group."
+          },
+          "admissionPolicy": {
+            "type": "ref",
+            "ref": "com.authorityone.group.defs#admissionPolicy",
+            "description": "Defaults to open if absent. How a user becomes a member."
+          },
+          "postingPolicy": {
+            "type": "ref",
+            "ref": "com.authorityone.group.defs#postingPolicy",
+            "description": "Defaults to members if absent. Who may post to the timeline."
+          },
+          "avatar": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg"],
+            "maxSize": 1000000
+          },
+          "banner": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg"],
+            "maxSize": 1000000
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the human/agent who created the group. Usually equals the hosting repo DID; recorded explicitly for org-hosted groups."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}
