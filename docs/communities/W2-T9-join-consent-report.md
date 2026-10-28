@@ -26,8 +26,10 @@ The logic file is `consent.ts`, not `joinConsent.ts`. On a case-insensitive file
 ### Behaviour
 
 - **Consent comes first.** `join` is called only from "Agree and join". The button is disabled until the consent box is ticked. `agreeAndJoin` also refuses without consent (`no_consent`), so a second guard sits below the UI.
-- **Consent version.** `join(id, consentVersion)` uses `consentVersion` from the community config (`getCommunity(id)`). If the config does not name one, it falls back to this build's wording version, `'1'`. The footer shows the version being agreed to: "Consent version {v} · saved with your membership."
-- **Being asked again.** The screen does not skip consent for people who are already members. If a later config version shares more, the community home (T12) can send a member back here, and joining again records the new version.
+- **Consent version.** `join(id, consentVersion)` uses `consentVersion` from the community config (`getCommunity(id)`), and only when this build has copy for that version (`SUPPORTED_CONSENT_VERSIONS`, today `['1']`). The footer shows the version being agreed to: "Consent version {v} · saved with your membership." (Changed by fix pass 376c8d0e, see below.)
+- **Unknown version (fail closed).** If the config names a version this build has no copy for, the screen shows "This community needs a newer version of the app." with a "Not now" button. No consent box, no Agree button, no `join` call. `agreeAndJoin` also refuses it (`unsupported_version`).
+- **Missing version.** A null, blank or absent `consentVersion` is not treated as `'1'`. The screen shows the "We couldn’t load this community" state and does not offer join.
+- **Being asked again: not enforced.** This screen does not know which version a member accepted before, so it cannot ask an existing member again when the version moves on. That needs a member accepted version from the runtime door (open question 4).
 - **Agent grant.** The toggle is off by default. `setAgentGrant(id, true)` is called only after a successful join, and only if the toggle is on. It is never called with `false`, never called when the join fails, and never called before the join. If the grant fails, the membership stays and the success state says so.
 - **Invites.** `route.params.invite` is never read. A test opens the screen with `invite` set: the box is unticked, the button is disabled, and neither `join` nor `setAgentGrant` is called.
 - **Flag.** With `EXPO_PUBLIC_COMMUNITIES_ENABLED` off, a deep link to `/c/:id/join` lands on Home (T1 linking). An in-app push renders nothing, goes Home, and never fetches the config.
@@ -53,7 +55,9 @@ How the required tests map:
 | --- | --- |
 | "Agree and join" disabled until ticked | `keeps “Agree and join” disabled until the box is ticked` |
 | No `join` before tick and press | `makes no join call before the box is ticked and the button pressed`, `agreeAndJoin › never calls join without consent` |
-| `join` gets the config's consent version | `joins with the consent version from the community config` (config `'3'` → `join('btb', '3')`) |
+| `join` gets the config's consent version | `joins with the consent version from the community config` (config `'1'` → `join('btb', '1')`) |
+| Unknown version fails closed | `fails closed on a consent version this build has no copy for` (config `'3'`), `agreeAndJoin › never calls join with a version this build has no copy for`, `consentGateFor › is joinable only for a version this build has copy for` |
+| Missing version not joinable | `does not offer join when the config consent version is null / blank / undefined`, `consentVersionFor › … never falls back to 1`, `consentGateFor › is not joinable for a null, blank or undefined version` |
 | Grant not set unless toggle on | `does not set the agent grant when the toggle is left off`, `sets the agent grant after joining when the toggle is on` (also checks order), `does not set the agent grant when the join fails` |
 | Invite link does not call join | `does not call join when opened from an invite link`, `carries an invite as a plain param, nothing more` |
 | Flag off: unreachable | `is unreachable with the flag off: renders nothing and goes Home`, `CommunityJoin route › lands on Home with the flag off` |
@@ -87,13 +91,14 @@ The screen tests mock ALF, Layout, Button, Toggle and Link: their native modules
 | Between Two Beers terms and privacy | "{sponsor} terms and privacy" (link to `termsUrl` or `privacyUrl`) | same, shown only if the config has a URL |
 | Leaving: leave any time; you can export or delete your posts first. | "Leaving" / "Leave any time. You can export or delete your posts first." | same |
 | I've read what joining shares and I agree to the community rules. | same, with a typographic apostrophe | same |
-| Consent version 1 · saved with your membership. | "Consent version {v} · saved with your membership." | same; v comes from config, falling back to 1 |
+| Consent version 1 · saved with your membership. | "Consent version {v} · saved with your membership." | same; v comes from config and must be a version this build has copy for (today only 1) |
 | Agree and join / Not now | same | same |
 | You're in. Welcome to Between Two Beers Listeners. Go to the community. | "You’re in." / "Welcome to {name}." / button "Go to the community" | same |
 
 Added copy that is not in the mockup:
 
 - Load error: "We couldn’t load this community. Please try again." with a "Try again" button.
+- Unknown consent version: "This community needs a newer version of the app." with "Not now".
 - Join error: "Couldn’t join right now. Please try again."
 - Grant failure after a successful join: "{agent} couldn’t be turned on for this community. You can try again from the community."
 
@@ -119,5 +124,24 @@ No new flags.
 1. **Config fields.** T8's `Community` type has no fields for sponsor name, agent display name, rules text, terms or privacy URL, or members-only. The screen reads them as optional extras (`JoinConsentConfig` in `consent.ts`) and falls back to neutral copy without them. The runtime config needs to supply them, or T8's type should add them.
 2. **What `setAgentGrant` means.** T8's doc comment says it controls "the community agent's access to the caller's content". This spec and mockup (d) use it for "Let Bob (the person's own agent) read this community". I followed the spec. The T8 doc comment and the runtime semantics should be reconciled.
 3. **Which personal agent.** `setAgentGrant(id, on)` takes no agent id. The toggle names the person's first owned agent (`useOwnerAgentsQuery`). If someone owns several agents, which one gets the grant is decided by the runtime.
-4. **Re-consent.** The `Community` payload does not include the version the member last accepted. The screen cannot detect "asked again" on its own. T12, or the runtime, needs to compare versions and send the member back here.
+4. **Re-consent (open item for Elliott and the runtime).** The `Community` payload does not include the version the member last accepted, and this branch does not enforce re-consent. The runtime door needs to return a member accepted version (or refuse member access until the current version is accepted). Until then nothing in the app asks an existing member again.
 5. **Consent version type.** The spec says `wording_version` 1, and T8 types `consentVersion` as a string. The screen sends `'1'` as a string. It also accepts a number in the config.
+
+## Fix pass 376c8d0e (review W2-T9, 2026-10-28)
+
+Commit `ff5604bcd` on `coord/fix-w2-t9-join-consent-fail-clos-376c8d0e`, from head `357c755ff`.
+
+- **B1 (version shown vs recorded).** `consent.ts` adds `SUPPORTED_CONSENT_VERSIONS` and `consentGateFor(config)` (`ok` / `missing` / `unsupported`). The screen renders the consent box, footer and Agree button only for `ok`. `unsupported` shows "This community needs a newer version of the app." `agreeAndJoin` refuses an unsupported version as a second guard. The tests that codified the mismatch (config `'3'` joined as `'3'`) now use `'1'`, and a new test checks that `'3'` renders no box or Agree button and makes no `join` call.
+- **M1 (missing version became `'1'`).** `consentVersionFor` returns `null` for null, blank or undefined. The gate maps that to `missing`, and the screen shows the couldn't-load state. Unit and screen tests cover all three.
+- **M2 (re-consent claim).** The `consent.ts` header no longer claims a later version asks again. It and this report name the member accepted version from the door as an open item (question 4).
+
+Tests (Windows, `pnpm test --bail=0` with a git-bash script shell):
+
+| | Suites | Tests |
+| --- | --- | --- |
+| Before (`fcbab086e`, from the report above) | 2 failed, 131 passed, 133 total | 1 failed, 28 todo, 1512 passed, 1541 total |
+| After (`ff5604bcd`) | 2 failed, 131 passed, 133 total | 1 failed, 28 todo, 1519 passed, 1548 total |
+
+The same two pre-existing failures remain, both caused by CRLF line endings in the Windows checkout (`noBackgroundLocationShipped.test.ts`, `withUISceneLifecycle.test.js`). `src/screens/Community` alone: 4 suites, 34 tests, all pass. `pnpm typecheck`: 0 errors. lint-staged (eslint `--fix`, prettier) passed on the commit.
+
+Not verified: no device or simulator run, and no check against a live runtime door.
