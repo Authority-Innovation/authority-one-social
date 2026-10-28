@@ -22,7 +22,7 @@ A brand changes config only. It never changes a file under `src/`
 | `splash.*BackgroundColor`   | `expo-splash-screen` light/dark background, iOS and Android |
 | `associatedDomains`         | iOS associated domains (paid-signing builds only)           |
 | `legal.*`                   | terms, privacy and support URLs (lint requires the first 2) |
-| `signature.schemes`         | Signature bounce schemes the brand may use                  |
+| `signature.schemes`         | Signature schemes the brand declares (not read by the build) |
 | `signature.clientId*`       | Signature client ids; empty while Signature is off          |
 | `skinId`, `lockedCommunity` | reserved for brand builds; empty for the default brand      |
 
@@ -47,4 +47,6 @@ the test pass.
 - every eas build profile sets `EXPO_PUBLIC_DISABLE_AGE_ASSURANCE` explicitly
   (profiles used only as an `extends` parent are skipped)
 - every `signature.schemes` entry is in `AO_SIGNATURE_SCHEMES`
-  (`src/features/aoSignature/config.ts`)
+  (`src/features/aoSignature/config.ts`). `signature.schemes` is a
+  declaration only. The build takes its Signature scheme from
+  `EXPO_PUBLIC_AO_SIGNATURE_SCHEME`, and the lint does not check that.

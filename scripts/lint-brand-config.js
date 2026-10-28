@@ -13,8 +13,10 @@
  *   age-assurance every eas build profile sets EXPO_PUBLIC_DISABLE_AGE_ASSURANCE
  *                 explicitly (directly or through `extends`). Profiles that only
  *                 exist as an `extends` parent are templates and are skipped.
- *   scheme        every Signature scheme a brand lists is in AO_SIGNATURE_SCHEMES
- *                 (src/features/aoSignature/config.ts)
+ *   scheme        every entry in brand.signature.schemes is in AO_SIGNATURE_SCHEMES
+ *                 (src/features/aoSignature/config.ts). signature.schemes is a
+ *                 declaration only: the build takes its Signature scheme from
+ *                 EXPO_PUBLIC_AO_SIGNATURE_SCHEME, which this lint does not read.
  */
 const fs = require('fs')
 const path = require('path')

@@ -36,7 +36,8 @@
     `authority-one`. It replaces 16 literals.
   - `scripts/lint-brand-config.js` (`pnpm lint:brands`), with 5 rules and
     one fixture per rule.
-  - A test that resolving any brand leaves `src/` byte-identical.
+  - A config-only test that resolving a brand config does not touch `src/`
+    (not a build-level check).
 - Byte compare: the default brand is identical to base in 72 of 72 env cases,
   as full JSON with nothing masked. The committed golden test masks only the
   release counters.

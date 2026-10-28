@@ -102,7 +102,7 @@ describe('BRAND selection', () => {
   })
 })
 
-describe('a brand build changes no file under src/', () => {
+describe('resolving a brand config does not touch src/', () => {
   /** @returns {string[]} "relative/path sha256" for every file under src/ */
   function snapshotSrc() {
     /** @type {string[]} */
@@ -125,7 +125,7 @@ describe('a brand build changes no file under src/', () => {
     return out.sort()
   }
 
-  it('resolving every brand config leaves src/ byte-identical', () => {
+  it('appConfigForBrand() writes nothing under src/ (config-only, not a build)', () => {
     const before = snapshotSrc()
     const configs = [
       ...listBrands().map(name => appConfig.appConfigForBrand(loadBrand(name))),

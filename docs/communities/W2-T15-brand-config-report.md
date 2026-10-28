@@ -80,7 +80,7 @@ The default brand resolves byte-identical to the base.
 | `bundle-id`     | iOS bundle ids and Android packages are unique across brands.                                              | `fixture-duplicate-bundle-id`                               |
 | `legal`         | `legal.termsOfService` and `legal.privacyPolicy` are https URLs.                                           | `fixture-missing-legal`                                     |
 | `age-assurance` | Every eas build profile sets `EXPO_PUBLIC_DISABLE_AGE_ASSURANCE`, directly or through `extends`.           | `eas-missing-age-assurance.json`                            |
-| `scheme`        | Each `signature.schemes` entry is in `AO_SIGNATURE_SCHEMES`. The list is read from `src/features/aoSignature/config.ts`, so it has a single source. | `fixture-scheme-not-allowed` |
+| `scheme`        | Each `signature.schemes` entry is in `AO_SIGNATURE_SCHEMES`. The list is read from `src/features/aoSignature/config.ts`, so it has a single source. `signature.schemes` is a declaration only: the build's Signature scheme comes from `EXPO_PUBLIC_AO_SIGNATURE_SCHEME` (`app.config.js` :111, :163), which the lint does not read. The lint does not enforce the build's scheme. | `fixture-scheme-not-allowed` |
 
 The lint passes on the repo: `brand config lint: ok (authority-one)`.
 
@@ -95,9 +95,12 @@ The lint passes on the repo: `brand config lint: ok (authority-one)`.
   - An unknown brand or a path-traversal name is refused.
   - A `BRAND` that disagrees with `EXPO_PUBLIC_BRAND` is refused.
   - A fixture brand's values reach the config.
-  - Resolving every brand (real and fixture) leaves `src/` byte-identical. The
-    test takes a sha256 of the file list under `src/` before and after, and
-    checks that no resolved config points into `src/`.
+  - Resolving a brand config does not touch `src/`. This is a config-only
+    check: it hashes the files under `src/`, calls `appConfigForBrand()` for
+    every brand (real and fixture), hashes again, and checks that no resolved
+    config points into `src/`. `appConfigForBrand()` is a pure function, so the
+    hash comparison cannot fail. It is not the spec's build-level check that a
+    brand build changes no file under `src/`; that is not tested.
 - `scripts/__tests__/lintBrandConfig.test.js` (8 tests):
   - The allow-list is read correctly.
   - The default brand passes.
@@ -152,10 +155,18 @@ Other checks:
 
 ## Assumptions and open questions
 
-1. **Signature scheme rule.** The default brand's app scheme is `one`, which is
-   not in `AO_SIGNATURE_SCHEMES` and must stay `one` for the byte-identical
-   rule. So the lint checks the brand's Signature bounce schemes
-   (`signature.schemes`), not its app scheme. Is that the intended rule?
+1. **Signature scheme rule (open question for Elliott).** The spec (section 4,
+   rule 5) says the brand's scheme must be in `AO_SIGNATURE_SCHEMES`. The
+   default brand's app scheme is `one`, which is not on the allow-list and must
+   stay `one` for byte-identity, so the literal rule cannot pass for the
+   default brand. The build's real Signature scheme comes from
+   `EXPO_PUBLIC_AO_SIGNATURE_SCHEME`, not from the brand. The lint checks only
+   `brand.signature.schemes`, which is a declaration: nothing in the build
+   reads it, and a brand with any scheme can still build. The lint does not
+   enforce the build's scheme. Which should the rule be: (a) the brand's app
+   scheme, which needs an exception for the default brand; (b) the declared
+   `signature.schemes`, as now, declaration only; or (c) the
+   `EXPO_PUBLIC_AO_SIGNATURE_SCHEME` set in each eas profile?
 2. **Age-assurance rule.** `base` in `eas.json` does not set
    `EXPO_PUBLIC_DISABLE_AGE_ASSURANCE`, and every profile that extends it does.
    The lint treats a profile used only as an `extends` parent as a template and
@@ -176,3 +187,16 @@ Other checks:
    `corepack pnpm`, with a temporary shim outside the repo. The install
    postinstall ran `lingui compile`, whose output is gitignored. Nothing was
    extracted or committed.
+
+## Fix pass (review W2-T15, majors 1 and 2)
+
+- **Major 1.** The `scheme` rule is unchanged in code. The lint header,
+  `brands/README.md` and this report now say that `brand.signature.schemes` is
+  a declaration only, and that the lint does not enforce the build's Signature
+  scheme (`EXPO_PUBLIC_AO_SIGNATURE_SCHEME`). The spec conflict is open
+  question 1. The spec itself is Mac-side and not in this repo, so it was not
+  edited here.
+- **Major 2.** The test is renamed to "resolving a brand config does not touch
+  src/". This report and `AUTONOMOUS-LOG.md` now describe it as config-only,
+  not as the spec's build-level check.
+- Minors 3 to 6 are out of scope and unchanged.
