@@ -11,10 +11,12 @@
  * members/paid target is simply refused with a typed reason the UI can render.
  *
  * Public-tier community targets and the user's own profile (including no
- * target at all, which means the profile) may use the PDS write paths. Whether
- * a public target can actually be published is decided by resolveTarget, which
- * refuses it until a community-bound public write path exists, so a public
- * post never lands on the profile.
+ * target at all, which means the profile) may use the PDS write paths. A
+ * public target still cannot be published: the only PDS publish path is the
+ * profile post path, so resolveTarget, gateComposerWrite and
+ * submitComposerThread each refuse it (`public-community-not-available`)
+ * until a community-bound public write path exists. A public post never lands
+ * on the profile.
  *
  * The guard is deliberately NOT behind a feature flag: it is a fail-closed
  * safety check. Undefined means the user's own profile. Null (a target the
@@ -52,6 +54,11 @@ export type ComposerWriteRefusalReason =
   | 'members-write-not-available'
   /** Anything the guard does not recognise. Fails closed. */
   | 'unknown-target'
+  /**
+   * A public-tier community target at the publish layer (submit and write
+   * gate). Never returned by guardComposerPdsWrite, which allows public.
+   */
+  | 'public-community-not-available'
 
 export type ComposerWriteDecision =
   | {allowed: true}
@@ -63,6 +70,37 @@ export type ComposerWriteDecision =
 
 function refuse(reason: ComposerWriteRefusalReason): ComposerWriteDecision {
   return {allowed: false, reason, refusedWrites: GUARDED_PDS_WRITES}
+}
+
+/**
+ * A public-tier community target. There is no community-bound public write
+ * path yet, and the profile post path would drop the community, so the
+ * publish layer refuses it.
+ */
+export function isPublicCommunityTarget(
+  target: ComposerTarget | null | undefined,
+): boolean {
+  return (
+    !!target &&
+    typeof target === 'object' &&
+    target.kind === 'community' &&
+    target.tier === 'public'
+  )
+}
+
+/**
+ * The publish-layer refusal for a public community target. Every PDS write is
+ * refused, because none of them can carry the community.
+ */
+export function refusePublicCommunityTarget(): Extract<
+  ComposerWriteDecision,
+  {allowed: false}
+> {
+  return {
+    allowed: false,
+    reason: 'public-community-not-available',
+    refusedWrites: GUARDED_PDS_WRITES,
+  }
 }
 
 /**

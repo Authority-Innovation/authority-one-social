@@ -7,6 +7,8 @@ import {
   type ComposerTarget,
   type ComposerWriteDecision,
   guardComposerPdsWrite,
+  isPublicCommunityTarget,
+  refusePublicCommunityTarget,
 } from '#/lib/communities/composerTarget'
 import {isWalledTarget} from '#/lib/communities/resolveTarget'
 import {type ThreadDraft} from '#/view/com/composer/state/composer'
@@ -38,11 +40,14 @@ export type SubmitComposerThreadResult =
 /**
  * The composer's publish path for a thread. `target` must already be resolved
  * (see resolveTarget.ts), so replies carry their parent's target. An undefined
- * target is the user's own profile; null (unresolved) is refused. resolveTarget
- * refuses public community targets, so a public post never reaches this
- * function and never lands on the profile.
+ * target is the user's own profile; null (unresolved) is refused.
  *
- * The members-content guard runs first, before anything touches the agent:
+ * A public community target is refused (`public-community-not-available`)
+ * before anything else, even though resolveTarget already refuses it: the PDS
+ * guard allows public, and the only PDS publish path would write a plain
+ * profile post with the community dropped.
+ *
+ * The members-content guard runs next, before anything touches the agent:
  *  - allowed (profile) -> the existing PDS path, unchanged.
  *  - refused because the target is members/paid -> the communities runtime
  *    client, and nothing else. The agent is never handed the thread.
@@ -66,6 +71,9 @@ export async function submitComposerThread(
     onStateChange?: (state: string) => void
   },
 ): Promise<SubmitComposerThreadResult> {
+  if (isPublicCommunityTarget(target)) {
+    return {ok: false, refusal: refusePublicCommunityTarget()}
+  }
   const decision = guardComposerPdsWrite(target)
   if (decision.allowed) {
     const {uris} = await apilib.post(agent, queryClient, {

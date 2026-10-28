@@ -47,6 +47,7 @@ jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
 }))
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
+import * as apilib from '#/lib/api/index'
 import {resolveTarget} from '#/lib/communities/resolveTarget'
 import {submitComposerThread} from '../submit'
 
@@ -331,6 +332,85 @@ describe('submitComposerThread', () => {
       })
     },
   )
+
+  describe('public community target (no public binding yet)', () => {
+    it.each<[string, boolean]>([
+      ['text only', false],
+      ['with an image', true],
+    ])(
+      '%s: refused with public-community-not-available, nothing sent',
+      async (_name, withImage) => {
+        const mocks = makeAgent()
+        const postSpy = jest.spyOn(apilib, 'post')
+        const res = await submitComposerThread(mocks.agent, queryClient, {
+          target: {kind: 'community', id: 'c1', tier: 'public'},
+          thread: makeThread('public post', {withImage}),
+          langs: ['en'],
+        })
+        expect(res).toMatchObject({
+          ok: false,
+          refusal: {allowed: false, reason: 'public-community-not-available'},
+        })
+        // Never becomes a profile post.
+        expect(postSpy).not.toHaveBeenCalled()
+        expect(mockPost).not.toHaveBeenCalled()
+        expect(mockReply).not.toHaveBeenCalled()
+        expectNoPdsWrites(mocks)
+        postSpy.mockRestore()
+      },
+    )
+
+    it('a public reply is refused the same way', async () => {
+      const mocks = makeAgent()
+      const postSpy = jest.spyOn(apilib, 'post')
+      const res = await submitComposerThread(mocks.agent, queryClient, {
+        target: {kind: 'community', id: 'c1', tier: 'public'},
+        thread: makeThread('public reply'),
+        replyTo: 'at://did:plc:other/app.bsky.feed.post/parent',
+      })
+      expect(res).toMatchObject({
+        ok: false,
+        refusal: {reason: 'public-community-not-available'},
+      })
+      expect(postSpy).not.toHaveBeenCalled()
+      expectNoPdsWrites(mocks)
+      postSpy.mockRestore()
+    })
+  })
+
+  describe('apilib.post is reached only by profile targets', () => {
+    it.each<[string, ComposerTarget | undefined]>([
+      ['profile', {kind: 'profile'}],
+      ['undefined', undefined],
+    ])('%s: posts through apilib.post', async (_name, target) => {
+      const mocks = makeAgent()
+      const postSpy = jest.spyOn(apilib, 'post')
+      const res = await submitComposerThread(mocks.agent, queryClient, {
+        target,
+        thread: makeThread('profile post'),
+      })
+      expect(res.ok && res.route).toBe('pds')
+      expect(postSpy).toHaveBeenCalledTimes(1)
+      postSpy.mockRestore()
+    })
+
+    it.each<['members' | 'paid']>([['members'], ['paid']])(
+      '%s: routes to the communities client, never apilib.post',
+      async tier => {
+        const mocks = makeAgent()
+        const postSpy = jest.spyOn(apilib, 'post')
+        const res = await submitComposerThread(mocks.agent, queryClient, {
+          target: {kind: 'community', id: 'c1', tier},
+          thread: makeThread('members post'),
+        })
+        expect(res.ok && res.route).toBe('communities')
+        expect(mockPost).toHaveBeenCalledTimes(1)
+        expect(postSpy).not.toHaveBeenCalled()
+        expectNoPdsWrites(mocks)
+        postSpy.mockRestore()
+      },
+    )
+  })
 
   it('an unrecognised target is refused by the guard, nothing sent', async () => {
     const mocks = makeAgent()

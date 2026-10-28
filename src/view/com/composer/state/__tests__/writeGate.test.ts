@@ -166,18 +166,29 @@ describe('gateComposerWrite', () => {
     }
   })
 
-  it('the PDS guard allows a public community target; resolveTarget is what refuses it', () => {
-    // resolveTarget never produces this resolution (it refuses public with
-    // public-community-not-available), so this is the guard on its own.
+  it('a public target that bypassed resolveTarget is still refused for every action', () => {
+    // resolveTarget never produces this resolution (it refuses public), and
+    // the PDS guard allows public, so this is the gate holding on its own.
     const forged: ResolvedComposerTarget = {
       ok: true,
       target: {kind: 'community', id: 'c1', tier: 'public'},
       route: 'pds',
       locked: false,
     }
-    expect(gateComposerWrite(forged, {kind: 'save-draft'})).toEqual({
-      allowed: true,
-      route: 'pds',
+    for (const action of [...nonPublish, ...publishes]) {
+      expect(gateComposerWrite(forged, action)).toEqual({
+        allowed: false,
+        refusal: {code: 'public-community-not-available'},
+      })
+    }
+    expect(
+      gateComposerWrite(
+        {...forged, route: 'communities'},
+        {kind: 'publish', postAs: false, authorityVideo: false},
+      ),
+    ).toEqual({
+      allowed: false,
+      refusal: {code: 'public-community-not-available'},
     })
   })
 

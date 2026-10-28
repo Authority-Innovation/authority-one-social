@@ -9,12 +9,14 @@
  * Composer wiring can be tested without rendering the Composer.
  *
  * Rule: a members/paid target never reaches a PDS write path. Its only path is
- * a plain publish through the communities runtime client. An unresolved target
- * reaches nothing.
+ * a plain publish through the communities runtime client. A public community
+ * target reaches nothing until a community-bound public write path exists (the
+ * PDS paths would drop the community). An unresolved target reaches nothing.
  */
 import {
   type ComposerWriteRefusalReason,
   guardComposerPdsWrite,
+  isPublicCommunityTarget,
 } from '#/lib/communities/composerTarget'
 import {
   type ComposerTargetErrorCode,
@@ -47,6 +49,10 @@ export function gateComposerWrite(
 ): ComposerWriteGate {
   if (!resolution.ok) {
     return refuse({code: 'unresolved-target', error: resolution.error.code})
+  }
+  // resolveTarget refuses public already; this holds if it is bypassed.
+  if (isPublicCommunityTarget(resolution.target)) {
+    return refuse({code: 'public-community-not-available'})
   }
   // Post-as-agent and runtime video are PDS paths, so a members publish with
   // either is refused by the guard below like any other PDS write.
