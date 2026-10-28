@@ -6,7 +6,14 @@
   },
   "build": {
     "base": {
-      "node": "24.15.0"
+      "node": "24.15.0",
+      "env": {
+        "EXPO_PUBLIC_COMMUNITIES_ENABLED": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
+        "EXPO_PUBLIC_BRAND": "authority-one",
+        "EXPO_PUBLIC_BRAND_SKIN": ""
+      }
     },
     "development": {
       "extends": "base",
@@ -28,7 +35,12 @@
         "EXPO_PUBLIC_APP_CONFIG_URL": "",
         "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
         "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
-        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true",
+        "EXPO_PUBLIC_COMMUNITIES_ENABLED": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
+        "EXPO_PUBLIC_BRAND": "authority-one",
+        "EXPO_PUBLIC_BRAND_SKIN": ""
       }
     },
     "preview": {
@@ -49,7 +61,12 @@
         "EXPO_PUBLIC_APP_CONFIG_URL": "",
         "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
         "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
-        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true",
+        "EXPO_PUBLIC_COMMUNITIES_ENABLED": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
+        "EXPO_PUBLIC_BRAND": "authority-one",
+        "EXPO_PUBLIC_BRAND_SKIN": ""
       }
     },
     "production": {
@@ -76,7 +93,12 @@
         "EXPO_PUBLIC_APP_CONFIG_URL": "",
         "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
         "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
-        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true",
+        "EXPO_PUBLIC_COMMUNITIES_ENABLED": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
+        "EXPO_PUBLIC_BRAND": "authority-one",
+        "EXPO_PUBLIC_BRAND_SKIN": ""
       }
     },
     "production-apk": {
@@ -103,7 +125,12 @@
         "EXPO_PUBLIC_APP_CONFIG_URL": "",
         "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
         "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
-        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true",
+        "EXPO_PUBLIC_COMMUNITIES_ENABLED": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
+        "EXPO_PUBLIC_BRAND": "authority-one",
+        "EXPO_PUBLIC_BRAND_SKIN": ""
       }
     },
     "testflight": {
@@ -129,7 +156,12 @@
         "EXPO_PUBLIC_APP_CONFIG_URL": "",
         "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
         "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
-        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true",
+        "EXPO_PUBLIC_COMMUNITIES_ENABLED": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
+        "EXPO_PUBLIC_BRAND": "authority-one",
+        "EXPO_PUBLIC_BRAND_SKIN": ""
       }
     },
     "testflight-android": {
@@ -156,7 +188,12 @@
         "EXPO_PUBLIC_APP_CONFIG_URL": "",
         "EXPO_PUBLIC_DISABLE_AGE_ASSURANCE": "1",
         "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
-        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true"
+        "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true",
+        "EXPO_PUBLIC_COMMUNITIES_ENABLED": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
+        "EXPO_PUBLIC_BRAND": "authority-one",
+        "EXPO_PUBLIC_BRAND_SKIN": ""
       }
     }
   },

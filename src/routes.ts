@@ -1,4 +1,5 @@
 import {Router} from '#/lib/routes/router'
+import {applyCommunitiesFlag} from '#/screens/Community/linking'
 import {type FlatNavigatorParams} from './lib/routes/types'
 
 type AllNavigatableRoutes = Omit<
@@ -6,7 +7,7 @@ type AllNavigatableRoutes = Omit<
   'NotFound' | 'SharedPreferencesTester'
 >
 
-export const router = new Router<AllNavigatableRoutes>({
+const routes: Record<keyof AllNavigatableRoutes, string | string[]> = {
   Home: ['/', '/download'],
   Search: '/search',
   Feeds: '/feeds',
@@ -115,4 +116,11 @@ export const router = new Router<AllNavigatableRoutes>({
   VideoFeed: '/video-feed',
   Bookmarks: '/saved',
   FindContactsFlow: '/find-contacts',
+  // Authority One Communities, dark behind EXPO_PUBLIC_COMMUNITIES_ENABLED
+  Community: '/c/:id',
+  CommunityMembers: '/c/:id/members',
+}
+
+export const router = new Router<AllNavigatableRoutes>(routes, {
+  resolve: match => applyCommunitiesFlag(match),
 })

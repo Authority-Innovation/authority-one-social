@@ -2,7 +2,20 @@ import {type Route, type RouteParams} from './types'
 
 export class Router<T extends Record<string, any>> {
   routes: [string, Route][] = []
-  constructor(description: Record<keyof T, string | string[]>) {
+  private resolve: (match: [string, RouteParams]) => [string, RouteParams]
+  constructor(
+    description: Record<keyof T, string | string[]>,
+    {
+      resolve = match => match,
+    }: {
+      /**
+       * Rewrites every matchPath result. Lives here, not in the callers, so
+       * no caller can skip it.
+       */
+      resolve?: (match: [string, RouteParams]) => [string, RouteParams]
+    } = {},
+  ) {
+    this.resolve = resolve
     for (const [screen, pattern] of Object.entries(description)) {
       if (typeof pattern === 'string') {
         this.routes.push([screen, createRoute(pattern)])
@@ -33,7 +46,7 @@ export class Router<T extends Record<string, any>> {
         break
       }
     }
-    return [name, params]
+    return this.resolve([name, params])
   }
 }
 
