@@ -5,6 +5,10 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 
+import {
+  assertComposerPdsWrite,
+  type ComposerTarget,
+} from '#/lib/communities/composerTarget'
 import {isNetworkError} from '#/lib/strings/errors'
 import {useAgent} from '#/state/session'
 import {type ComposerState} from '#/view/com/composer/state/composer'
@@ -114,8 +118,11 @@ export async function loadDraftMedia(draft: AppBskyDraftDefs.Draft): Promise<{
  * IMPORTANT: Network operations happen first in mutationFn.
  * Local storage operations (save new media, delete orphaned media) happen in onSuccess.
  * This ensures we don't lose data if the network request fails.
+ *
+ * `target` is required so every caller states where the draft is headed. A
+ * members/paid community target is refused before any server call.
  */
-export function useSaveDraftMutation() {
+export function useSaveDraftMutation({target}: {target: ComposerTarget}) {
   const agent = useAgent()
   const queryClient = useQueryClient()
 
@@ -131,6 +138,12 @@ export function useSaveDraftMutation() {
       localRefPaths: Map<string, string>
       originalLocalRefs: Set<string> | undefined
     }> => {
+      assertComposerPdsWrite(
+        target,
+        existingDraftId
+          ? 'app.bsky.draft.updateDraft'
+          : 'app.bsky.draft.createDraft',
+      )
       // Convert composer state to server draft format
       const {draft, localRefPaths} = await composerStateToDraft(composerState)
 
@@ -218,8 +231,9 @@ export function useSaveDraftMutation() {
 /**
  * Hook to delete a draft.
  * Takes the full draft data to avoid re-fetching for media cleanup.
+ * A members/paid community target is refused before the server call.
  */
-export function useDeleteDraftMutation() {
+export function useDeleteDraftMutation({target}: {target: ComposerTarget}) {
   const agent = useAgent()
   const queryClient = useQueryClient()
 
@@ -230,6 +244,7 @@ export function useDeleteDraftMutation() {
       draftId: string
       draft: AppBskyDraftDefs.Draft
     }) => {
+      assertComposerPdsWrite(target, 'app.bsky.draft.deleteDraft')
       // Delete from server first - if this fails, we keep local media for retry
       await agent.app.bsky.draft.deleteDraft({id: draftId})
     },
@@ -262,8 +277,13 @@ export function useDeleteDraftMutation() {
  * Hook to clean up a draft after it has been published.
  * Deletes the draft from server and all associated local media.
  * Takes draftId and originalLocalRefs from composer state.
+ * A members/paid community target is refused before the server call.
  */
-export function useCleanupPublishedDraftMutation() {
+export function useCleanupPublishedDraftMutation({
+  target,
+}: {
+  target: ComposerTarget
+}) {
   const agent = useAgent()
   const queryClient = useQueryClient()
 
@@ -279,6 +299,7 @@ export function useCleanupPublishedDraftMutation() {
         draftId,
         mediaFileCount: originalLocalRefs.size,
       })
+      assertComposerPdsWrite(target, 'app.bsky.draft.deleteDraft')
       // Delete from server first
       await agent.app.bsky.draft.deleteDraft({id: draftId})
       logger.debug('deleted draft from server', {draftId})

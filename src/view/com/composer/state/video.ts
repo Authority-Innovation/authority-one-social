@@ -4,6 +4,10 @@ import {type I18n} from '@lingui/core'
 import {msg} from '@lingui/core/macro'
 
 import {AbortError} from '#/lib/async/cancelable'
+import {
+  type ComposerTarget,
+  guardComposerPdsWrite,
+} from '#/lib/communities/composerTarget'
 import {VIDEO_MAX_SIZE_MB} from '#/lib/constants'
 import {compressVideo} from '#/lib/media/video/compress'
 import {
@@ -265,7 +269,20 @@ export async function processVideo(
   did: string,
   signal: AbortSignal,
   i18n: I18n,
+  target: ComposerTarget,
 ) {
+  // The bsky video service writes the uploaded blob into the PDS, so a
+  // members/paid target is refused before compression or upload starts.
+  if (!guardComposerPdsWrite(target).allowed) {
+    dispatch({
+      type: 'to_error',
+      error: i18n._(
+        msg`Videos can’t be uploaded to members-only communities yet.`,
+      ),
+      signal,
+    })
+    return
+  }
   let video: CompressedVideo | undefined
   try {
     video = await compressVideo(asset, {
