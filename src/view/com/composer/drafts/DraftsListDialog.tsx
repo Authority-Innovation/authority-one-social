@@ -4,6 +4,10 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
+import {
+  type ComposerTarget,
+  guardComposerPdsWrite,
+} from '#/lib/communities/composerTarget'
 import {useCallOnce} from '#/lib/once'
 import {EmptyState} from '#/view/com/util/EmptyState'
 import {atoms as a, select, useBreakpoints, useTheme, web} from '#/alf'
@@ -22,9 +26,11 @@ import {type DraftSummary} from './state/schema'
 export function DraftsListDialog({
   control,
   onSelectDraft,
+  target,
 }: {
   control: Dialog.DialogControlProps
   onSelectDraft: (draft: DraftSummary) => void
+  target: ComposerTarget
 }) {
   const {_} = useLingui()
   const t = useTheme()
@@ -32,7 +38,10 @@ export function DraftsListDialog({
   const ax = useAnalytics()
   const {data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage} =
     useDraftsQuery()
-  const {mutate: deleteDraft} = useDeleteDraftMutation()
+  const {mutate: deleteDraft} = useDeleteDraftMutation({target})
+  // deleteDraft is a PDS write, so the control is hidden for a refused target
+  // (the mutation refuses it as well).
+  const canDeleteDrafts = guardComposerPdsWrite(target).allowed
 
   const drafts = useMemo(
     () => data?.pages.flatMap(page => page.drafts) ?? [],
@@ -104,12 +113,12 @@ export function DraftsListDialog({
           <DraftItem
             draft={item}
             onSelect={handleSelectDraft}
-            onDelete={handleDeleteDraft}
+            onDelete={canDeleteDrafts ? handleDeleteDraft : undefined}
           />
         </View>
       )
     },
-    [handleSelectDraft, handleDeleteDraft, gtPhone],
+    [handleSelectDraft, handleDeleteDraft, canDeleteDrafts, gtPhone],
   )
 
   const header = useMemo(

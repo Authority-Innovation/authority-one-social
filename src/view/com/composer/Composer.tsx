@@ -74,6 +74,8 @@ import {useAppState} from '#/lib/appState'
 import {retry} from '#/lib/async/retry'
 import {until} from '#/lib/async/until'
 import {
+  assertComposerPdsWrite,
+  type ComposerTarget,
   DEFAULT_COMPOSER_TARGET,
   guardComposerPdsWrite,
 } from '#/lib/communities/composerTarget'
@@ -334,8 +336,10 @@ export const ComposePost = ({
   const emptyPostsPromptControl = Prompt.usePromptControl()
   const skipEmptyConfirmedRef = useRef(false)
   const {mutateAsync: saveDraft, isPending: _isSavingDraft} =
-    useSaveDraftMutation()
-  const {mutate: cleanupPublishedDraft} = useCleanupPublishedDraftMutation()
+    useSaveDraftMutation({target})
+  const {mutate: cleanupPublishedDraft} = useCleanupPublishedDraftMutation({
+    target,
+  })
   const {closeAllDialogs} = useDialogStateControlContext()
   const {closeAllModals} = useModalControls()
   const {data: preferences} = usePreferencesQuery()
@@ -580,9 +584,10 @@ export const ComposePost = ({
         currentDid,
         abortController.signal,
         i18n,
+        target,
       )
     },
-    [i18n, agent, currentDid, composerDispatch, pdsWriteRefusal],
+    [i18n, agent, currentDid, composerDispatch, pdsWriteRefusal, target],
   )
 
   const onInitVideo = useNonReactiveCallback(() => {
@@ -727,6 +732,7 @@ export const ComposePost = ({
           currentDid,
           abortController.signal,
           i18n,
+          target,
         )
       } catch (e) {
         logger.error('Failed to restore video from draft', {
@@ -735,7 +741,7 @@ export const ComposePost = ({
         })
       }
     },
-    [i18n, agent, currentDid, composerDispatch],
+    [i18n, agent, currentDid, composerDispatch, target],
   )
 
   const handleSelectDraft = useCallback(
@@ -1243,6 +1249,9 @@ export const ComposePost = ({
             )
           }
           setPublishingStage(l`Uploading video...`)
+          // Unreachable behind the early refusal; kept so this blob upload
+          // stays guarded on its own.
+          assertComposerPdsWrite(target, 'com.atproto.repo.uploadBlob')
           const {data} = await agent.uploadBlob(new Uint8Array(source.bytes), {
             encoding: source.contentType,
           })
@@ -1749,7 +1758,8 @@ export const ComposePost = ({
             isDirty={composerState.isDirty}
             isEditingDraft={!!composerState.draftId}
             canSaveDraft={allPostsWithinLimit}
-            textLength={thread.posts[0].richtext.text.length}>
+            textLength={thread.posts[0].richtext.text.length}
+            target={target}>
             {missingAltError && <AltTextReminder error={missingAltError} />}
             <ErrorBanner
               error={error}
@@ -2126,6 +2136,7 @@ function ComposerTopBar({
   isEditingDraft,
   canSaveDraft,
   textLength,
+  target,
   topBarAnimatedStyle,
   children,
 }: {
@@ -2145,6 +2156,7 @@ function ComposerTopBar({
   isEditingDraft: boolean
   canSaveDraft: boolean
   textLength: number
+  target: ComposerTarget
   topBarAnimatedStyle: StyleProp<ViewStyle>
   children?: React.ReactNode
 }) {
@@ -2198,6 +2210,7 @@ function ComposerTopBar({
                 isEditingDraft={isEditingDraft}
                 canSaveDraft={canSaveDraft}
                 textLength={textLength}
+                target={target}
               />
             )}
             <Button

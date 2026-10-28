@@ -34,6 +34,7 @@ export const GUARDED_PDS_WRITES = [
   'com.atproto.repo.uploadBlob',
   'app.bsky.draft.createDraft',
   'app.bsky.draft.updateDraft',
+  'app.bsky.draft.deleteDraft',
   'app.bsky.video.uploadVideo',
 ] as const
 
@@ -83,5 +84,36 @@ export function guardComposerPdsWrite(
       }
     default:
       return refuse('unknown-target')
+  }
+}
+
+/**
+ * Thrown by the data-layer write paths (draft mutations, video upload) when
+ * the target is refused. These run before the network call, so a refused
+ * target sends nothing even if a UI-level early return is missing.
+ */
+export class ComposerPdsWriteRefusedError extends Error {
+  readonly reason: ComposerWriteRefusalReason
+  readonly write: GuardedPdsWrite
+
+  constructor(reason: ComposerWriteRefusalReason, write: GuardedPdsWrite) {
+    super(`Composer PDS write refused (${write}): ${reason}`)
+    this.name = 'ComposerPdsWriteRefusedError'
+    this.reason = reason
+    this.write = write
+  }
+}
+
+/**
+ * Throws ComposerPdsWriteRefusedError unless `target` may write to the PDS.
+ * Call immediately before the `write` it names.
+ */
+export function assertComposerPdsWrite(
+  target: ComposerTarget | undefined,
+  write: GuardedPdsWrite,
+): void {
+  const decision = guardComposerPdsWrite(target)
+  if (!decision.allowed) {
+    throw new ComposerPdsWriteRefusedError(decision.reason, write)
   }
 }

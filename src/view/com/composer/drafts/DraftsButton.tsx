@@ -2,6 +2,7 @@ import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 
+import {type ComposerTarget} from '#/lib/communities/composerTarget'
 import {atoms as a} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
@@ -20,6 +21,7 @@ export function DraftsButton({
   isEditingDraft,
   canSaveDraft,
   textLength,
+  target,
 }: {
   onSelectDraft: (draft: DraftSummary) => void
   onSaveDraft: () => Promise<{success: boolean}>
@@ -29,12 +31,13 @@ export function DraftsButton({
   isEditingDraft: boolean
   canSaveDraft: boolean
   textLength: number
+  target: ComposerTarget
 }) {
   const {_} = useLingui()
   const ax = useAnalytics()
   const draftsDialogControl = Dialog.useDialogControl()
   const savePromptControl = Prompt.usePromptControl()
-  const {isPending: isSaving} = useSaveDraftMutation()
+  const {isPending: isSaving} = useSaveDraftMutation({target})
 
   const handlePress = () => {
     if (isEmpty || !isDirty) {
@@ -83,6 +86,7 @@ export function DraftsButton({
       <DraftsListDialog
         control={draftsDialogControl}
         onSelectDraft={onSelectDraft}
+        target={target}
       />
 
       <Prompt.Outer control={savePromptControl}>

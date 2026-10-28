@@ -1,6 +1,8 @@
 import {describe, expect, it} from '@jest/globals'
 
 import {
+  assertComposerPdsWrite,
+  ComposerPdsWriteRefusedError,
   type ComposerTarget,
   DEFAULT_COMPOSER_TARGET,
   guardComposerPdsWrite,
@@ -67,5 +69,59 @@ describe('guardComposerPdsWrite', () => {
         'com.atproto.repo.uploadBlob',
       ]),
     )
+  })
+
+  it('covers every draft endpoint the composer can reach, including delete', () => {
+    // deleteDraft is reachable from the composer via DraftsButton ->
+    // DraftsListDialog -> DraftItem, and after publish via draft cleanup.
+    expect(GUARDED_PDS_WRITES).toEqual(
+      expect.arrayContaining([
+        'app.bsky.draft.createDraft',
+        'app.bsky.draft.updateDraft',
+        'app.bsky.draft.deleteDraft',
+        'app.bsky.video.uploadVideo',
+      ]),
+    )
+  })
+})
+
+describe('assertComposerPdsWrite', () => {
+  it.each<[string, ComposerTarget | undefined]>([
+    ['default', undefined],
+    ['profile', {kind: 'profile'}],
+    ['community public', {kind: 'community', id: 'c1', tier: 'public'}],
+  ])('allows %s', (_name, target) => {
+    expect(() =>
+      assertComposerPdsWrite(target, 'app.bsky.draft.deleteDraft'),
+    ).not.toThrow()
+  })
+
+  it.each<[string, unknown, string]>([
+    [
+      'community members',
+      {kind: 'community', id: 'c1', tier: 'members'},
+      'members-write-not-available',
+    ],
+    [
+      'community paid',
+      {kind: 'community', id: 'c1', tier: 'paid'},
+      'members-write-not-available',
+    ],
+    ['an unknown kind', {kind: 'group'}, 'unknown-target'],
+  ])('throws a typed refusal for %s', (_name, target, reason) => {
+    let thrown: unknown
+    try {
+      assertComposerPdsWrite(
+        target as ComposerTarget,
+        'app.bsky.draft.deleteDraft',
+      )
+    } catch (e) {
+      thrown = e
+    }
+    expect(thrown).toBeInstanceOf(ComposerPdsWriteRefusedError)
+    expect(thrown).toMatchObject({
+      reason,
+      write: 'app.bsky.draft.deleteDraft',
+    })
   })
 })

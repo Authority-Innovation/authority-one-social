@@ -29,7 +29,8 @@ export function DraftItem({
 }: {
   draft: DraftSummary
   onSelect: (draft: DraftSummary) => void
-  onDelete: (draft: DraftSummary) => void
+  /** Omit to hide the delete control, e.g. when the target refuses PDS writes. */
+  onDelete?: (draft: DraftSummary) => void
 }) {
   const {_} = useLingui()
   const t = useTheme()
@@ -58,7 +59,7 @@ export function DraftItem({
   }, [draft])
 
   const handleDelete = useCallback(() => {
-    onDelete(draft)
+    onDelete?.(draft)
   }, [onDelete, draft])
 
   return (
@@ -177,7 +178,8 @@ export function DraftItem({
           </TimeElapsed>
         </View>
 
-        {/* Menu button */}
+        {/* Menu button - its only action is delete */}
+        {onDelete && (
         <View
           style={[
             a.absolute,
@@ -232,16 +234,19 @@ export function DraftItem({
             )}
           </Button>
         </View>
+        )}
       </View>
 
-      <Prompt.Basic
-        control={discardPromptControl}
-        title={_(msg`Discard draft?`)}
-        description={_(msg`This draft will be permanently deleted.`)}
-        onConfirm={handleDelete}
-        confirmButtonCta={_(msg`Discard`)}
-        confirmButtonColor="negative"
-      />
+      {onDelete && (
+        <Prompt.Basic
+          control={discardPromptControl}
+          title={_(msg`Discard draft?`)}
+          description={_(msg`This draft will be permanently deleted.`)}
+          onConfirm={handleDelete}
+          confirmButtonCta={_(msg`Discard`)}
+          confirmButtonColor="negative"
+        />
+      )}
     </>
   )
 }
