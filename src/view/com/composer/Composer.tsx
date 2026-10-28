@@ -74,6 +74,10 @@ import {useAppState} from '#/lib/appState'
 import {retry} from '#/lib/async/retry'
 import {until} from '#/lib/async/until'
 import {
+  DEFAULT_COMPOSER_TARGET,
+  guardComposerPdsWrite,
+} from '#/lib/communities/composerTarget'
+import {
   IMAGE_SIZE_CONFIG_2K_1MB,
   MAX_DRAFT_GRAPHEME_LENGTH,
   MAX_GRAPHEME_LENGTH,
@@ -187,6 +191,7 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from './state/composer'
+import {submitComposerThread} from './state/submit'
 import {
   NO_VIDEO,
   type NoVideoState,
@@ -291,6 +296,7 @@ type Props = ComposerOpts
 export const ComposePost = ({
   replyTo,
   postAs,
+  target = DEFAULT_COMPOSER_TARGET,
   onPost,
   onPostSuccess,
   quote: initQuote,
@@ -312,6 +318,14 @@ export const ComposePost = ({
   const currentDid = currentAccount!.did
   const {closeComposer} = useComposerControls()
   const {t: l, i18n} = useLingui()
+  // Members/paid community content must never reach the PDS. Until the walled
+  // store client exists, every PDS write path below refuses with this message.
+  const pdsWriteDecision = guardComposerPdsWrite(target)
+  const pdsWriteRefusal = pdsWriteDecision.allowed
+    ? undefined
+    : pdsWriteDecision.reason === 'members-write-not-available'
+      ? l`Posting to members-only communities isn’t available yet.`
+      : l`This post can’t be published here.`
   const requireAltTextEnabled = useRequireAltTextEnabled()
   const langPrefs = useLanguagePrefs()
   const setLangPrefs = useLanguagePrefsApi()
@@ -535,6 +549,11 @@ export const ComposePost = ({
 
   const selectVideo = useCallback(
     (postId: string, asset: ImagePickerAsset) => {
+      // The bsky video service writes the uploaded blob into the PDS.
+      if (pdsWriteRefusal) {
+        Toast.show(pdsWriteRefusal, {type: 'warning'})
+        return
+      }
       const abortController = new AbortController()
       composerDispatch({
         type: 'update_post',
@@ -563,7 +582,7 @@ export const ComposePost = ({
         i18n,
       )
     },
-    [i18n, agent, currentDid, composerDispatch],
+    [i18n, agent, currentDid, composerDispatch, pdsWriteRefusal],
   )
 
   const onInitVideo = useNonReactiveCallback(() => {
@@ -812,6 +831,11 @@ export const ComposePost = ({
 
   const handleSaveDraft = useCallback(async () => {
     setError('')
+    // Server-side drafts are stored via the PDS, so they are refused too.
+    if (pdsWriteRefusal) {
+      setError(pdsWriteRefusal)
+      return
+    }
     if (!validateDraftTextOrError()) {
       return
     }
@@ -854,6 +878,7 @@ export const ComposePost = ({
     ax,
     validateDraftTextOrError,
     getDraftSaveError,
+    pdsWriteRefusal,
   ])
 
   // Save without closing - for use by DraftsButton
@@ -861,6 +886,10 @@ export const ComposePost = ({
     success: boolean
   }> => {
     setError('')
+    if (pdsWriteRefusal) {
+      setError(pdsWriteRefusal)
+      return {success: false}
+    }
     if (!validateDraftTextOrError()) {
       return {success: false}
     }
@@ -881,6 +910,7 @@ export const ComposePost = ({
     composerDispatch,
     validateDraftTextOrError,
     getDraftSaveError,
+    pdsWriteRefusal,
   ])
 
   // Handle discard action - fires metric and closes composer
@@ -1095,6 +1125,13 @@ export const ComposePost = ({
     }
 
     if (!canPost) {
+      return
+    }
+
+    // Before ANY write path (PDS record, PDS blob, or post-as-agent): a
+    // members/paid community target is refused here, with nothing sent.
+    if (pdsWriteRefusal) {
+      setError(pdsWriteRefusal)
       return
     }
 
@@ -1327,14 +1364,21 @@ export const ComposePost = ({
     let postSuccessData: OnPostSuccessData
     try {
       logger.info(`composer: posting...`)
-      postUri = (
-        await apilib.post(agent, queryClient, {
-          thread: filteredThread,
-          replyTo: replyTo?.uri,
-          onStateChange: setPublishingStage,
-          langs: currentLanguages,
-        })
-      ).uris[0]
+      const result = await submitComposerThread(agent, queryClient, {
+        target,
+        thread: filteredThread,
+        replyTo: replyTo?.uri,
+        onStateChange: setPublishingStage,
+        langs: currentLanguages,
+      })
+      if (!result.ok) {
+        // Unreachable while the early refusal above holds; kept so this write
+        // path stays guarded on its own.
+        setError(pdsWriteRefusal ?? l`This post can’t be published here.`)
+        setIsPublishing(false)
+        return
+      }
+      postUri = result.uris[0]
 
       /*
        * Wait for app view to have received the post(s). If this fails, it's
@@ -1536,6 +1580,8 @@ export const ComposePost = ({
     getFilteredThread,
     linkQueries,
     authorityVideo,
+    pdsWriteRefusal,
+    target,
   ])
 
   const handleConfirmSkipEmpty = () => {
