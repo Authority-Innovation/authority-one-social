@@ -3,9 +3,9 @@
  * `/c/:id/members`. They render nothing yet; the real community home and
  * members screens replace them in a later task.
  *
- * Deep links are already sent to Home when EXPO_PUBLIC_COMMUNITIES_ENABLED is
- * off (see `./linking.ts`). The guard below covers in-app pushes, e.g. a
- * `/c/:id` link inside a post.
+ * Every path resolved through `router.matchPath` is already sent to Home when
+ * EXPO_PUBLIC_COMMUNITIES_ENABLED is off (see `./linking.ts`). The guard below
+ * is a second line for navigation by route name, which skips matchPath.
  */
 import {useEffect} from 'react'
 import {useNavigation} from '@react-navigation/native'
