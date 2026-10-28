@@ -10,6 +10,10 @@
  * The agent toggle is a separate grant, off by default, for this community
  * only. It is sent after the join succeeds and only when turned on.
  *
+ * Join is offered only when the config names a consent version this build has
+ * copy for (see `./consent.ts`). A missing version shows the load-error state;
+ * an unknown one asks for a newer app. Neither shows the consent box.
+ *
  * Dark behind EXPO_PUBLIC_COMMUNITIES_ENABLED: with it off, deep links land on
  * Home (see `./linking.ts`) and an in-app push falls back to Home here.
  */
@@ -39,11 +43,7 @@ import {InlineLinkText} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
-import {
-  agreeAndJoin,
-  consentVersionFor,
-  type JoinConsentConfig,
-} from './consent'
+import {agreeAndJoin, consentGateFor, type JoinConsentConfig} from './consent'
 import {useCommunitiesDisabledFallback} from './index'
 
 const communityJoinConfigQueryKeyRoot = 'communityJoinConfig'
@@ -95,15 +95,15 @@ function JoinConsent({id}: {id: string}) {
   const [joinFailed, setJoinFailed] = useState(false)
   const [joined, setJoined] = useState<{agentGrantFailed: boolean} | null>(null)
 
-  const consentVersion = consentVersionFor(config)
+  const gate = consentGateFor(config)
 
   const onAgreeAndJoin = async () => {
-    if (!consented || pending) return
+    if (!consented || pending || gate.kind !== 'ok') return
     setPending(true)
     setJoinFailed(false)
     const outcome = await agreeAndJoin({
       id,
-      consentVersion,
+      consentVersion: gate.version,
       consented,
       // Only send a grant the person can see and turned on.
       agentGrant: !!myAgentName && agentGrant,
@@ -144,8 +144,10 @@ function JoinConsent({id}: {id: string}) {
           <View style={[a.align_center, a.p_2xl]}>
             <Loader size="xl" />
           </View>
-        ) : isError || !config ? (
-          <View style={[a.gap_md, a.p_xl, a.align_center]}>
+        ) : isError || !config || gate.kind === 'missing' ? (
+          <View
+            testID="communityJoinLoadError"
+            style={[a.gap_md, a.p_xl, a.align_center]}>
             <Text
               style={[a.text_md, a.text_center, t.atoms.text_contrast_high]}>
               <Trans>We couldn’t load this community. Please try again.</Trans>
@@ -157,6 +159,25 @@ function JoinConsent({id}: {id: string}) {
               size="small">
               <ButtonText>
                 <Trans>Try again</Trans>
+              </ButtonText>
+            </Button>
+          </View>
+        ) : gate.kind === 'unsupported' ? (
+          <View
+            testID="communityJoinNeedsUpdate"
+            style={[a.gap_md, a.p_xl, a.align_center]}>
+            <Text
+              style={[a.text_md, a.text_center, t.atoms.text_contrast_high]}>
+              <Trans>This community needs a newer version of the app.</Trans>
+            </Text>
+            <Button
+              testID="communityJoinNotNowButton"
+              label={l`Not now`}
+              onPress={onNotNow}
+              color="secondary"
+              size="small">
+              <ButtonText>
+                <Trans>Not now</Trans>
               </ButtonText>
             </Button>
           </View>
@@ -259,7 +280,7 @@ function JoinConsent({id}: {id: string}) {
               </Toggle.Item>
               <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
                 <Trans>
-                  Consent version {consentVersion} · saved with your membership.
+                  Consent version {gate.version} · saved with your membership.
                 </Trans>
               </Text>
             </View>

@@ -161,7 +161,7 @@ jest.mock('#/components/icons/Lock', () => ({
 
 import {applyCommunitiesFlag} from '#/screens/Community/linking'
 import {router} from '#/routes'
-import {agreeAndJoin, consentVersionFor} from '../consent'
+import {agreeAndJoin, consentGateFor, consentVersionFor} from '../consent'
 import {CommunityJoinScreen} from '../JoinConsent'
 
 const CONSENT_BOX = 'toggle-community_join_consent'
@@ -175,7 +175,8 @@ const CONFIG = {
   sponsorName: 'Between Two Beers',
   agentName: 'Steve',
   agentDid: 'did:example:agent',
-  consentVersion: '3',
+  // The only version this build has copy for.
+  consentVersion: '1',
   rulesText: 'Be kind. No spoilers before release day.',
   termsUrl: 'https://example.com/terms',
 }
@@ -216,7 +217,7 @@ beforeEach(() => {
   mockGetCommunity.mockResolvedValue({ok: true, data: CONFIG})
   mockJoin.mockResolvedValue({
     ok: true,
-    data: {communityId: 'btb', role: 'member', consentVersion: '3'},
+    data: {communityId: 'btb', role: 'member', consentVersion: '1'},
   })
   mockSetAgentGrant.mockResolvedValue({ok: true, data: {agentGrant: true}})
 })
@@ -243,7 +244,7 @@ describe('CommunityJoinScreen', () => {
     r.getByText(
       'I’ve read what joining shares and I agree to the community rules.',
     )
-    r.getByText('Consent version 3 · saved with your membership.')
+    r.getByText('Consent version 1 · saved with your membership.')
     r.getByText('Agree and join')
     r.getByText('Not now')
   })
@@ -279,12 +280,49 @@ describe('CommunityJoinScreen', () => {
     fireEvent.press(await r.findByTestId(CONSENT_BOX))
     fireEvent.press(r.getByTestId('communityJoinAgreeButton'))
     await waitFor(() => expect(mockJoin).toHaveBeenCalled())
-    expect(mockJoin).toHaveBeenCalledWith('btb', '3')
+    expect(mockJoin).toHaveBeenCalledWith('btb', '1')
     await r.findByText('You’re in.')
     r.getByText('Welcome to Between Two Beers Listeners.')
     fireEvent.press(r.getByTestId('communityJoinGoButton'))
     expect(mockNavigate).toHaveBeenCalledWith('Community', {id: 'btb'})
   })
+
+  it('fails closed on a consent version this build has no copy for', async () => {
+    mockGetCommunity.mockResolvedValue({
+      ok: true,
+      data: {...CONFIG, consentVersion: '3'},
+    })
+    const r = renderScreen()
+    await r.findByText('This community needs a newer version of the app.')
+    expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
+    expect(r.queryByTestId('communityJoinAgreeButton')).toBeNull()
+    expect(r.queryByText(/Consent version/)).toBeNull()
+    expect(r.queryByText('Agree and join')).toBeNull()
+    fireEvent.press(r.getByTestId('communityJoinNotNowButton'))
+    expect(mockGoBack).toHaveBeenCalled()
+    expect(mockJoin).not.toHaveBeenCalled()
+    expect(mockSetAgentGrant).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['null', null],
+    ['blank', '  '],
+    ['undefined', undefined],
+  ])(
+    'does not offer join when the config consent version is %s',
+    async (_label, consentVersion) => {
+      mockGetCommunity.mockResolvedValue({
+        ok: true,
+        data: {...CONFIG, consentVersion},
+      })
+      const r = renderScreen()
+      await r.findByText('We couldn’t load this community. Please try again.')
+      r.getByTestId('communityJoinLoadError')
+      expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
+      expect(r.queryByTestId('communityJoinAgreeButton')).toBeNull()
+      expect(mockJoin).not.toHaveBeenCalled()
+    },
+  )
 
   it('does not set the agent grant when the toggle is left off', async () => {
     const r = renderScreen()
@@ -403,6 +441,16 @@ describe('agreeAndJoin', () => {
     expect(mockSetAgentGrant).not.toHaveBeenCalled()
   })
 
+  it('never calls join with a version this build has no copy for', async () => {
+    const out = await agreeAndJoin(
+      {id: 'btb', consentVersion: '3', consented: true, agentGrant: true},
+      client,
+    )
+    expect(out).toEqual({ok: false, reason: 'unsupported_version'})
+    expect(mockJoin).not.toHaveBeenCalled()
+    expect(mockSetAgentGrant).not.toHaveBeenCalled()
+  })
+
   it('keeps the membership when only the grant fails', async () => {
     mockSetAgentGrant.mockResolvedValue({ok: false, error: {kind: 'network'}})
     const out = await agreeAndJoin(
@@ -414,13 +462,35 @@ describe('agreeAndJoin', () => {
 })
 
 describe('consentVersionFor', () => {
-  it('uses the config version, else this build’s wording version 1', () => {
+  it('uses the config version and never falls back to 1', () => {
     expect(consentVersionFor({consentVersion: '2'})).toBe('2')
     expect(consentVersionFor({consentVersion: 2 as unknown as string})).toBe(
       '2',
     )
-    expect(consentVersionFor({consentVersion: null})).toBe('1')
-    expect(consentVersionFor({consentVersion: '  '})).toBe('1')
-    expect(consentVersionFor(undefined)).toBe('1')
+    expect(consentVersionFor({consentVersion: null})).toBeNull()
+    expect(consentVersionFor({consentVersion: '  '})).toBeNull()
+    expect(consentVersionFor(undefined)).toBeNull()
+  })
+})
+
+describe('consentGateFor', () => {
+  it('is joinable only for a version this build has copy for', () => {
+    expect(consentGateFor({consentVersion: '1'})).toEqual({
+      kind: 'ok',
+      version: '1',
+    })
+    expect(consentGateFor({consentVersion: '3'})).toEqual({
+      kind: 'unsupported',
+      version: '3',
+    })
+  })
+
+  it('is not joinable for a null, blank or undefined version', () => {
+    expect(consentGateFor({consentVersion: null})).toEqual({kind: 'missing'})
+    expect(consentGateFor({consentVersion: '  '})).toEqual({kind: 'missing'})
+    expect(consentGateFor({consentVersion: undefined})).toEqual({
+      kind: 'missing',
+    })
+    expect(consentGateFor(undefined)).toEqual({kind: 'missing'})
   })
 })
