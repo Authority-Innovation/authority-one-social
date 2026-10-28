@@ -65,6 +65,9 @@ export function gateComposerWrite(
   return {allowed: true, route: 'pds'}
 }
 
+type VideoOf<Loaded extends {restoredVideos: Map<number, unknown>}> =
+  Loaded['restoredVideos'] extends Map<number, infer V> ? V : never
+
 /**
  * Loads a draft into the composer only when the target allows it. A refused
  * target loads nothing and restores no video, so no draft video is handed to
@@ -73,9 +76,8 @@ export function gateComposerWrite(
 export async function restoreDraftGuarded<
   Loaded extends {
     posts: {id: string}[]
-    restoredVideos: Map<number, Video>
+    restoredVideos: Map<number, unknown>
   },
-  Video,
 >({
   resolution,
   onRefused,
@@ -87,7 +89,7 @@ export async function restoreDraftGuarded<
   onRefused: (refusal: ComposerWriteGateRefusal) => void
   load: () => Promise<Loaded>
   apply: (loaded: Loaded) => void
-  restoreVideo: (postId: string, video: Video) => void
+  restoreVideo: (postId: string, video: VideoOf<Loaded>) => void
 }): Promise<boolean> {
   const gate = gateComposerWrite(resolution, {kind: 'restore-draft'})
   if (!gate.allowed) {
@@ -98,7 +100,7 @@ export async function restoreDraftGuarded<
   apply(loaded)
   for (const [postIndex, video] of loaded.restoredVideos) {
     const post = loaded.posts[postIndex]
-    if (post) restoreVideo(post.id, video)
+    if (post) restoreVideo(post.id, video as VideoOf<Loaded>)
   }
   return true
 }

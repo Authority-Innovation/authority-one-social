@@ -192,16 +192,16 @@ import {
 } from './state/composer'
 import {submitComposerThread} from './state/submit'
 import {
-  type ComposerWriteGateRefusal,
-  gateComposerWrite,
-  restoreDraftGuarded,
-} from './state/writeGate'
-import {
   NO_VIDEO,
   type NoVideoState,
   processVideo,
   type VideoState,
 } from './state/video'
+import {
+  type ComposerWriteGateRefusal,
+  gateComposerWrite,
+  restoreDraftGuarded,
+} from './state/writeGate'
 import {type TextInputRef} from './text-input/TextInput.types'
 import {getVideoMetadata} from './videos/pickVideo'
 import {clearThumbnailCache} from './videos/VideoTranscodeBackdrop'

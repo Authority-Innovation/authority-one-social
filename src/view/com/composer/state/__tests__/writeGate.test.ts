@@ -2,8 +2,8 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 
 import {type ComposerTarget} from '#/lib/communities/composerTarget'
 import {
-  resolveTarget,
   type ResolvedComposerTarget,
+  resolveTarget,
 } from '#/lib/communities/resolveTarget'
 import {
   type ComposerWriteAction,
