@@ -30,7 +30,7 @@ export function DraftsListDialog({
 }: {
   control: Dialog.DialogControlProps
   onSelectDraft: (draft: DraftSummary) => void
-  target: ComposerTarget
+  target: ComposerTarget | null
 }) {
   const {_} = useLingui()
   const t = useTheme()

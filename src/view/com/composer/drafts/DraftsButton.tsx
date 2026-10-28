@@ -31,7 +31,7 @@ export function DraftsButton({
   isEditingDraft: boolean
   canSaveDraft: boolean
   textLength: number
-  target: ComposerTarget
+  target: ComposerTarget | null
 }) {
   const {_} = useLingui()
   const ax = useAnalytics()

@@ -10,10 +10,13 @@ import {
 } from '#/lib/communities/composerTarget'
 
 describe('guardComposerPdsWrite', () => {
-  it('defaults to the profile target', () => {
+  it('defaults to the profile: no target is allowed', () => {
     expect(DEFAULT_COMPOSER_TARGET).toEqual({kind: 'profile'})
-    expect(guardComposerPdsWrite()).toEqual({allowed: true})
+    expect(guardComposerPdsWrite(DEFAULT_COMPOSER_TARGET)).toEqual({
+      allowed: true,
+    })
     expect(guardComposerPdsWrite(undefined)).toEqual({allowed: true})
+    expect(guardComposerPdsWrite()).toEqual({allowed: true})
   })
 
   it.each<[string, ComposerTarget, boolean, string | undefined]>([

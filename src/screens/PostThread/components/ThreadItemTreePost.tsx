@@ -8,6 +8,7 @@ import {
 } from '@atproto/api'
 import {Trans} from '@lingui/react/macro'
 
+import {feedPostTarget} from '#/lib/communities/feedPostTarget'
 import {MAX_POST_LINES} from '#/lib/constants'
 import {useOpenComposer} from '#/lib/hooks/useOpenComposer'
 import {makeProfileLink} from '#/lib/routes/links'
@@ -304,6 +305,7 @@ const ThreadItemTreePostInner = memo(function ThreadItemTreePostInner({
         embed: post.embed,
         moderation,
         langs: post.record.langs,
+        target: feedPostTarget(post),
       },
       onPostSuccess: onPostSuccess,
       logContext: 'PostReply',

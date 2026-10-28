@@ -12,6 +12,7 @@ import {
 import {useQueryClient} from '@tanstack/react-query'
 
 import {type ReasonFeedSource} from '#/lib/api/feed/types'
+import {feedPostTarget} from '#/lib/communities/feedPostTarget'
 import {MAX_POST_LINES} from '#/lib/constants'
 import {useOpenComposer} from '#/lib/hooks/useOpenComposer'
 import {usePalette} from '#/lib/hooks/usePalette'
@@ -206,6 +207,7 @@ let FeedItemInner = ({
         embed: post.embed,
         moderation,
         langs: record.langs,
+        target: feedPostTarget(post),
       },
       logContext: 'PostReply',
     })

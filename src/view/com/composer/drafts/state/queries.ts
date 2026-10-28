@@ -122,7 +122,7 @@ export async function loadDraftMedia(draft: AppBskyDraftDefs.Draft): Promise<{
  * `target` is required so every caller states where the draft is headed. A
  * members/paid community target is refused before any server call.
  */
-export function useSaveDraftMutation({target}: {target: ComposerTarget}) {
+export function useSaveDraftMutation({target}: {target: ComposerTarget | null}) {
   const agent = useAgent()
   const queryClient = useQueryClient()
 
@@ -233,7 +233,7 @@ export function useSaveDraftMutation({target}: {target: ComposerTarget}) {
  * Takes the full draft data to avoid re-fetching for media cleanup.
  * A members/paid community target is refused before the server call.
  */
-export function useDeleteDraftMutation({target}: {target: ComposerTarget}) {
+export function useDeleteDraftMutation({target}: {target: ComposerTarget | null}) {
   const agent = useAgent()
   const queryClient = useQueryClient()
 
@@ -282,7 +282,7 @@ export function useDeleteDraftMutation({target}: {target: ComposerTarget}) {
 export function useCleanupPublishedDraftMutation({
   target,
 }: {
-  target: ComposerTarget
+  target: ComposerTarget | null
 }) {
   const agent = useAgent()
   const queryClient = useQueryClient()

@@ -269,7 +269,7 @@ export async function processVideo(
   did: string,
   signal: AbortSignal,
   i18n: I18n,
-  target: ComposerTarget,
+  target: ComposerTarget | null,
 ) {
   // The bsky video service writes the uploaded blob into the PDS, so a
   // members/paid target is refused before compression or upload starts.

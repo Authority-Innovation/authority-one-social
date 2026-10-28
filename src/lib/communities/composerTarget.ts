@@ -10,9 +10,16 @@
  * The members write path (a runtime client) is not built yet, so for now a
  * members/paid target is simply refused with a typed reason the UI can render.
  *
+ * Public-tier community targets and the user's own profile (including no
+ * target at all, which means the profile) may use the PDS write paths. Whether
+ * a public target can actually be published is decided by resolveTarget, which
+ * refuses it until a community-bound public write path exists, so a public
+ * post never lands on the profile.
+ *
  * The guard is deliberately NOT behind a feature flag: it is a fail-closed
- * safety check, and nothing sets a community target yet, so it is inert for
- * every existing caller (the default target is the user's own profile).
+ * safety check. Undefined means the user's own profile. Null (a target the
+ * composer could not resolve) and anything else it does not recognise is
+ * refused.
  */
 
 export type CommunityTier = 'public' | 'members' | 'paid'
@@ -63,7 +70,7 @@ function refuse(reason: ComposerWriteRefusalReason): ComposerWriteDecision {
  * Never throws; an unrecognised target is refused rather than allowed.
  */
 export function guardComposerPdsWrite(
-  target: ComposerTarget | undefined = DEFAULT_COMPOSER_TARGET,
+  target: ComposerTarget | null | undefined = DEFAULT_COMPOSER_TARGET,
 ): ComposerWriteDecision {
   if (!target || typeof target !== 'object') {
     return refuse('unknown-target')
@@ -73,7 +80,6 @@ export function guardComposerPdsWrite(
       return {allowed: true}
     case 'community':
       switch (target.tier) {
-        // Public-tier community posting is unchanged by this guard.
         case 'public':
           return {allowed: true}
         case 'members':
@@ -109,7 +115,7 @@ export class ComposerPdsWriteRefusedError extends Error {
  * Call immediately before the `write` it names.
  */
 export function assertComposerPdsWrite(
-  target: ComposerTarget | undefined,
+  target: ComposerTarget | null | undefined,
   write: GuardedPdsWrite,
 ): void {
   const decision = guardComposerPdsWrite(target)

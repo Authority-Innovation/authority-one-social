@@ -21,6 +21,19 @@
 - Verdict: done, as a draft PR awaiting a fresh review.
 - NOT done: no UI, runtime calls or flags (out of scope). No wrangler, check:bundle or deploy (deny-listed or not allowed).
 - Head and full detail: `docs/communities/w1-t2-lexicon-codegen-report.md`.
+- Branch `coord/communities-w1-t3-composer-no-pd-1550eefa`, base `569b3b240`.
+- Changed: `ComposerTarget` + pure fail-closed `guardComposerPdsWrite`
+  (`src/lib/communities/composerTarget.ts`); `submitComposerThread`
+  (`src/view/com/composer/state/submit.ts`); `ComposerOpts.target` threaded to
+  `ComposePost`; composer refuses members/paid targets before publish, drafts and
+  bsky video upload.
+- Head: see `git log` (feature commit `f0a4c68d8`, then this log/report commit).
+- Tests: base 1387 passed / 1 failed / 28 todo (128 suites, 3 failing);
+  head 1406 passed / 1 failed / 28 todo (130 suites, same 3 pre-existing failures).
+- Verdict: done, draft PR, awaiting separate review.
+- NOT done: members write path (walled-store client), any UI that sets a
+  community target, public-tier routing. No wrangler / check:bundle (deny-listed).
+- Report: `docs/communities/W1-T3-composer-guard-report.md`.
 
 ## 2026-10-28 – Communities W1-T8: communities client (task f45195a0)
 
@@ -169,3 +182,11 @@
   - `brand.json` `legal`, `signature`, `skinId` and `lockedCommunity` are not
     read by `app.config.js` yet.
 - Report: `docs/communities/W2-T15-brand-config-report.md`.
+## 2026-10-28 - Communities W2-T17: composer target + fail-closed rule (task f0037cb5)
+
+- Branch `communities/w2-composer-target`, base `569b3b240` + T1, T3, T8 merged (merge commits). Feature head `3ad7673d6`.
+- Changed: pure `resolveTarget` (`src/lib/communities/resolveTarget.ts`); `submitComposerThread` keeps the T3 guard first and routes members/paid only to `communitiesClient.post`/`.reply`; Composer resolves the target (reply inheritance, `LOCKED_COMMUNITY`, `COMMUNITIES_ENABLED`) before any write path; `ComposerOptsPostRef.target`.
+- Tests: base 1387 passed / 1 failed / 28 todo (128 suites); predecessors merged 1480 passed; head 1525 passed / 1 failed / 28 todo (135 suites). Same 3 pre-existing environment-only failing suites throughout.
+- Verdict: done, draft PR, awaiting a separate reviewer.
+- NOT done: no UI sets a target (T12), members media, locked-community tier from config, no `wrangler` / `check:bundle` (deny-listed, not run), no deploy or EAS build.
+- Report: `docs/communities/W2-T17-composer-target-report.md`.

@@ -76,9 +76,8 @@ import {until} from '#/lib/async/until'
 import {
   assertComposerPdsWrite,
   type ComposerTarget,
-  DEFAULT_COMPOSER_TARGET,
-  guardComposerPdsWrite,
 } from '#/lib/communities/composerTarget'
+import {resolveTarget} from '#/lib/communities/resolveTarget'
 import {
   IMAGE_SIZE_CONFIG_2K_1MB,
   MAX_DRAFT_GRAPHEME_LENGTH,
@@ -156,12 +155,14 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {
+  COMMUNITIES_ENABLED,
   IS_ANDROID,
   IS_IOS,
   IS_LIQUID_GLASS,
   IS_NATIVE,
   IS_WEB,
   IS_WEB_SAFARI,
+  LOCKED_COMMUNITY,
 } from '#/env'
 import {type Gif} from '#/features/gifPicker/types'
 import {BottomSheetPortalProvider} from '../../../../modules/bottom-sheet'
@@ -200,6 +201,11 @@ import {
   processVideo,
   type VideoState,
 } from './state/video'
+import {
+  type ComposerWriteGateRefusal,
+  gateComposerWrite,
+  restoreDraftGuarded,
+} from './state/writeGate'
 import {type TextInputRef} from './text-input/TextInput.types'
 import {getVideoMetadata} from './videos/pickVideo'
 import {clearThumbnailCache} from './videos/VideoTranscodeBackdrop'
@@ -298,7 +304,7 @@ type Props = ComposerOpts
 export const ComposePost = ({
   replyTo,
   postAs,
-  target = DEFAULT_COMPOSER_TARGET,
+  target: requestedTarget,
   onPost,
   onPostSuccess,
   quote: initQuote,
@@ -320,14 +326,40 @@ export const ComposePost = ({
   const currentDid = currentAccount!.did
   const {closeComposer} = useComposerControls()
   const {t: l, i18n} = useLingui()
-  // Members/paid community content must never reach the PDS. Until the walled
-  // store client exists, every PDS write path below refuses with this message.
-  const pdsWriteDecision = guardComposerPdsWrite(target)
-  const pdsWriteRefusal = pdsWriteDecision.allowed
+  // Where this submit goes. A reply inherits its parent's target, a locked
+  // build is pinned to its community, and anything undeterminable is refused.
+  const targetResolution = resolveTarget({
+    requested: requestedTarget,
+    parent: replyTo ? {uri: replyTo.uri, target: replyTo.target} : undefined,
+    lockedCommunityId: LOCKED_COMMUNITY,
+    communitiesEnabled: COMMUNITIES_ENABLED,
+  })
+  // Null (not undefined) when unresolved: the PDS guard reads undefined as the
+  // user's profile, but refuses null, so the data-layer write paths stay
+  // closed for a target the composer could not resolve.
+  const target = targetResolution.ok ? targetResolution.target : null
+  const writeRefusalMessage = (refusal: ComposerWriteGateRefusal): string => {
+    const code =
+      refusal.code === 'unresolved-target' ? refusal.error : refusal.code
+    switch (code) {
+      case 'unknown-parent-target':
+        return l`We couldn’t tell where this reply belongs, so it can’t be sent.`
+      case 'members-write-not-available':
+        return l`This isn’t available in members-only communities yet.`
+      case 'public-community-not-available':
+        return l`Posting to public communities isn’t available yet.`
+      default:
+        return l`This post can’t be published here.`
+    }
+  }
+  // Members/paid community content must never reach the PDS: drafts, bsky
+  // video upload (including a restored draft video) and the PDS publish path
+  // all go through gateComposerWrite. The non-publish write paths share one
+  // decision, computed here for render and the draft callbacks below.
+  const pdsWriteGate = gateComposerWrite(targetResolution, {kind: 'save-draft'})
+  const pdsWriteRefusal = pdsWriteGate.allowed
     ? undefined
-    : pdsWriteDecision.reason === 'members-write-not-available'
-      ? l`Posting to members-only communities isn’t available yet.`
-      : l`This post can’t be published here.`
+    : writeRefusalMessage(pdsWriteGate.refusal)
   const requireAltTextEnabled = useRequireAltTextEnabled()
   const langPrefs = useLanguagePrefs()
   const setLangPrefs = useLanguagePrefsApi()
@@ -554,8 +586,9 @@ export const ComposePost = ({
   const selectVideo = useCallback(
     (postId: string, asset: ImagePickerAsset) => {
       // The bsky video service writes the uploaded blob into the PDS.
-      if (pdsWriteRefusal) {
-        Toast.show(pdsWriteRefusal, {type: 'warning'})
+      const gate = gateComposerWrite(targetResolution, {kind: 'select-video'})
+      if (!gate.allowed) {
+        Toast.show(writeRefusalMessage(gate.refusal), {type: 'warning'})
         return
       }
       const abortController = new AbortController()
@@ -587,7 +620,16 @@ export const ComposePost = ({
         target,
       )
     },
-    [i18n, agent, currentDid, composerDispatch, pdsWriteRefusal, target],
+    [
+      i18n,
+      agent,
+      currentDid,
+      composerDispatch,
+      pdsWriteRefusal,
+      target,
+      targetResolution,
+      writeRefusalMessage,
+    ],
   )
 
   const onInitVideo = useNonReactiveCallback(() => {
@@ -625,6 +667,13 @@ export const ComposePost = ({
 
   const restoreVideo = useCallback(
     async (postId: string, videoInfo: RestoredVideo) => {
+      // Same PDS upload as selectVideo. handleSelectDraft already refuses a
+      // draft for a refused target; this keeps the upload guarded on its own.
+      if (
+        !gateComposerWrite(targetResolution, {kind: 'restore-draft'}).allowed
+      ) {
+        return
+      }
       try {
         logger.debug('restoring video from draft', {
           postId,
@@ -741,7 +790,7 @@ export const ComposePost = ({
         })
       }
     },
-    [i18n, agent, currentDid, composerDispatch, target],
+    [i18n, agent, currentDid, composerDispatch, target, targetResolution],
   )
 
   const handleSelectDraft = useCallback(
@@ -750,58 +799,69 @@ export const ComposePost = ({
         draftId: draftSummary.id,
       })
 
-      // Load local media files for the draft
-      const {loadedMedia} = await loadDraftMedia(draftSummary.draft)
+      // A draft can carry a video, and restoring one re-uploads it through
+      // the bsky video service (a PDS write). A refused target loads nothing.
+      await restoreDraftGuarded({
+        resolution: targetResolution,
+        onRefused: refusal => {
+          Toast.show(writeRefusalMessage(refusal), {type: 'warning'})
+        },
+        load: async () => {
+          // Load local media files for the draft
+          const {loadedMedia} = await loadDraftMedia(draftSummary.draft)
 
-      // Extract original localRefs for orphan detection on save
-      const originalLocalRefs = extractLocalRefs(draftSummary.draft)
+          // Extract original localRefs for orphan detection on save
+          const originalLocalRefs = extractLocalRefs(draftSummary.draft)
 
-      logger.debug('draft loaded', {
-        draftId: draftSummary.id,
-        loadedMediaCount: loadedMedia.size,
-        originalLocalRefCount: originalLocalRefs.size,
+          logger.debug('draft loaded', {
+            draftId: draftSummary.id,
+            loadedMediaCount: loadedMedia.size,
+            originalLocalRefCount: originalLocalRefs.size,
+          })
+
+          // Convert server draft to composer posts (videos returned separately)
+          const {posts, restoredVideos} = await draftToComposerPosts(
+            draftSummary.draft,
+            loadedMedia,
+          )
+          return {posts, restoredVideos, loadedMedia, originalLocalRefs}
+        },
+        apply: ({posts, loadedMedia, originalLocalRefs}) => {
+          // Dispatch restore action (this also sets draftId in state)
+          composerDispatch({
+            type: 'restore_from_draft',
+            draftId: draftSummary.id,
+            posts,
+            threadgateAllow: draftSummary.draft.threadgateAllow,
+            postgateEmbeddingRules: draftSummary.draft.postgateEmbeddingRules,
+            loadedMedia,
+            originalLocalRefs,
+          })
+
+          // Track when the draft was created for metrics
+          setLoadedDraftCreatedAt(draftSummary.createdAt)
+
+          // Fire draft:load metric
+          const draftPosts = draftSummary.posts
+          const draftAgeMs =
+            Date.now() - new Date(draftSummary.createdAt).getTime()
+          ax.metric('draft:load', {
+            draftAgeMs,
+            hasText: draftPosts.some(p => p.text.trim().length > 0),
+            hasImages: draftPosts.some(p => p.images && p.images.length > 0),
+            hasVideo: draftPosts.some(p => !!p.video),
+            hasGif: draftPosts.some(p => !!p.gif),
+            postCount: draftPosts.length,
+          })
+        },
+        // Initiate video processing for any restored videos. This is async
+        // but not awaited - videos process in the background.
+        restoreVideo: (postId, videoInfo) => {
+          void restoreVideo(postId, videoInfo)
+        },
       })
-
-      // Convert server draft to composer posts (videos returned separately)
-      const {posts, restoredVideos} = await draftToComposerPosts(
-        draftSummary.draft,
-        loadedMedia,
-      )
-
-      // Dispatch restore action (this also sets draftId in state)
-      composerDispatch({
-        type: 'restore_from_draft',
-        draftId: draftSummary.id,
-        posts,
-        threadgateAllow: draftSummary.draft.threadgateAllow,
-        postgateEmbeddingRules: draftSummary.draft.postgateEmbeddingRules,
-        loadedMedia,
-        originalLocalRefs,
-      })
-
-      // Track when the draft was created for metrics
-      setLoadedDraftCreatedAt(draftSummary.createdAt)
-
-      // Fire draft:load metric
-      const draftPosts = draftSummary.posts
-      const draftAgeMs = Date.now() - new Date(draftSummary.createdAt).getTime()
-      ax.metric('draft:load', {
-        draftAgeMs,
-        hasText: draftPosts.some(p => p.text.trim().length > 0),
-        hasImages: draftPosts.some(p => p.images && p.images.length > 0),
-        hasVideo: draftPosts.some(p => !!p.video),
-        hasGif: draftPosts.some(p => !!p.gif),
-        postCount: draftPosts.length,
-      })
-
-      // Initiate video processing for any restored videos
-      // This is async but we don't await - videos process in the background
-      for (const [postIndex, videoInfo] of restoredVideos) {
-        const postId = posts[postIndex].id
-        restoreVideo(postId, videoInfo)
-      }
     },
-    [composerDispatch, restoreVideo, ax],
+    [composerDispatch, restoreVideo, ax, targetResolution, writeRefusalMessage],
   )
 
   const [publishOnUpload, setPublishOnUpload] = useState(false)
@@ -1134,12 +1194,25 @@ export const ComposePost = ({
       return
     }
 
-    // Before ANY write path (PDS record, PDS blob, or post-as-agent): a
-    // members/paid community target is refused here, with nothing sent.
-    if (pdsWriteRefusal) {
-      setError(pdsWriteRefusal)
+    // Before ANY write path (PDS record, PDS blob, or post-as-agent): an
+    // unresolvable target, a public community target, or a members target
+    // with post-as-agent or runtime video (both PDS paths) is refused here,
+    // with nothing sent. Members/paid targets have exactly one path: the
+    // communities client in submitComposerThread.
+    const publishGate = gateComposerWrite(targetResolution, {
+      kind: 'publish',
+      postAs: !!postAs,
+      authorityVideo: !!authorityVideo,
+    })
+    if (!publishGate.allowed || !targetResolution.ok) {
+      setError(
+        publishGate.allowed
+          ? l`This post can’t be published here.`
+          : writeRefusalMessage(publishGate.refusal),
+      )
       return
     }
+    const isCommunityRoute = publishGate.route === 'communities'
 
     const {type: emptyType, filteredThread} = getFilteredThread()
 
@@ -1163,6 +1236,39 @@ export const ComposePost = ({
     skipEmptyConfirmedRef.current = false
     setError('')
     setIsPublishing(true)
+
+    if (isCommunityRoute) {
+      try {
+        const result = await submitComposerThread(agent, queryClient, {
+          target: targetResolution.target,
+          thread: filteredThread,
+          replyTo: replyTo?.uri,
+        })
+        if (!result.ok) {
+          setError(
+            'communityError' in result &&
+              result.communityError.kind === 'unsupported-content'
+              ? l`Only text can be posted to members-only communities for now.`
+              : l`Your post couldn’t be sent. Please try again.`,
+          )
+          setIsPublishing(false)
+          return
+        }
+      } catch (e) {
+        logger.error(e as Error, {message: 'Composer: community post failed'})
+        setError(l`Your post couldn’t be sent. Please try again.`)
+        setIsPublishing(false)
+        return
+      }
+      onPost?.(undefined)
+      onClose()
+      setTimeout(() => {
+        Toast.show(replyTo ? l`Your reply was sent` : l`Your post was sent`, {
+          type: 'success',
+        })
+      }, 500)
+      return
+    }
 
     // AUTHORITY ONE VIDEO: only the runtime can build the Cloudflare-Stream-backed
     // video embed, so a video post always talks to the runtime. WHO the post is
@@ -1380,9 +1486,9 @@ export const ComposePost = ({
         onStateChange: setPublishingStage,
         langs: currentLanguages,
       })
-      if (!result.ok) {
-        // Unreachable while the early refusal above holds; kept so this write
-        // path stays guarded on its own.
+      if (!result.ok || result.route !== 'pds') {
+        // Unreachable while the early refusal and the communities branch above
+        // hold; kept so this write path stays guarded on its own.
         setError(pdsWriteRefusal ?? l`This post can’t be published here.`)
         setIsPublishing(false)
         return
@@ -1591,6 +1697,8 @@ export const ComposePost = ({
     authorityVideo,
     pdsWriteRefusal,
     target,
+    targetResolution,
+    writeRefusalMessage,
   ])
 
   const handleConfirmSkipEmpty = () => {
@@ -2156,7 +2264,7 @@ function ComposerTopBar({
   isEditingDraft: boolean
   canSaveDraft: boolean
   textLength: number
-  target: ComposerTarget
+  target: ComposerTarget | null
   topBarAnimatedStyle: StyleProp<ViewStyle>
   children?: React.ReactNode
 }) {
