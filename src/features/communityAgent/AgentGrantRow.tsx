@@ -1,8 +1,11 @@
 /**
- * Per-community settings row: "Let my agent read this community".
+ * Per-community settings row for the COMMUNITY agent's grant.
  *
- * A separate grant from membership, for this one community only, and off by
- * default (mockup d). Toggling calls `communitiesClient.setAgentGrant` once.
+ * `setAgentGrant` controls whether this community's agent may read the
+ * caller's content here, which can include members-only posts. It does not
+ * touch the person's own agent, so the copy must never name it. A separate
+ * grant from membership, for this one community only, and off by default
+ * (mockup d). Toggling calls `communitiesClient.setAgentGrant` once.
  * The switch moves straight away and snaps back if the runtime refuses.
  * Renders nothing with EXPO_PUBLIC_COMMUNITIES_ENABLED off.
  */
@@ -18,12 +21,9 @@ import {COMMUNITIES_ENABLED} from '#/env'
 
 export function AgentGrantRow({
   communityId,
-  agentName,
   initialValue = false,
 }: {
   communityId: string
-  /** The person's own agent, e.g. "Bob". Falls back to "my agent". */
-  agentName?: string | null
   initialValue?: boolean
 }) {
   const t = useTheme()
@@ -34,10 +34,7 @@ export function AgentGrantRow({
 
   if (!COMMUNITIES_ENABLED) return null
 
-  const name = agentName?.trim()
-  const label = name
-    ? l`Let ${name} read this community for me`
-    : l`Let my agent read this community`
+  const label = l`Let this community’s agent read my posts here`
 
   const onChange = async (next: boolean) => {
     if (pending) return
@@ -67,17 +64,11 @@ export function AgentGrantRow({
         <Toggle.Platform />
       </Toggle.Item>
       <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-        {name ? (
-          <Trans>
-            {name} can give you recaps of threads you can already see. You can
-            turn it off any time.
-          </Trans>
-        ) : (
-          <Trans>
-            Your agent can give you recaps of threads you can already see. You
-            can turn it off any time.
-          </Trans>
-        )}
+        <Trans>
+          The community’s agent will be able to read what you post in this
+          community, including members-only posts. Off unless you turn it on.
+          You can turn it off any time.
+        </Trans>
       </Text>
       {failed ? (
         <Text

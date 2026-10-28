@@ -292,7 +292,9 @@ describe('agent grant row', () => {
     const r = render(<AgentGrantRow communityId="btb-listeners" />)
     const toggle = r.getByTestId('agentGrantToggle')
     expect(isChecked(toggle)).toBe(false)
-    expect(r.getByText('Let my agent read this community')).toBeTruthy()
+    expect(
+      r.getByText('Let this community’s agent read my posts here'),
+    ).toBeTruthy()
 
     await press(toggle)
     expect(mockSetAgentGrant).toHaveBeenCalledTimes(1)
@@ -302,17 +304,21 @@ describe('agent grant row', () => {
 
   it('turning it off calls setAgentGrant once with false', async () => {
     mockSetAgentGrant.mockResolvedValue({ok: true, data: {agentGrant: false}})
-    const r = render(
-      <AgentGrantRow
-        communityId="btb-listeners"
-        agentName="Bob"
-        initialValue
-      />,
-    )
-    expect(r.getByText('Let Bob read this community for me')).toBeTruthy()
+    const r = render(<AgentGrantRow communityId="btb-listeners" initialValue />)
     await press(r.getByTestId('agentGrantToggle'))
     expect(mockSetAgentGrant).toHaveBeenCalledTimes(1)
     expect(mockSetAgentGrant).toHaveBeenCalledWith('btb-listeners', false)
+  })
+
+  it('copy names the community agent, never the person’s own agent', () => {
+    const r = render(<AgentGrantRow communityId="btb-listeners" />)
+    const text = JSON.stringify(r.toJSON())
+    expect(text).toContain('community’s agent')
+    expect(text).toContain('members-only')
+    expect(text).not.toMatch(/\bBob\b/)
+    expect(text).not.toMatch(/\bmy agent\b/i)
+    expect(text).not.toMatch(/\byour agent\b/i)
+    expect(text).not.toMatch(/\bfor me\b/)
   })
 
   it('snaps back and shows an error when the runtime refuses', async () => {
