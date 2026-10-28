@@ -1,0 +1,421 @@
+{
+  "note": "Resolved Expo config of the pre-brand app.config.js. version and ios.buildNumber are masked in the hashes.",
+  "cases": 72,
+  "hashes": {
+    "env=dev,paid=0,platform=none,signature=off,sentry=off": "668e89d161aca7b2de1512ab05570072e2b8359d5baa99c4d71fc166a5cb8fd0",
+    "env=dev,paid=0,platform=none,signature=off,sentry=on": "0282c22c61ad98771f284596853705d89fa3cb1811242b6cd554e82b347c0cd9",
+    "env=dev,paid=0,platform=none,signature=on,sentry=off": "8018dd167662b79156d2f163f98b1340045c4cfc6e4b8d61e0dd44c2eb26e8e3",
+    "env=dev,paid=0,platform=none,signature=on,sentry=on": "14ceaaa1c059e7ad45cfef848f4cf4e4ebc1e08513dd32910224f235db0ff750",
+    "env=dev,paid=0,platform=ios,signature=off,sentry=off": "058039199a5c2cab52094fdee8ed7ed08c83b8370990762f0aebd165c8fdd957",
+    "env=dev,paid=0,platform=ios,signature=off,sentry=on": "e5a5709e6204b0d79a4cf79da53c70bffd9c6b5b849e3b1e730a0119749cdded",
+    "env=dev,paid=0,platform=ios,signature=on,sentry=off": "b5a899ac8a423e6146e604e085b6a9bdfca9260c3159c6180a2d85cc4e24f7ea",
+    "env=dev,paid=0,platform=ios,signature=on,sentry=on": "3f5e887000c2d5945906122f65d774768287881c4ca6ab790ccb4c0d36e8508c",
+    "env=dev,paid=0,platform=android,signature=off,sentry=off": "668e89d161aca7b2de1512ab05570072e2b8359d5baa99c4d71fc166a5cb8fd0",
+    "env=dev,paid=0,platform=android,signature=off,sentry=on": "0282c22c61ad98771f284596853705d89fa3cb1811242b6cd554e82b347c0cd9",
+    "env=dev,paid=0,platform=android,signature=on,sentry=off": "8018dd167662b79156d2f163f98b1340045c4cfc6e4b8d61e0dd44c2eb26e8e3",
+    "env=dev,paid=0,platform=android,signature=on,sentry=on": "14ceaaa1c059e7ad45cfef848f4cf4e4ebc1e08513dd32910224f235db0ff750",
+    "env=dev,paid=1,platform=none,signature=off,sentry=off": "3a7706ff60687ca28a48e9a76aca7ec95bd343c1b3dd54468928d5cc39cb6888",
+    "env=dev,paid=1,platform=none,signature=off,sentry=on": "0ce8bb64b4211eb67dd283a0637e8193d83859916d7ee76e746bccc09e12ffbe",
+    "env=dev,paid=1,platform=none,signature=on,sentry=off": "39cf854730c818aa92ee6a31aec2914b849681578b5877ab8948d8eef1effb58",
+    "env=dev,paid=1,platform=none,signature=on,sentry=on": "3519621c5a5cc6b6d3eaf6e4fb68a1cb7f3fddf876b8defb828159e9fdec92f1",
+    "env=dev,paid=1,platform=ios,signature=off,sentry=off": "ad30800db9a576f646b758598b7d48865408dfdb6e19cd0520e5b34c586c84a8",
+    "env=dev,paid=1,platform=ios,signature=off,sentry=on": "e3d36edfc68a5b31db14157fd69a400f81d1663a60c234b9932d0753ae338ee5",
+    "env=dev,paid=1,platform=ios,signature=on,sentry=off": "638500cd7b5d20ee2523b706eb11f5eb8425e51e7b0edac4aca68c1b650d2bfb",
+    "env=dev,paid=1,platform=ios,signature=on,sentry=on": "e82284de0432c7cb00e0e85ce71e0581ba48be761c8fd836d56284cbbb048795",
+    "env=dev,paid=1,platform=android,signature=off,sentry=off": "3a7706ff60687ca28a48e9a76aca7ec95bd343c1b3dd54468928d5cc39cb6888",
+    "env=dev,paid=1,platform=android,signature=off,sentry=on": "0ce8bb64b4211eb67dd283a0637e8193d83859916d7ee76e746bccc09e12ffbe",
+    "env=dev,paid=1,platform=android,signature=on,sentry=off": "39cf854730c818aa92ee6a31aec2914b849681578b5877ab8948d8eef1effb58",
+    "env=dev,paid=1,platform=android,signature=on,sentry=on": "3519621c5a5cc6b6d3eaf6e4fb68a1cb7f3fddf876b8defb828159e9fdec92f1",
+    "env=testflight,paid=0,platform=none,signature=off,sentry=off": "f6d0dd451035f4a920ff714812be999b196763f8a3fb2f38b51d6542bd2ff47b",
+    "env=testflight,paid=0,platform=none,signature=off,sentry=on": "e93d982da68589006fb61faa431bf20d64f03182e65be2d1c70ca36ef627a860",
+    "env=testflight,paid=0,platform=none,signature=on,sentry=off": "fc52cbee0b44b06c0310642864f72487e8fd3b5bebb5d3190c353dd17950ef1e",
+    "env=testflight,paid=0,platform=none,signature=on,sentry=on": "75d65267773a5e25f02fd945b7c53d0b2d6990050e145918c500544c4d6d8dd2",
+    "env=testflight,paid=0,platform=ios,signature=off,sentry=off": "e58663291ac88906be3185519a2dc88ff988e962534ad94351fa0aa8520dfea3",
+    "env=testflight,paid=0,platform=ios,signature=off,sentry=on": "6c5a7fc884779497cf3e105f4210c966cf11d013a7588062cc647476554fa451",
+    "env=testflight,paid=0,platform=ios,signature=on,sentry=off": "dda63078449522ad00d23d19667bac0505a892f20efe2547a4d8186a3823eab1",
+    "env=testflight,paid=0,platform=ios,signature=on,sentry=on": "829c063c930827f1e116cce9f9524b91589c6915e8b12e8267524f76eae6883c",
+    "env=testflight,paid=0,platform=android,signature=off,sentry=off": "f6d0dd451035f4a920ff714812be999b196763f8a3fb2f38b51d6542bd2ff47b",
+    "env=testflight,paid=0,platform=android,signature=off,sentry=on": "e93d982da68589006fb61faa431bf20d64f03182e65be2d1c70ca36ef627a860",
+    "env=testflight,paid=0,platform=android,signature=on,sentry=off": "fc52cbee0b44b06c0310642864f72487e8fd3b5bebb5d3190c353dd17950ef1e",
+    "env=testflight,paid=0,platform=android,signature=on,sentry=on": "75d65267773a5e25f02fd945b7c53d0b2d6990050e145918c500544c4d6d8dd2",
+    "env=testflight,paid=1,platform=none,signature=off,sentry=off": "cf70d94e90f7e17cf827a71490914369d68ddf433a5cd3a0335890de3a3802a2",
+    "env=testflight,paid=1,platform=none,signature=off,sentry=on": "be9643ea7059b8486e3485c18730fa8fa9749199dae331c800802643f4b07776",
+    "env=testflight,paid=1,platform=none,signature=on,sentry=off": "300b652636473353a9a9986899503e306434eff64ee2c13f676cb564ff1fa52e",
+    "env=testflight,paid=1,platform=none,signature=on,sentry=on": "6bc60073e62ba2bb363cfbe4945183688dcb4d08603ea65b56a7df70c2cb1c42",
+    "env=testflight,paid=1,platform=ios,signature=off,sentry=off": "452e953f1ae6772fa36ff512e59560c21df39da2506bfb438b746be7b92125eb",
+    "env=testflight,paid=1,platform=ios,signature=off,sentry=on": "6920916b9b76747797099da625d5feb1f6a047f204b344b70248b2f76bcd7e75",
+    "env=testflight,paid=1,platform=ios,signature=on,sentry=off": "8a83200f0d6511893e0a4115a450faa6747c6e29029197614ec3362962ff8a95",
+    "env=testflight,paid=1,platform=ios,signature=on,sentry=on": "73dd5afc14d25bc4fec758fca05bce7a8b8d8781685220ec331d0842a34dfcaf",
+    "env=testflight,paid=1,platform=android,signature=off,sentry=off": "cf70d94e90f7e17cf827a71490914369d68ddf433a5cd3a0335890de3a3802a2",
+    "env=testflight,paid=1,platform=android,signature=off,sentry=on": "be9643ea7059b8486e3485c18730fa8fa9749199dae331c800802643f4b07776",
+    "env=testflight,paid=1,platform=android,signature=on,sentry=off": "300b652636473353a9a9986899503e306434eff64ee2c13f676cb564ff1fa52e",
+    "env=testflight,paid=1,platform=android,signature=on,sentry=on": "6bc60073e62ba2bb363cfbe4945183688dcb4d08603ea65b56a7df70c2cb1c42",
+    "env=production,paid=0,platform=none,signature=off,sentry=off": "6a1fd47b70f7100732b43174391b4ed879fa85472b15f57150f6d01e89983b4a",
+    "env=production,paid=0,platform=none,signature=off,sentry=on": "272b87cc30ab63b830bd6180711e726631a3935272ef2fc4bf04500412ae71f4",
+    "env=production,paid=0,platform=none,signature=on,sentry=off": "e14b237f898716fddf313ee319c4591bafe4f581935b5ce8e5d8798081c0d66c",
+    "env=production,paid=0,platform=none,signature=on,sentry=on": "67c6baf96e608d485f3a420d11304005c0fbe2457734fb0fe8a58b842077ed78",
+    "env=production,paid=0,platform=ios,signature=off,sentry=off": "5785cab89c05950afb3e07baa0e5c2e8700b41f9f2e90c737c459bcef1da7f9d",
+    "env=production,paid=0,platform=ios,signature=off,sentry=on": "6aa0093cd8904972ff72244ab40b85ed8cfba8ba8b9228069179f8347e61f898",
+    "env=production,paid=0,platform=ios,signature=on,sentry=off": "037f1c66a84624bbfe1ee25cd5364a8a5b6f63378081d9aebff04045ece3603e",
+    "env=production,paid=0,platform=ios,signature=on,sentry=on": "9c55eb6ecc4c8ec9279867fbe9bbb7170e654e53d40250fd051e8957c1ff8eb8",
+    "env=production,paid=0,platform=android,signature=off,sentry=off": "6a1fd47b70f7100732b43174391b4ed879fa85472b15f57150f6d01e89983b4a",
+    "env=production,paid=0,platform=android,signature=off,sentry=on": "272b87cc30ab63b830bd6180711e726631a3935272ef2fc4bf04500412ae71f4",
+    "env=production,paid=0,platform=android,signature=on,sentry=off": "e14b237f898716fddf313ee319c4591bafe4f581935b5ce8e5d8798081c0d66c",
+    "env=production,paid=0,platform=android,signature=on,sentry=on": "67c6baf96e608d485f3a420d11304005c0fbe2457734fb0fe8a58b842077ed78",
+    "env=production,paid=1,platform=none,signature=off,sentry=off": "3f37e04cb861a55612799245a16476b975e9f8be142b9eed34fd152c3a7866e3",
+    "env=production,paid=1,platform=none,signature=off,sentry=on": "c44ade60d01d553bf78256d2902b4509ceb992a0018634803acda063f3795354",
+    "env=production,paid=1,platform=none,signature=on,sentry=off": "1144b59ad84794d15be41affa8c1893182b8592429ee56d70092008c00d68eb6",
+    "env=production,paid=1,platform=none,signature=on,sentry=on": "bc664966cfa6a4f0271e8f5c27007146e82fed45d5c4851252366783866b27e1",
+    "env=production,paid=1,platform=ios,signature=off,sentry=off": "867788d5631f03b76f66b984bf3b7e2c2144707e3ae7cd908ab71c03179953b7",
+    "env=production,paid=1,platform=ios,signature=off,sentry=on": "441721e1da05aad43be9c94e267fac627c29cf352918ffb17c654ee5238e703b",
+    "env=production,paid=1,platform=ios,signature=on,sentry=off": "ff88c84fb47d544bc22426669392d06b6ac9be20e3c86d9043991fd12b706f2c",
+    "env=production,paid=1,platform=ios,signature=on,sentry=on": "41185524c848caa3f60aac1c0995f6aec6793adba9afb39c0fad7f5a986fbefa",
+    "env=production,paid=1,platform=android,signature=off,sentry=off": "3f37e04cb861a55612799245a16476b975e9f8be142b9eed34fd152c3a7866e3",
+    "env=production,paid=1,platform=android,signature=off,sentry=on": "c44ade60d01d553bf78256d2902b4509ceb992a0018634803acda063f3795354",
+    "env=production,paid=1,platform=android,signature=on,sentry=off": "1144b59ad84794d15be41affa8c1893182b8592429ee56d70092008c00d68eb6",
+    "env=production,paid=1,platform=android,signature=on,sentry=on": "bc664966cfa6a4f0271e8f5c27007146e82fed45d5c4851252366783866b27e1"
+  },
+  "defaultConfig": {
+    "expo": {
+      "version": "<version>",
+      "name": "Authority-One",
+      "slug": "one",
+      "scheme": "one",
+      "owner": "blueskysocial",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
+      "icon": "./assets/app-icons/ios_icon_default_next.png",
+      "userInterfaceStyle": "automatic",
+      "primaryColor": "#E8431F",
+      "newArchEnabled": false,
+      "ios": {
+        "supportsTablet": false,
+        "bundleIdentifier": "com.authorityone.app",
+        "buildNumber": "<buildNumber>",
+        "appleTeamId": "4TKU6PS7ZS",
+        "config": {
+          "usesNonExemptEncryption": false
+        },
+        "icon": "./assets/app-icons/ios_icon_default_next.png",
+        "infoPlist": {
+          "CFBundleDisplayName": "authority-one",
+          "CADisableMinimumFrameDurationOnPhone": true,
+          "UIBackgroundModes": [
+            "remote-notification",
+            "location"
+          ],
+          "NSUserActivityTypes": [
+            "INSendMessageIntent"
+          ],
+          "NSCameraUsageDescription": "Used for profile pictures, posts, and other kinds of content.",
+          "NSMicrophoneUsageDescription": "Used to talk to your agent by voice and for posts and other kinds of content.",
+          "NSSpeechRecognitionUsageDescription": "Used to transcribe your speech on-device so you can talk to your agent.",
+          "NSPhotoLibraryAddUsageDescription": "Used to save images to your library.",
+          "NSPhotoLibraryUsageDescription": "Used for profile pictures, posts, and other kinds of content",
+          "CFBundleSpokenName": "Authority One",
+          "CFBundleLocalizations": [
+            "en",
+            "an",
+            "ast",
+            "ca",
+            "cy",
+            "da",
+            "de",
+            "el",
+            "eo",
+            "es",
+            "eu",
+            "fi",
+            "fr",
+            "fy",
+            "ga",
+            "gd",
+            "gl",
+            "hi",
+            "hu",
+            "ia",
+            "id",
+            "it",
+            "ja",
+            "km",
+            "ko",
+            "ne",
+            "nl",
+            "pl",
+            "pt-BR",
+            "pt-PT",
+            "ro",
+            "ru",
+            "sv",
+            "th",
+            "tr",
+            "uk",
+            "vi",
+            "yue",
+            "zh-Hans",
+            "zh-Hant"
+          ]
+        },
+        "entitlements": {},
+        "privacyManifests": {
+          "NSPrivacyCollectedDataTypes": [
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
+              "NSPrivacyCollectedDataTypeLinked": false,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePerformanceData",
+              "NSPrivacyCollectedDataTypeLinked": false,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+              "NSPrivacyCollectedDataTypeLinked": false,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            }
+          ],
+          "NSPrivacyAccessedAPITypes": [
+            {
+              "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+              "NSPrivacyAccessedAPITypeReasons": [
+                "C617.1",
+                "3B52.1",
+                "0A2A.1"
+              ]
+            },
+            {
+              "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+              "NSPrivacyAccessedAPITypeReasons": [
+                "E174.1",
+                "85F4.1"
+              ]
+            },
+            {
+              "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+              "NSPrivacyAccessedAPITypeReasons": [
+                "35F9.1"
+              ]
+            },
+            {
+              "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+              "NSPrivacyAccessedAPITypeReasons": [
+                "CA92.1",
+                "1C8F.1"
+              ]
+            }
+          ]
+        }
+      },
+      "androidStatusBar": {
+        "barStyle": "light-content"
+      },
+      "androidNavigationBar": {
+        "barStyle": "light-content"
+      },
+      "android": {
+        "icon": "./assets/app-icons/android_icon_default_next.png",
+        "adaptiveIcon": {
+          "foregroundImage": "./assets/icon-android-foreground.png",
+          "monochromeImage": "./assets/icon-android-monochrome.png",
+          "backgroundColor": "#F4F0E8"
+        },
+        "googleServicesFile": "./google-services.json",
+        "package": "com.authorityone.app",
+        "intentFilters": [
+          {
+            "action": "VIEW",
+            "autoVerify": true,
+            "data": [
+              {
+                "scheme": "https",
+                "host": "authority-one.com"
+              },
+              {
+                "scheme": "http",
+                "host": "localhost:19006"
+              }
+            ],
+            "category": [
+              "BROWSABLE",
+              "DEFAULT"
+            ]
+          }
+        ]
+      },
+      "web": {
+        "favicon": "./assets/favicon.png"
+      },
+      "updates": {
+        "url": "https://updates.bsky.app/manifest",
+        "enabled": false,
+        "fallbackToCacheTimeout": 30000,
+        "checkAutomatically": "NEVER"
+      },
+      "plugins": [
+        "./plugins/withFreeTeamSigning.js",
+        "expo-video",
+        "expo-localization",
+        "expo-web-browser",
+        [
+          "react-native-edge-to-edge",
+          {
+            "android": {
+              "enforceNavigationBarContrast": false
+            }
+          }
+        ],
+        [
+          "expo-build-properties",
+          {
+            "ios": {
+              "deploymentTarget": "17.0",
+              "buildReactNativeFromSource": true,
+              "ccacheEnabled": true,
+              "cxxLanguageStandard": "c++23",
+              "extraPods": [
+                {
+                  "name": "MCEmojiPicker",
+                  "git": "https://github.com/bluesky-social/MCEmojiPicker.git",
+                  "branch": "main"
+                }
+              ]
+            },
+            "android": {
+              "compileSdkVersion": 36,
+              "targetSdkVersion": 35,
+              "buildToolsVersion": "35.0.0",
+              "buildReactNativeFromSource": false
+            }
+          }
+        ],
+        [
+          "expo-notifications",
+          {
+            "icon": "./assets/icon-android-notification.png",
+            "color": "#E8431F",
+            "sounds": [
+              "assets/dm.mp3"
+            ]
+          }
+        ],
+        "react-native-compressor",
+        [
+          "@bitdrift/react-native",
+          {
+            "networkInstrumentation": true
+          }
+        ],
+        "./plugins/withGradleJVMHeapSizeIncrease.js",
+        "./plugins/withAndroidManifestLargeHeapPlugin.js",
+        "./plugins/withAndroidManifestFCMIconPlugin.js",
+        "./plugins/withAndroidManifestIntentQueriesPlugin.js",
+        "./plugins/withAndroidStylesAccentColorPlugin.js",
+        "./plugins/withAndroidNoJitpackPlugin.js",
+        "./plugins/uiSceneLifecycle/withUISceneLifecycle.js",
+        [
+          "expo-font",
+          {
+            "fonts": [
+              "./assets/fonts/inter/InterVariable.woff2",
+              "./assets/fonts/inter/InterVariable-Italic.woff2",
+              "./assets/fonts/inter/Inter-Regular.otf",
+              "./assets/fonts/inter/Inter-Italic.otf",
+              "./assets/fonts/inter/Inter-Medium.otf",
+              "./assets/fonts/inter/Inter-MediumItalic.otf",
+              "./assets/fonts/inter/Inter-SemiBold.otf",
+              "./assets/fonts/inter/Inter-SemiBoldItalic.otf",
+              "./assets/fonts/inter/Inter-Bold.otf",
+              "./assets/fonts/inter/Inter-BoldItalic.otf",
+              "./assets/fonts/fraunces/Fraunces-Static.ttf",
+              "./assets/fonts/nhl-carolina/NHLCarolina-Static.ttf"
+            ]
+          }
+        ],
+        [
+          "expo-splash-screen",
+          {
+            "ios": {
+              "enableFullScreenImage_legacy": true,
+              "backgroundColor": "#F4F0E8",
+              "image": "./assets/splash/splash.png",
+              "resizeMode": "cover",
+              "dark": {
+                "enableFullScreenImage_legacy": true,
+                "backgroundColor": "#110C09",
+                "image": "./assets/splash/splash-dark.png",
+                "resizeMode": "cover"
+              }
+            },
+            "android": {
+              "backgroundColor": "#F4F0E8",
+              "image": "./assets/splash/android-splash-logo-white.png",
+              "imageWidth": 102,
+              "dark": {
+                "backgroundColor": "#110C09",
+                "image": "./assets/splash/android-splash-logo-dark.png",
+                "imageWidth": 102
+              }
+            }
+          }
+        ],
+        [
+          "@bsky.app/expo-dynamic-app-icon",
+          {
+            "default_light": {
+              "ios": "./assets/app-icons/ios_icon_default_next.png",
+              "android": "./assets/app-icons/android_icon_default_next.png",
+              "prerendered": true
+            },
+            "default_dark": {
+              "ios": "./assets/app-icons/ios_icon_default_next.png",
+              "android": "./assets/app-icons/android_icon_default_next.png",
+              "prerendered": true
+            },
+            "skin_hurricanes": {
+              "ios": "./assets/app-icons/ios_icon_skin_hurricanes.png",
+              "android": "./assets/app-icons/android_icon_skin_hurricanes.png",
+              "prerendered": true
+            }
+          }
+        ],
+        [
+          "expo-screen-orientation",
+          {
+            "initialOrientation": "PORTRAIT_UP"
+          }
+        ],
+        [
+          "expo-location",
+          {
+            "locationAlwaysAndWhenInUsePermission": "Authority One uses your location in the background to recognize the coarse places you spend time (like “home”, “work”, or a venue) so your agent has all-day context. It stores only these conclusions on your device, never a continuous location trail, and you can turn it off any time.",
+            "locationWhenInUsePermission": "Authority One uses your location while the app is open to recognize the coarse places you spend time, so your agent has context. It stores only conclusions on your device, never a continuous location trail.",
+            "isIosBackgroundLocationEnabled": true,
+            "isAndroidBackgroundLocationEnabled": true
+          }
+        ],
+        [
+          "expo-contacts",
+          {
+            "contactsPermission": "I agree to allow One to use my contacts for friend discovery until I opt out."
+          }
+        ]
+      ],
+      "extra": {
+        "eas": {
+          "projectId": "55bd077a-d905-4184-9c7f-94789ba0f302"
+        }
+      }
+    }
+  }
+}

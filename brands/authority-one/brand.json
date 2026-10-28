@@ -1,0 +1,33 @@
+{
+  "displayName": "authority-one",
+  "appStoreName": "Authority-One",
+  "slug": "one",
+  "scheme": "one",
+  "bundleId": "com.authorityone.app",
+  "androidPackage": "com.authorityone.app",
+  "easOwner": "blueskysocial",
+  "easProjectId": "55bd077a-d905-4184-9c7f-94789ba0f302",
+  "skinId": "",
+  "lockedCommunity": "",
+  "associatedDomains": ["applinks:authority-one.com"],
+  "icons": {
+    "app": "./assets/app-icons/ios_icon_default_next.png",
+    "ios": "./assets/app-icons/ios_icon_default_next.png",
+    "android": "./assets/app-icons/android_icon_default_next.png"
+  },
+  "splash": {
+    "backgroundColor": "#F4F0E8",
+    "darkBackgroundColor": "#110C09"
+  },
+  "legal": {
+    "termsOfService": "https://authority-one.com/terms",
+    "privacyPolicy": "https://authority-one.com/privacy",
+    "support": "https://authority-one.com/support"
+  },
+  "signature": {
+    "schemes": ["authorityone", "authorityone-dev"],
+    "clientIdIos": "",
+    "clientIdAndroid": "",
+    "clientIdWeb": ""
+  }
+}

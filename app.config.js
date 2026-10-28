@@ -2,6 +2,10 @@
 const fs = require('fs')
 const path = require('path')
 const pkg = require('./package.json')
+const {
+  loadBrand,
+  resolveBrandName,
+} = require('./scripts/brand-config/loadBrand')
 
 /**
  * Authority One: Fraunces (serif) display face for the AO brand theme's
@@ -52,11 +56,96 @@ const HURRICANES_FONT_PRESENT = fs.existsSync(
   path.join(__dirname, HURRICANES_FONT),
 )
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Signature sign-in (P2b, dark): the native bounce scheme to register, or null.
+// It MIRRORS parseAOSignatureConfig (src/features/aoSignature/config.ts) for the
+// native platforms: this file runs in plain node at build time and can't import
+// that TS module, so a parity test
+// (src/features/aoSignature/__tests__/appConfigParity.test.ts) runs both over
+// the same env matrix and requires them to agree. Any mismatch or partial
+// config ⇒ null ⇒ the scheme stays exactly 'one'.
+//   `platform`: EAS_BUILD_PLATFORM ('ios' | 'android'); unset (a local
+//   prebuild) ⇒ armed if EITHER native platform's config is complete.
+// ─────────────────────────────────────────────────────────────────────────────
+const AO_SIGNATURE_DEFAULT_RUNTIME =
+  'https://authority-one-agent-runtime.e-479.workers.dev' // = AGENT_RUNTIME_SERVICE
+
 /**
+ * @param {Record<string, string | undefined>} rawEnv
+ * @param {string | undefined} platform
+ * @returns {string | null}
+ */
+function aoSignatureNativeScheme(rawEnv, platform) {
+  /** @param {string} k */
+  const env = k => String(rawEnv[k] ?? '').trim()
+  /** @param {string} raw @returns {URL | null} */
+  const httpsUrl = raw => {
+    if (!raw || raw.includes('?') || raw.includes('#')) return null
+    try {
+      const u = new URL(raw)
+      return u.protocol === 'https:' && u.host && !u.search && !u.hash
+        ? u
+        : null
+    } catch {
+      return null
+    }
+  }
+  /** @param {string} raw */
+  const originOf = raw => {
+    try {
+      return new URL(raw).origin
+    } catch {
+      return null
+    }
+  }
+  const issuer = httpsUrl(env('EXPO_PUBLIC_AO_SIGNATURE_ISSUER'))
+  const runtime = httpsUrl(
+    env('EXPO_PUBLIC_AO_SIGNATURE_RUNTIME_URL').replace(/\/+$/, ''),
+  )
+  if (!issuer || !runtime) return null
+  const agentRuntime =
+    rawEnv.EXPO_PUBLIC_AGENT_RUNTIME_URL ?? AO_SIGNATURE_DEFAULT_RUNTIME
+  if (runtime.origin !== originOf(agentRuntime)) return null
+  const authorizeBase = env('EXPO_PUBLIC_AO_SIGNATURE_AUTHORIZE_BASE')
+  if (authorizeBase && !httpsUrl(authorizeBase)) return null
+  const scheme = env('EXPO_PUBLIC_AO_SIGNATURE_SCHEME')
+  if (!['authorityone', 'authorityone-dev'].includes(scheme)) return null
+  const redirect = httpsUrl(env('EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI'))
+  if (
+    !redirect ||
+    (redirect.pathname !== '/auth/janus/app-callback' &&
+      redirect.pathname !== '/auth/janus/android-callback')
+  ) {
+    return null
+  }
+  /** @param {string} id */
+  const clientOk = id => Boolean(id) && !/\s|,/.test(id)
+  const ios = clientOk(env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS'))
+  const android = clientOk(env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID'))
+  const armed =
+    platform === 'ios' ? ios : platform === 'android' ? android : ios || android
+  return armed ? scheme : null
+}
+
+/**
+ * Brand builds: `BRAND` (default `authority-one`) picks
+ * `brands/<BRAND>/brand.json`, which supplies the identity values below (names,
+ * ids, scheme, owner, icons, splash colours, associated domains). The default
+ * brand resolves to exactly the pre-brand config - see
+ * scripts/__tests__/brandConfig.test.js.
+ *
  * @param {import('@expo/config-types').ExpoConfig} _config
  * @returns {{ expo: import('@expo/config-types').ExpoConfig }}
  */
-module.exports = function (_config) {
+function appConfig(_config) {
+  return appConfigForBrand(loadBrand(resolveBrandName(process.env)))
+}
+
+/**
+ * @param {import('./scripts/brand-config/loadBrand').Brand} BRAND
+ * @returns {{ expo: import('@expo/config-types').ExpoConfig }}
+ */
+function appConfigForBrand(BRAND) {
   /**
    * App version number. Should be incremented as part of a release cycle.
    */
@@ -70,6 +159,11 @@ module.exports = function (_config) {
   const PLATFORM = process.env.EAS_BUILD_PLATFORM ?? 'web'
 
   const IS_TESTFLIGHT = process.env.EXPO_PUBLIC_ENV === 'testflight'
+  // Signature sign-in (P2b, dark): see aoSignatureNativeScheme below.
+  const AO_SIGNATURE_SCHEME = aoSignatureNativeScheme(
+    process.env,
+    process.env.EAS_BUILD_PLATFORM,
+  )
   const IS_PRODUCTION = process.env.EXPO_PUBLIC_ENV === 'production'
   const IS_DEV = !IS_TESTFLIGHT && !IS_PRODUCTION
 
@@ -106,7 +200,7 @@ module.exports = function (_config) {
   // capability), populated for paid builds.
   const ASSOCIATED_DOMAINS = PAID_SIGNING
     ? [
-        'applinks:authority-one.com',
+        ...BRAND.associatedDomains,
         // When testing local services, enter an ngrok (et al) domain here. It must use a standard HTTP/HTTPS port.
         ...(IS_DEV || IS_TESTFLIGHT ? [] : []),
       ]
@@ -120,7 +214,7 @@ module.exports = function (_config) {
   // The original fork shipped Apple Icon Composer `.icon` bundles (the Bluesky
   // butterfly); we drop those for the first TestFlight so the One icon is a
   // single, easy-to-replace PNG. Swap ios_icon_default_next.png for final art.
-  const IOS_ICON_FILE = './assets/app-icons/ios_icon_default_next.png'
+  const IOS_ICON_FILE = BRAND.icons.ios
 
   return {
     expo: {
@@ -131,14 +225,19 @@ module.exports = function (_config) {
       // Note: CFBundleName is NOT set explicitly, so Expo derives it from this
       // name too ("Authority One"), which is likewise unique. Bundle identifier
       // stays com.authorityone.app (unchanged).
-      name: 'Authority-One',
-      slug: 'one',
-      scheme: 'one',
-      owner: 'blueskysocial',
+      name: BRAND.appStoreName,
+      slug: BRAND.slug,
+      // Signature sign-in (P2b, dark): the runtime bounce's app scheme is
+      // registered ONLY when EXPO_PUBLIC_AO_SIGNATURE_SCHEME names an allowed
+      // one; unset ⇒ exactly `'one'`, as before.
+      scheme: AO_SIGNATURE_SCHEME
+        ? [BRAND.scheme, AO_SIGNATURE_SCHEME]
+        : BRAND.scheme,
+      owner: BRAND.easOwner,
       runtimeVersion: {
         policy: 'appVersion',
       },
-      icon: './assets/app-icons/ios_icon_default_next.png',
+      icon: BRAND.icons.app,
       userInterfaceStyle: 'automatic',
       primaryColor: '#E8431F', // Authority One brand orange (was Bluesky #006AFF)
       newArchEnabled: false,
@@ -146,7 +245,7 @@ module.exports = function (_config) {
         supportsTablet: false,
         // Authority One bundle identifier. Changeable — must match the App ID you
         // register under your Apple Developer team in App Store Connect.
-        bundleIdentifier: 'com.authorityone.app',
+        bundleIdentifier: BRAND.bundleId,
         // Authority One: CFBundleVersion. The first upload defaulted to "1" and
         // was rejected; bumped to "2" so the re-upload isn't treated as a
         // duplicate build. Increment on every subsequent App Store Connect upload.
@@ -168,7 +267,7 @@ module.exports = function (_config) {
           // "One" was rejected at upload with ITMS-90129 (name already taken),
           // so this is now the lowercase "authority-one". If Apple rejects this
           // too, it's a one-line swap to try another.
-          CFBundleDisplayName: 'authority-one',
+          CFBundleDisplayName: BRAND.displayName,
           CADisableMinimumFrameDurationOnPhone: true,
           // BACKGROUND LOCATION IS OFF IN CODE (2026-10-23; derive.ts
           // BACKGROUND_LOCATION_SHIPPED = false): it held a 48 h iOS location subscription
@@ -317,14 +416,14 @@ module.exports = function (_config) {
         barStyle: 'light-content',
       },
       android: {
-        icon: './assets/app-icons/android_icon_default_next.png',
+        icon: BRAND.icons.android,
         adaptiveIcon: {
           foregroundImage: './assets/icon-android-foreground.png',
           monochromeImage: './assets/icon-android-monochrome.png',
           backgroundColor: '#F4F0E8', // Authority One "paper" cream (windmill mark)
         },
         googleServicesFile: './google-services.json',
-        package: 'com.authorityone.app', // was 'xyz.blueskyweb.app'
+        package: BRAND.androidPackage, // was 'xyz.blueskyweb.app'
         intentFilters: [
           {
             action: 'VIEW',
@@ -479,22 +578,22 @@ module.exports = function (_config) {
           {
             ios: {
               enableFullScreenImage_legacy: true, // iOS only
-              backgroundColor: '#F4F0E8', // One "paper" cream (windmill on paper)
+              backgroundColor: BRAND.splash.backgroundColor, // One "paper" cream (windmill on paper)
               image: './assets/splash/splash.png',
               resizeMode: 'cover',
               dark: {
                 enableFullScreenImage_legacy: true, // iOS only
-                backgroundColor: '#110C09', // One warm near-black (dark paper)
+                backgroundColor: BRAND.splash.darkBackgroundColor, // One warm near-black (dark paper)
                 image: './assets/splash/splash-dark.png',
                 resizeMode: 'cover',
               },
             },
             android: {
-              backgroundColor: '#F4F0E8', // One "paper" cream
+              backgroundColor: BRAND.splash.backgroundColor, // One "paper" cream
               image: './assets/splash/android-splash-logo-white.png', // black windmill (on cream)
               imageWidth: 102, // even division of 306px
               dark: {
-                backgroundColor: '#110C09', // One warm near-black
+                backgroundColor: BRAND.splash.darkBackgroundColor, // One warm near-black
                 image: './assets/splash/android-splash-logo-dark.png', // cream windmill (on dark)
                 imageWidth: 102,
               },
@@ -569,9 +668,13 @@ module.exports = function (_config) {
           // each extension target doesn't need its own provisioning profile.
           // Re-add it together with the three extension config plugins above to
           // restore the extensions.
-          projectId: '55bd077a-d905-4184-9c7f-94789ba0f302',
+          projectId: BRAND.easProjectId,
         },
       },
     },
   }
 }
+
+appConfig.aoSignatureNativeScheme = aoSignatureNativeScheme
+appConfig.appConfigForBrand = appConfigForBrand
+module.exports = appConfig

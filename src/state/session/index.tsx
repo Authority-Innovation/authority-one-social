@@ -15,6 +15,7 @@ import {useCloseAllActiveElements} from '#/state/util'
 import {useGlobalDialogsControlContext} from '#/components/dialogs/Context'
 import {AnalyticsContext, useAnalyticsBase, utils} from '#/analytics'
 import {IS_WEB} from '#/env'
+import {aoSignatureOnPdsLogout} from '#/features/aoSignature/controller'
 import {emitSessionDropped} from '../events'
 import {
   agentToSessionAccount,
@@ -207,6 +208,8 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
           did: prevState.currentAgentState.did,
         })
         void clearPersistedQueryStorage(prevState.currentAgentState.did)
+        // Signature sign-in (no-op while dark): this account's AO session too.
+        aoSignatureOnPdsLogout(prevState.currentAgentState.did)
       }
       // reset onboarding flow on logout
       onboardingDispatch({type: 'skip'})
@@ -240,6 +243,8 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       for (const account of prevState.accounts) {
         void clearPersistedQueryStorage(account.did)
       }
+      // Signature sign-in (no-op while dark): every account signed out.
+      aoSignatureOnPdsLogout(null)
       // reset onboarding flow on logout
       onboardingDispatch({type: 'skip'})
     },

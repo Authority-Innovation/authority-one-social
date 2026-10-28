@@ -1,0 +1,89 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`sign-in screen with Signature config unset renders the pre-merge tree on the ChooseAccount form 1`] = `
+<View
+  style={{}}
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {},
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+    testID="signIn"
+  >
+    <View
+      testID="authHeader"
+    >
+      <View />
+      <View />
+      <View />
+    </View>
+    <View
+      testID="loggedOutLayout"
+    >
+      <Text>
+        Sign in
+      </Text>
+      <Text>
+        Select from an existing account
+      </Text>
+      <View
+        testID="screenTransition"
+      >
+        <View
+          testID="chooseAccountForm"
+        />
+      </View>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`sign-in screen with Signature config unset renders the pre-merge tree on the Login form 1`] = `
+<View
+  style={{}}
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {},
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+    testID="signIn"
+  >
+    <View
+      testID="authHeader"
+    >
+      <View />
+      <View />
+      <View />
+    </View>
+    <View
+      testID="loggedOutLayout"
+    >
+      <Text>
+        Sign in
+      </Text>
+      <Text>
+        Enter your username and password
+      </Text>
+      <View
+        testID="screenTransition"
+      >
+        <View
+          testID="loginForm"
+        />
+      </View>
+    </View>
+  </View>
+</View>
+`;
