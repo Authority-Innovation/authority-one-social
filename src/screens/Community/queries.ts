@@ -13,6 +13,7 @@ import {
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
 import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
+import {useSession} from '#/state/session'
 import {COMMUNITIES_ENABLED} from '#/env'
 import {type CommunityDescriptor, postsSource, toDescriptor} from './descriptor'
 
@@ -22,15 +23,23 @@ export class CommunityReadError extends Error {
   }
 }
 
-export const createCommunityQueryKey = (args: {id: string}) =>
+/*
+ * Both keys carry the signed-in DID. The descriptor holds the caller's role
+ * and the timeline holds members-tier bodies, so on a shared device one
+ * account must never be shown another account's cached entry.
+ */
+export const createCommunityQueryKey = (args: {id: string; viewer: string}) =>
   createQueryKey('community', args)
 
-export const createCommunityTimelineQueryKey = (args: {id: string}) =>
-  createQueryKey('communityTimeline', args)
+export const createCommunityTimelineQueryKey = (args: {
+  id: string
+  viewer: string
+}) => createQueryKey('communityTimeline', args)
 
 export function useCommunityQuery({id}: {id: string}) {
+  const viewer = useSession().currentAccount?.did ?? ''
   return useQuery<CommunityDescriptor, CommunityReadError>({
-    queryKey: createCommunityQueryKey({id}),
+    queryKey: createCommunityQueryKey({id, viewer}),
     enabled: COMMUNITIES_ENABLED && !!id,
     staleTime: STALE.MINUTES.ONE,
     async queryFn() {
@@ -51,6 +60,7 @@ export function useCommunityTimelineQuery({
   community?: CommunityDescriptor
 }) {
   const id = community?.id ?? ''
+  const viewer = useSession().currentAccount?.did ?? ''
   return useInfiniteQuery<
     communitiesClient.CommunityTimelinePage,
     CommunityReadError,
@@ -58,9 +68,10 @@ export function useCommunityTimelineQuery({
     ReturnType<typeof createCommunityTimelineQueryKey>,
     string | undefined
   >({
-    queryKey: createCommunityTimelineQueryKey({id}),
+    queryKey: createCommunityTimelineQueryKey({id, viewer}),
     enabled:
       COMMUNITIES_ENABLED &&
+      !!viewer &&
       !!community &&
       postsSource(community) === 'runtime',
     initialPageParam: undefined,

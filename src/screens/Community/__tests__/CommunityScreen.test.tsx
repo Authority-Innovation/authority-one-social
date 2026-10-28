@@ -46,9 +46,13 @@ jest.mock('#/state/queries/group', () => ({
 }))
 
 const mockAgentCall = jest.fn()
+let mockViewerDid: string | undefined = 'did:example:alice'
 jest.mock('#/state/session', () => ({
-  ...jest.requireActual<Record<string, unknown>>('#/state/session'),
   useAgent: () => ({call: mockAgentCall}),
+  useSession: () => ({
+    hasSession: !!mockViewerDid,
+    currentAccount: mockViewerDid ? {did: mockViewerDid} : undefined,
+  }),
 }))
 
 // Layout's header pulls in navigation, analytics and breakpoints; plain views
@@ -171,13 +175,15 @@ function ThemeProbe() {
   return null
 }
 
+function newQueryClient() {
+  return new QueryClient({defaultOptions: {queries: {retry: false}}})
+}
+
 function renderScreen({
   id = 'btb',
   members = false,
-}: {id?: string; members?: boolean} = {}) {
-  const queryClient = new QueryClient({
-    defaultOptions: {queries: {retry: false}},
-  })
+  queryClient = newQueryClient(),
+}: {id?: string; members?: boolean; queryClient?: QueryClient} = {}) {
   const route = {key: 'k', name: members ? 'CommunityMembers' : 'Community'}
   const Screen = (members ? CommunityMembersScreen : CommunityScreen) as (p: {
     route: unknown
@@ -223,6 +229,7 @@ function elementsUsingColour(r: ReturnType<typeof render>, colour: string) {
 
 beforeEach(() => {
   mockCommunitiesEnabled = true
+  mockViewerDid = 'did:example:alice'
   jest.clearAllMocks()
   getTimeline.mockResolvedValue({
     ok: true,
@@ -383,6 +390,102 @@ describe('Community home - member', () => {
     expect(r.queryByTestId('communityPosts')).toBeNull()
     fireEvent.press(r.getByTestId('communityTab-posts'))
     expect(r.getByTestId('communityPosts')).toBeTruthy()
+  })
+})
+
+describe('Community home - account-scoped cache', () => {
+  it('does not show one account the cached community or timeline of another', async () => {
+    const queryClient = newQueryClient()
+    getCommunity.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        data: communityResponse(
+          mockViewerDid === 'did:example:alice' ? {role: 'member'} : {},
+        ),
+      }),
+    )
+
+    // Alice, a member, loads the members-tier timeline.
+    const alice = renderScreen({queryClient})
+    await alice.findByText(
+      'What should I listen to first?',
+      {},
+      {timeout: 3000},
+    )
+    alice.unmount()
+    expect(getTimeline).toHaveBeenCalledTimes(1)
+
+    // Bob, not a member, opens the same community on the same device.
+    mockViewerDid = 'did:example:bob'
+    const bob = renderScreen({queryClient})
+    expect(bob.queryByText('What should I listen to first?')).toBeNull()
+    expect(bob.queryByTestId('communityMemberBadge')).toBeNull()
+    await bob.findByTestId('communityWallPlaceholder', {}, {timeout: 3000})
+    expect(bob.queryByText('What should I listen to first?')).toBeNull()
+    expect(getCommunity).toHaveBeenCalledTimes(2)
+    expect(getTimeline).toHaveBeenCalledTimes(1)
+
+    const keys = queryClient
+      .getQueryCache()
+      .getAll()
+      .map(q => q.queryKey)
+      .filter(k => k[0] === 'community' || k[0] === 'communityTimeline')
+    const viewersOf = (root: string) =>
+      keys
+        .filter(k => k[0] === root)
+        .map(k => (k[1] as {viewer: string}).viewer)
+        .sort()
+    expect(viewersOf('community')).toEqual([
+      'did:example:alice',
+      'did:example:bob',
+    ])
+    // Bob's descriptor says non-member, so no timeline entry exists for him.
+    expect(viewersOf('communityTimeline')).toEqual(['did:example:alice'])
+  })
+
+  it('keeps two members on separate timeline entries', async () => {
+    const queryClient = newQueryClient()
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    getTimeline.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        data: {
+          posts: [
+            {
+              id: `p-${mockViewerDid}`,
+              author: {displayName: 'Someone', is_agent: false},
+              body: `Seen by ${mockViewerDid}`,
+              createdAt: '2026-10-28T09:29:00.000Z',
+            },
+          ],
+        },
+      }),
+    )
+
+    const alice = renderScreen({queryClient})
+    await alice.findByText('Seen by did:example:alice', {}, {timeout: 3000})
+    alice.unmount()
+
+    mockViewerDid = 'did:example:bob'
+    const bob = renderScreen({queryClient})
+    expect(bob.queryByText('Seen by did:example:alice')).toBeNull()
+    await bob.findByText('Seen by did:example:bob', {}, {timeout: 3000})
+    expect(bob.queryByText('Seen by did:example:alice')).toBeNull()
+    expect(getTimeline).toHaveBeenCalledTimes(2)
+  })
+
+  it('makes no timeline read when signed out', async () => {
+    mockViewerDid = undefined
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityHeader', {}, {timeout: 3000})
+    expect(getTimeline).not.toHaveBeenCalled()
   })
 })
 
