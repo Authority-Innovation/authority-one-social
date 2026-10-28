@@ -81,6 +81,7 @@ import {GroupManageScreen} from '#/screens/Chats/GroupManageScreen'
 import {NewAgentScreen} from '#/screens/Chats/NewAgentScreen'
 import {NewGroupScreen} from '#/screens/Chats/NewGroupScreen'
 import {CommunityMembersScreen, CommunityScreen} from '#/screens/Community'
+import {CommunityJoinScreen} from '#/screens/Community/JoinConsent'
 import {SharedPreferencesTesterScreen} from '#/screens/E2E/SharedPreferencesTesterScreen'
 import {FindContactsFlowScreen} from '#/screens/FindContactsFlowScreen'
 import {ForYouScreen} from '#/screens/ForYou'
@@ -734,6 +735,11 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="CommunityMembers"
         getComponent={() => CommunityMembersScreen}
         options={{title: title(msg`Community members`), requireAuth: true}}
+      />
+      <Stack.Screen
+        name="CommunityJoin"
+        getComponent={() => CommunityJoinScreen}
+        options={{title: title(msg`Join community`), requireAuth: true}}
       />
     </>
   )

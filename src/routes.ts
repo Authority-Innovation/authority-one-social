@@ -119,6 +119,7 @@ const routes: Record<keyof AllNavigatableRoutes, string | string[]> = {
   // Authority One Communities, dark behind EXPO_PUBLIC_COMMUNITIES_ENABLED
   Community: '/c/:id',
   CommunityMembers: '/c/:id/members',
+  CommunityJoin: '/c/:id/join',
 }
 
 export const router = new Router<AllNavigatableRoutes>(routes, {
