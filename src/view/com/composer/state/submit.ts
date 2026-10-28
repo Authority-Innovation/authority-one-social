@@ -36,11 +36,13 @@ export type SubmitComposerThreadResult =
   | {ok: false; communityError: CommunitySubmitError}
 
 /**
- * The composer's publish path for a thread. `target` must already be resolved
- * (see resolveTarget.ts), so replies carry their parent's target.
+ * The composer's publish path for a thread. `target` is required and must
+ * already be resolved (see resolveTarget.ts), so replies carry their parent's
+ * target. A missing target is refused (`unknown-target`), never treated as the
+ * profile.
  *
  * The members-content guard runs first, before anything touches the agent:
- *  - allowed (profile, public tier) -> the existing PDS path, unchanged.
+ *  - allowed (profile only) -> the existing PDS path, unchanged.
  *  - refused because the target is members/paid -> the communities runtime
  *    client, and nothing else. The agent is never handed the thread.
  *  - refused for any other reason -> returned as-is, nothing sent.
@@ -55,7 +57,7 @@ export async function submitComposerThread(
     langs,
     onStateChange,
   }: {
-    target?: ComposerTarget
+    target: ComposerTarget | undefined
     thread: ThreadDraft
     /** AT-URI of a PDS parent, or the runtime post id of a members parent. */
     replyTo?: string

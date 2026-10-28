@@ -4,12 +4,19 @@
  *
  * Rules (fork change plan, Phase 3 "Composer target and fail-closed rule"):
  *
- *  - profile and public-tier community targets keep the existing PDS path.
+ *  - profile targets keep the existing PDS path.
+ *  - public-tier community targets are refused for now
+ *    (`public-community-not-available`). The only PDS publish path is the
+ *    profile post path, and a public community post written there would land
+ *    on the user's profile with its community lost.
  *  - members and paid community targets go ONLY through the communities
  *    runtime client (`communitiesClient.post` / `.reply`). They never reach a
  *    PDS write; the T3 guard (`guardComposerPdsWrite`) still enforces that.
  *  - A reply inherits its parent's target. If the parent's target cannot be
- *    determined, the submit is refused with a typed error (fail closed).
+ *    determined, the submit is refused with a typed error (fail closed). With
+ *    the communities flag on, a PDS post AT-URI alone does not determine it (it
+ *    may be a public community post), so the caller must pass the parent's
+ *    target.
  *  - `EXPO_PUBLIC_LOCKED_COMMUNITY` fixes the target to that community. The
  *    composer cannot move a post anywhere else.
  *  - With `EXPO_PUBLIC_COMMUNITIES_ENABLED` off (the default), anything that
@@ -24,7 +31,7 @@ import {
 
 /** The write path a resolved target uses. */
 export type ComposerTargetRoute =
-  /** The user's PDS via the existing composer path (profile, public tier). */
+  /** The user's PDS via the existing composer path (profile only). */
   | 'pds'
   /** The communities runtime client. Members and paid tiers only. */
   | 'communities'
@@ -42,6 +49,11 @@ export type ComposerTargetErrorCode =
   | 'locked-community-tier-unknown'
   /** A community target while the communities flag is off. */
   | 'communities-disabled'
+  /**
+   * A public-tier community target. There is no community-aware public write
+   * path yet, and the profile path would drop the community.
+   */
+  | 'public-community-not-available'
 
 export type ComposerTargetError = {code: ComposerTargetErrorCode}
 
@@ -137,20 +149,26 @@ function isPdsPostUri(uri: unknown): boolean {
 }
 
 /**
- * The parent's target. An explicit target wins. Without one, an
- * app.bsky.feed.post AT-URI is a PDS record, and every PDS post is public, so
- * the reply stays on the PDS path as a profile reply. Anything else is unknown.
+ * The parent's target. An explicit target wins. Without one, with the
+ * communities flag off, an app.bsky.feed.post AT-URI is treated as a profile
+ * post (base behaviour). With the flag on it could also be a public community
+ * post, so it is unknown. Anything else is unknown.
  */
 function parentTarget(
   parent: ComposerTargetParent,
+  communitiesEnabled: boolean,
 ): ComposerTarget | undefined {
   if (parent.target !== undefined && parent.target !== null) {
     return normalise(parent.target)
   }
+  if (communitiesEnabled) return undefined
   return isPdsPostUri(parent.uri) ? {kind: 'profile'} : undefined
 }
 
 function ok(target: ComposerTarget, locked: boolean): ResolvedComposerTarget {
+  if (target.kind === 'community' && target.tier === 'public') {
+    return fail('public-community-not-available')
+  }
   return {ok: true, target, route: routeForTarget(target), locked}
 }
 
@@ -172,7 +190,7 @@ export function resolveTarget(
     if (!parent || typeof parent !== 'object') {
       return fail('unknown-parent-target')
     }
-    inherited = parentTarget(parent)
+    inherited = parentTarget(parent, communitiesEnabled)
     if (!inherited) return fail('unknown-parent-target')
     if (explicit && !sameTarget(explicit, inherited)) {
       return fail('reply-target-mismatch')

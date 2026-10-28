@@ -189,9 +189,8 @@ describe('submitComposerThread', () => {
   })
 
   describe('profile target (base behaviour, unchanged)', () => {
-    it.each<[string, ComposerTarget | undefined]>([
+    it.each<[string, ComposerTarget]>([
       ['explicit profile target', {kind: 'profile'}],
-      ['no target (default)', undefined],
     ])(
       '%s: writes the post to the session repo exactly as before',
       async (_name, target) => {
@@ -347,17 +346,43 @@ describe('submitComposerThread', () => {
     expectNoPdsWrites(mocks)
   })
 
-  it('public community target keeps the PDS path', async () => {
+  it('a missing target is refused, never treated as the profile', async () => {
+    const mocks = makeAgent()
+    const res = await submitComposerThread(mocks.agent, queryClient, {
+      target: undefined,
+      thread: makeThread('no target', {withImage: true}),
+      langs: ['en'],
+    })
+    expect(res).toEqual({
+      ok: false,
+      refusal: {
+        allowed: false,
+        reason: 'unknown-target',
+        refusedWrites: expect.any(Array),
+      },
+    })
+    expect(mockPost).not.toHaveBeenCalled()
+    expect(mockReply).not.toHaveBeenCalled()
+    expectNoPdsWrites(mocks)
+  })
+
+  it('a public community target is refused, not posted to the profile', async () => {
     const mocks = makeAgent()
     const res = await submitComposerThread(mocks.agent, queryClient, {
       target: {kind: 'community', id: 'c1', tier: 'public'},
-      thread: makeThread('public community post'),
+      thread: makeThread('public community post', {withImage: true}),
       langs: ['en'],
     })
-    expect(res).toMatchObject({ok: true, route: 'pds'})
-    expect(mocks.repo.applyWrites).toHaveBeenCalledTimes(1)
+    expect(res).toMatchObject({
+      ok: false,
+      refusal: {
+        allowed: false,
+        reason: 'public-community-write-not-available',
+      },
+    })
     expect(mockPost).not.toHaveBeenCalled()
     expect(mockReply).not.toHaveBeenCalled()
+    expectNoPdsWrites(mocks)
   })
 
   describe('resolveTarget + submit', () => {
@@ -387,13 +412,49 @@ describe('submitComposerThread', () => {
       expectNoPdsWrites(mocks)
     })
 
-    it('a reply to a PDS post inherits the profile target (unchanged)', async () => {
+    it('flag on: a reply to a PDS post with no known target is refused', () => {
+      expect(
+        resolveTarget({
+          communitiesEnabled: true,
+          parent: {uri: 'at://did:plc:parent/app.bsky.feed.post/3kabc'},
+        }),
+      ).toEqual({ok: false, error: {code: 'unknown-parent-target'}})
+    })
+
+    it('a reply to a public community post is refused', () => {
+      expect(
+        resolveTarget({
+          communitiesEnabled: true,
+          parent: {
+            uri: 'at://did:plc:parent/app.bsky.feed.post/3kabc',
+            target: {kind: 'community', id: 'c1', tier: 'public'},
+          },
+        }),
+      ).toEqual({ok: false, error: {code: 'public-community-not-available'}})
+    })
+
+    it.each<[string, Parameters<typeof resolveTarget>[0]]>([
+      [
+        'flag off, no parent target',
+        {
+          communitiesEnabled: false,
+          parent: {uri: 'at://did:plc:parent/app.bsky.feed.post/3kabc'},
+        },
+      ],
+      [
+        'flag on, explicit profile parent',
+        {
+          communitiesEnabled: true,
+          parent: {
+            uri: 'at://did:plc:parent/app.bsky.feed.post/3kabc',
+            target: {kind: 'profile'},
+          },
+        },
+      ],
+    ])('a reply to a profile post (%s) stays a profile reply', async (_n, ctx) => {
       const mocks = makeAgent()
       const parentUri = 'at://did:plc:parent/app.bsky.feed.post/3kabc'
-      const resolved = resolveTarget({
-        communitiesEnabled: true,
-        parent: {uri: parentUri},
-      })
+      const resolved = resolveTarget(ctx)
       expect(resolved).toMatchObject({ok: true, target: {kind: 'profile'}})
       if (!resolved.ok) return
       const res = await submitComposerThread(mocks.agent, queryClient, {

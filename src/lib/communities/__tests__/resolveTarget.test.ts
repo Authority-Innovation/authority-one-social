@@ -32,7 +32,11 @@ describe('resolveTarget', () => {
     // Top-level posts
     ['nothing requested -> profile', {...on}, {target: profile, route: 'pds'}],
     ['profile', {...on, requested: profile}, {target: profile, route: 'pds'}],
-    ['public community', {...on, requested: pub}, {target: pub, route: 'pds'}],
+    [
+      'public community refused',
+      {...on, requested: pub},
+      {error: 'public-community-not-available'},
+    ],
     [
       'members community',
       {...on, requested: members},
@@ -46,14 +50,20 @@ describe('resolveTarget', () => {
 
     // Reply inheritance
     [
-      'reply to a PDS post with no target -> profile',
+      // Could be a public community post; the URI alone cannot tell.
+      'flag on: reply to a PDS post with no target is unknown',
       {...on, parent: {uri: PDS_POST}},
+      {error: 'unknown-parent-target'},
+    ],
+    [
+      'reply to a PDS post with an explicit profile target',
+      {...on, parent: {uri: PDS_POST, target: profile}},
       {target: profile, route: 'pds'},
     ],
     [
-      'reply inherits a public parent',
+      'reply to a public parent refused',
       {...on, parent: {uri: PDS_POST, target: pub}},
-      {target: pub, route: 'pds'},
+      {error: 'public-community-not-available'},
     ],
     [
       'reply inherits a members parent',
@@ -109,8 +119,8 @@ describe('resolveTarget', () => {
       {error: 'reply-target-mismatch'},
     ],
     [
-      'explicit members on a PDS parent',
-      {...on, requested: members, parent: {uri: PDS_POST}},
+      'explicit members on a profile parent',
+      {...on, requested: members, parent: {uri: PDS_POST, target: profile}},
       {error: 'reply-target-mismatch'},
     ],
     [
@@ -167,9 +177,14 @@ describe('resolveTarget', () => {
         ...on,
         requested: profile,
         lockedCommunityId: 'c1',
-        lockedCommunityTier: 'public',
+        lockedCommunityTier: 'members',
       },
-      {target: pub, route: 'pds', locked: true},
+      {target: members, route: 'communities', locked: true},
+    ],
+    [
+      'locked: a public locked community is refused',
+      {...on, lockedCommunityId: 'c1', lockedCommunityTier: 'public'},
+      {error: 'public-community-not-available'},
     ],
     [
       'locked: tier taken from a matching request',
@@ -196,10 +211,10 @@ describe('resolveTarget', () => {
       {error: 'locked-community-mismatch'},
     ],
     [
-      'locked: reply to a PDS post refused',
+      'locked: reply to a profile post refused',
       {
         ...on,
-        parent: {uri: PDS_POST},
+        parent: {uri: PDS_POST, target: profile},
         lockedCommunityId: 'c1',
         lockedCommunityTier: 'members',
       },

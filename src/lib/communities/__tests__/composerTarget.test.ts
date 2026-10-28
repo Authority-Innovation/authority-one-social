@@ -8,10 +8,16 @@ import {
 } from '#/lib/communities/composerTarget'
 
 describe('guardComposerPdsWrite', () => {
-  it('defaults to the profile target', () => {
+  it('has no default: a missing target is refused', () => {
     expect(DEFAULT_COMPOSER_TARGET).toEqual({kind: 'profile'})
-    expect(guardComposerPdsWrite()).toEqual({allowed: true})
-    expect(guardComposerPdsWrite(undefined)).toEqual({allowed: true})
+    expect(guardComposerPdsWrite(DEFAULT_COMPOSER_TARGET)).toEqual({
+      allowed: true,
+    })
+    expect(guardComposerPdsWrite(undefined)).toEqual({
+      allowed: false,
+      reason: 'unknown-target',
+      refusedWrites: GUARDED_PDS_WRITES,
+    })
   })
 
   it.each<[string, ComposerTarget, boolean, string | undefined]>([
@@ -19,8 +25,8 @@ describe('guardComposerPdsWrite', () => {
     [
       'community public',
       {kind: 'community', id: 'c1', tier: 'public'},
-      true,
-      undefined,
+      false,
+      'public-community-write-not-available',
     ],
     [
       'community members',

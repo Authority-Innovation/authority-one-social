@@ -10,9 +10,13 @@
  * The members write path (a runtime client) is not built yet, so for now a
  * members/paid target is simply refused with a typed reason the UI can render.
  *
+ * Public-tier community targets are refused too: the only PDS publish path is
+ * the profile post path, which would drop the community.
+ *
  * The guard is deliberately NOT behind a feature flag: it is a fail-closed
- * safety check, and nothing sets a community target yet, so it is inert for
- * every existing caller (the default target is the user's own profile).
+ * safety check. It has no default target: a caller must pass one, and a
+ * missing target is refused. UI code that means "the user's own profile"
+ * passes DEFAULT_COMPOSER_TARGET explicitly.
  */
 
 export type CommunityTier = 'public' | 'members' | 'paid'
@@ -42,6 +46,8 @@ export type GuardedPdsWrite = (typeof GUARDED_PDS_WRITES)[number]
 export type ComposerWriteRefusalReason =
   /** Members/paid content: the walled-store write path is not available yet. */
   | 'members-write-not-available'
+  /** Public community content: no community-aware public write path yet. */
+  | 'public-community-write-not-available'
   /** Anything the guard does not recognise. Fails closed. */
   | 'unknown-target'
 
@@ -62,7 +68,7 @@ function refuse(reason: ComposerWriteRefusalReason): ComposerWriteDecision {
  * Never throws; an unrecognised target is refused rather than allowed.
  */
 export function guardComposerPdsWrite(
-  target: ComposerTarget | undefined = DEFAULT_COMPOSER_TARGET,
+  target: ComposerTarget | undefined,
 ): ComposerWriteDecision {
   if (!target || typeof target !== 'object') {
     return refuse('unknown-target')
@@ -72,9 +78,8 @@ export function guardComposerPdsWrite(
       return {allowed: true}
     case 'community':
       switch (target.tier) {
-        // Public-tier community posting is unchanged by this guard.
         case 'public':
-          return {allowed: true}
+          return refuse('public-community-write-not-available')
         case 'members':
         case 'paid':
           return refuse('members-write-not-available')
