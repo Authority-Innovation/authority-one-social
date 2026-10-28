@@ -1,8 +1,8 @@
 /**
  * COMMUNITIES client - /app/communities[/:id/...] on the agent runtime.
  *
- * Members-tier community content (posts, replies, media refs, exports) is only
- * ever reached through this client. It never calls the PDS: no
+ * Members-tier community content (posts, replies, exports) is only ever
+ * reached through this client. It never calls the PDS: no
  * com.atproto.repo.* writes and no uploadBlob. Every URL is built from
  * AGENT_RUNTIME_BASE_URL.
  *
@@ -30,82 +30,96 @@ export type CommunitiesResult<T> =
   | {ok: true; data: T}
   | {ok: false; error: CommunitiesError}
 
-export type CommunityRole = 'owner' | 'moderator' | 'member'
+/**
+ * The agent label on a community (N1): the config's agent DID. Only present
+ * while the runtime's community agent flag is on.
+ */
+export type CommunityAgent = {
+  did: string
+  is_agent: true
+}
 
+/** A community as the door returns it (`publicConfig` in door.js). */
 export type Community = {
   id: string
   name: string
-  description?: string | null
+  description: string | null
   /** Header-only accent (N3: never a whole-app reskin). */
-  accent?: string | null
-  /** The community's agent, from the community config (N1). */
-  agentDid?: string | null
-  memberCount?: number
-  /** The caller's role, absent when the caller is not a member. */
-  role?: CommunityRole | null
-  /** Consent version the caller must accept to join. */
-  consentVersion?: string | null
-  /** Whether the caller lets the community agent read their content. */
-  agentGrant?: boolean
+  accent: string | null
+  /** The consent wording version this community requires to join. */
+  wording_version: number | null
+  /**
+   * Absent while the community agent flag is off; null when on but there is
+   * no valid agent slot.
+   */
+  agent?: CommunityAgent | null
+  /** The runtime's refusal code for a misconfigured agent slot. */
+  agent_error?: string
 }
 
-export type CommunityMembership = {
-  communityId: string
-  role: CommunityRole
-  consentVersion: string
-  joinedAt?: string | null
+/** What a non-member is told before joining (GET /:id/join-info). */
+export type CommunityJoinInfo = {
+  wording_version: number | null
+}
+
+export type CommunityJoinResult = {
+  community: Community
+  joined: boolean
+}
+
+/** A source an agent item cites (`normaliseSources` in agent-slot.js). */
+export type CommunityItemSource = {
+  title: string | null
+  kind: string | null
+  ref: string | null
+  at: string | null
 }
 
 /**
- * A reference to media already held by the runtime's members-only store. This
- * client never uploads media anywhere; it only names what the runtime holds.
+ * One post or reply (`publicItem` in door.js). `is_agent` is runtime-supplied
+ * and never inferred from the author; it, `sources` and `no_source` are only
+ * present while the community agent flag is on.
  */
-export type CommunityMediaRef = {
-  mediaId: string
-  alt?: string
-}
-
-export type CommunityPostAuthor = {
-  displayName: string
-  avatar?: string | null
-  /** Runtime-supplied agent flag (N1). Never inferred from a handle. */
-  is_agent: boolean
-}
-
-export type CommunityPost = {
+export type CommunityItem = {
   id: string
-  author: CommunityPostAuthor
-  body: string
-  media?: CommunityMediaRef[]
-  parentId?: string | null
+  parentId: string | null
+  authorId: string
+  text: string
   createdAt: string
-  mine?: boolean
+  is_agent?: boolean
+  sources?: CommunityItemSource[]
+  no_source?: boolean
 }
 
 export type CommunityTimelinePage = {
-  posts: CommunityPost[]
-  cursor?: string
+  items: CommunityItem[]
+  cursor: string | null
 }
 
 export type CommunityExport = {
   communityId: string
-  generatedAt?: string
-  posts: CommunityPost[]
+  items: CommunityItem[]
 }
 
 export type AgentGrantState = {
-  agentGrant: boolean
+  communityId: string
+  on: boolean
 }
 
-const COMMUNITIES_ENDPOINT = `${AGENT_RUNTIME_BASE_URL}/app/communities`
+const COMMUNITIES_PATH = '/app/communities'
 
-function communityUrl(id: string, ...rest: string[]): string {
-  return [COMMUNITIES_ENDPOINT, id, ...rest].map(encodeSegment).join('/')
-}
-
-function encodeSegment(segment: string, index: number): string {
-  // The first segment is the base endpoint; everything after is a path part.
-  return index === 0 ? segment : encodeURIComponent(segment)
+/**
+ * Builds the URL from encoded path parts. Called inside `request`'s try block
+ * because encodeURIComponent throws on a lone surrogate.
+ */
+function communityUrl(parts: string[], query?: Record<string, string>): string {
+  const path = [COMMUNITIES_PATH, ...parts.map(encodeURIComponent)].join('/')
+  const qs = query
+    ? Object.entries(query)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&')
+    : ''
+  return `${AGENT_RUNTIME_BASE_URL}${path}${qs ? `?${qs}` : ''}`
 }
 
 function errMsg(e: unknown): string | undefined {
@@ -132,14 +146,18 @@ function validId(id: unknown): id is string {
 
 /**
  * One authenticated runtime request. Returns the parsed JSON body (or null for
- * an empty body) on 2xx, a typed error otherwise. Never throws.
+ * an empty body) on 2xx, a typed error otherwise. Never throws: the URL is
+ * built inside the try, so an id that can't be encoded comes back as
+ * `invalid_argument` rather than a thrown URIError.
  */
 async function request(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-  url: string,
+  method: 'GET' | 'POST' | 'DELETE',
+  parts: string[],
   body?: Record<string, unknown>,
+  query?: Record<string, string>,
 ): Promise<CommunitiesResult<unknown>> {
   try {
+    const url = communityUrl(parts, query)
     const token = await getAgentRuntimeAccessToken()
     if (!token) return {ok: false, error: {kind: 'signed_out'}}
     const headers: Record<string, string> = {Authorization: `Bearer ${token}`}
@@ -168,6 +186,10 @@ async function request(
       return badResponse('response was not JSON')
     }
   } catch (e) {
+    // Checked by name: an error from another realm fails instanceof.
+    if (isObject(e) && e.name === 'URIError') {
+      return invalid('id could not be encoded')
+    }
     logger.warn('communities: request failed', {safeMessage: errMsg(e)})
     return {ok: false, error: {kind: 'network', message: errMsg(e)}}
   }
@@ -199,6 +221,8 @@ function field<T>(
 
 const isArray = (v: unknown): v is unknown[] => Array.isArray(v)
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
+const isVersion = (v: unknown): v is number | null =>
+  v === null || (typeof v === 'number' && Number.isFinite(v))
 
 function done(result: CommunitiesResult<unknown>): CommunitiesResult<null> {
   return result.ok ? {ok: true, data: null} : result
@@ -208,38 +232,60 @@ function done(result: CommunitiesResult<unknown>): CommunitiesResult<null> {
 export async function listMyCommunities(): Promise<
   CommunitiesResult<Community[]>
 > {
-  const res = await request('GET', COMMUNITIES_ENDPOINT)
+  const res = await request('GET', [])
   return field(res, 'communities', isArray) as CommunitiesResult<Community[]>
 }
 
-/** One community's public-to-members details. */
+/** One community's members-only details. */
 export async function getCommunity(
   id: string,
 ): Promise<CommunitiesResult<Community>> {
   if (!validId(id)) return invalid('community id is required')
-  const res = await request('GET', communityUrl(id))
+  const res = await request('GET', [id])
   return field(res, 'community', isObject) as CommunitiesResult<Community>
 }
 
-/** Join, recording consent to the given consent version. */
+/**
+ * The consent wording version a non-member must accept before `join`. The
+ * runtime answers the same body for every id, so this never confirms that a
+ * community exists.
+ */
+export async function getJoinInfo(
+  id: string,
+): Promise<CommunitiesResult<CommunityJoinInfo>> {
+  if (!validId(id)) return invalid('community id is required')
+  const res = await request('GET', [id, 'join-info'])
+  const version = field(res, 'wording_version', isVersion)
+  return version.ok
+    ? {ok: true, data: {wording_version: version.data}}
+    : version
+}
+
+/** Join, recording consent to the given wording version. */
 export async function join(
   id: string,
-  consentVersion: string,
-): Promise<CommunitiesResult<CommunityMembership>> {
+  consentVersion: number,
+): Promise<CommunitiesResult<CommunityJoinResult>> {
   if (!validId(id)) return invalid('community id is required')
-  if (!validId(consentVersion)) return invalid('consent version is required')
-  const res = await request('POST', communityUrl(id, 'join'), {consentVersion})
-  return field(
-    res,
-    'membership',
-    isObject,
-  ) as CommunitiesResult<CommunityMembership>
+  if (typeof consentVersion !== 'number' || !Number.isFinite(consentVersion)) {
+    return invalid('consent version is required')
+  }
+  const res = await request('POST', [id, 'join'], {consentVersion})
+  if (!res.ok) return res
+  const data = res.data
+  if (!isObject(data) || !isObject(data.community) || !isBool(data.joined)) {
+    return badResponse('missing or malformed "community" or "joined"')
+  }
+  return {
+    ok: true,
+    data: {community: data.community as Community, joined: data.joined},
+  }
 }
 
 /** Leave a community. */
 export async function leave(id: string): Promise<CommunitiesResult<null>> {
   if (!validId(id)) return invalid('community id is required')
-  return done(await request('POST', communityUrl(id, 'leave')))
+  return done(await request('POST', [id, 'leave']))
 }
 
 /** One page of the members-only timeline. */
@@ -248,64 +294,50 @@ export async function getTimeline(
   cursor?: string,
 ): Promise<CommunitiesResult<CommunityTimelinePage>> {
   if (!validId(id)) return invalid('community id is required')
-  const base = communityUrl(id, 'timeline')
-  const url = cursor ? `${base}?cursor=${encodeURIComponent(cursor)}` : base
-  const res = await request('GET', url)
-  const posts = field(res, 'posts', isArray)
-  if (!posts.ok) return posts
+  const res = await request(
+    'GET',
+    [id, 'timeline'],
+    undefined,
+    cursor ? {cursor} : undefined,
+  )
+  const items = field(res, 'items', isArray)
+  if (!items.ok) return items
   const data = res.ok && isObject(res.data) ? res.data : {}
   return {
     ok: true,
     data: {
-      posts: posts.data as CommunityPost[],
-      ...(typeof data.cursor === 'string' ? {cursor: data.cursor} : {}),
+      items: items.data as CommunityItem[],
+      cursor: typeof data.cursor === 'string' ? data.cursor : null,
     },
   }
 }
 
-function mediaRefs(
-  media: CommunityMediaRef[] | undefined,
-): CommunityMediaRef[] {
-  if (!Array.isArray(media)) return []
-  return media
-    .filter(m => isObject(m) && validId(m.mediaId))
-    .map(m => (m.alt ? {mediaId: m.mediaId, alt: m.alt} : {mediaId: m.mediaId}))
-}
-
-/** New members-only post. Media are refs into the runtime's store. */
+/** New members-only post. */
 export async function post(
   id: string,
-  body: string,
-  media?: CommunityMediaRef[],
-): Promise<CommunitiesResult<CommunityPost>> {
+  text: string,
+): Promise<CommunitiesResult<CommunityItem>> {
   if (!validId(id)) return invalid('community id is required')
-  if (typeof body !== 'string') return invalid('post body is required')
-  const refs = mediaRefs(media)
-  if (!body.trim() && refs.length === 0) return invalid('post is empty')
-  const res = await request('POST', communityUrl(id, 'posts'), {
-    body,
-    media: refs,
-  })
-  return field(res, 'post', isObject) as CommunitiesResult<CommunityPost>
+  if (typeof text !== 'string' || !text.trim()) {
+    return invalid('post text is required')
+  }
+  const res = await request('POST', [id, 'posts'], {text})
+  return field(res, 'item', isObject) as CommunitiesResult<CommunityItem>
 }
 
 /** Reply to a members-only post. */
 export async function reply(
   id: string,
   parent: string,
-  body: string,
-): Promise<CommunitiesResult<CommunityPost>> {
+  text: string,
+): Promise<CommunitiesResult<CommunityItem>> {
   if (!validId(id)) return invalid('community id is required')
   if (!validId(parent)) return invalid('parent post id is required')
-  if (typeof body !== 'string' || !body.trim()) {
-    return invalid('reply body is required')
+  if (typeof text !== 'string' || !text.trim()) {
+    return invalid('reply text is required')
   }
-  const res = await request(
-    'POST',
-    communityUrl(id, 'posts', parent, 'replies'),
-    {body},
-  )
-  return field(res, 'post', isObject) as CommunitiesResult<CommunityPost>
+  const res = await request('POST', [id, 'posts', parent, 'replies'], {text})
+  return field(res, 'item', isObject) as CommunitiesResult<CommunityItem>
 }
 
 /** Delete one of the caller's own posts. The runtime enforces ownership. */
@@ -315,7 +347,7 @@ export async function deleteMine(
 ): Promise<CommunitiesResult<null>> {
   if (!validId(id)) return invalid('community id is required')
   if (!validId(postId)) return invalid('post id is required')
-  return done(await request('DELETE', communityUrl(id, 'posts', postId)))
+  return done(await request('DELETE', [id, 'posts', postId]))
 }
 
 /** Export the caller's own content in this community. */
@@ -323,12 +355,43 @@ export async function exportMine(
   id: string,
 ): Promise<CommunitiesResult<CommunityExport>> {
   if (!validId(id)) return invalid('community id is required')
-  const res = await request('GET', communityUrl(id, 'export'))
+  const res = await request('GET', [id, 'export'])
   if (!res.ok) return res
-  if (!isObject(res.data) || !Array.isArray(res.data.posts)) {
-    return badResponse('missing or malformed "posts"')
+  const data = res.data
+  if (
+    !isObject(data) ||
+    typeof data.communityId !== 'string' ||
+    !Array.isArray(data.items)
+  ) {
+    return badResponse('missing or malformed "communityId" or "items"')
   }
-  return {ok: true, data: res.data as CommunityExport}
+  return {
+    ok: true,
+    data: {communityId: data.communityId, items: data.items as CommunityItem[]},
+  }
+}
+
+function grantState(
+  res: CommunitiesResult<unknown>,
+): CommunitiesResult<AgentGrantState> {
+  if (!res.ok) return res
+  const data = res.data
+  if (
+    !isObject(data) ||
+    typeof data.communityId !== 'string' ||
+    !isBool(data.on)
+  ) {
+    return badResponse('missing or malformed "communityId" or "on"')
+  }
+  return {ok: true, data: {communityId: data.communityId, on: data.on}}
+}
+
+/** Whether the caller lets the community agent read their content. */
+export async function getAgentGrant(
+  id: string,
+): Promise<CommunitiesResult<AgentGrantState>> {
+  if (!validId(id)) return invalid('community id is required')
+  return grantState(await request('GET', [id, 'agent-grant']))
 }
 
 /** Turn the community agent's access to the caller's content on or off. */
@@ -338,7 +401,5 @@ export async function setAgentGrant(
 ): Promise<CommunitiesResult<AgentGrantState>> {
   if (!validId(id)) return invalid('community id is required')
   if (typeof on !== 'boolean') return invalid('grant must be on or off')
-  const res = await request('PUT', communityUrl(id, 'agent-grant'), {on})
-  const grant = field(res, 'agentGrant', isBool)
-  return grant.ok ? {ok: true, data: {agentGrant: grant.data}} : grant
+  return grantState(await request('POST', [id, 'agent-grant'], {on}))
 }
