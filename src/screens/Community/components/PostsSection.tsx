@@ -42,27 +42,19 @@ function MembersTimeline({community}: {community: CommunityDescriptor}) {
   return (
     <View testID="communityMembersTimeline">
       {posts.map(post => (
-        <MemberPostRow key={post.id} post={post} community={community} />
+        <MemberPostRow key={post.id} post={post} />
       ))}
     </View>
   )
 }
 
-function MemberPostRow({
-  post,
-  community,
-}: {
-  post: CommunityPost
-  community: CommunityDescriptor
-}) {
+function MemberPostRow({post}: {post: CommunityPost}) {
   const t = useTheme()
   const {i18n} = useLingui()
-  const authorDid = (post.author as {did?: unknown}).did
-  // N1: an agent label needs both the runtime flag and the config's agent DID.
-  const isAgent =
-    post.author.is_agent === true &&
-    !!community.agent &&
-    authorDid === community.agent.did
+  // N1: the runtime's is_agent flag alone decides the label. The door does
+  // not send an author DID, so requiring a DID match would hide every agent
+  // label. Mislabelling a human as an agent is the safer failure.
+  const isAgent = post.author.is_agent === true
   const created = new Date(post.createdAt)
 
   return (
