@@ -12,10 +12,6 @@ import {
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
 import {STALE} from '#/state/queries'
-import {
-  useGroupMembersQuery,
-  useGroupTimelineQuery,
-} from '#/state/queries/group'
 import {createQueryKey} from '#/state/queries/util'
 import {COMMUNITIES_ENABLED} from '#/env'
 import {type CommunityDescriptor, postsSource, toDescriptor} from './descriptor'
@@ -75,33 +71,4 @@ export function useCommunityTimelineQuery({
       return res.data
     },
   })
-}
-
-/** Public-tier posts, through the group AppView. */
-export function useCommunityPublicTimelineQuery({
-  community,
-}: {
-  community?: CommunityDescriptor
-}) {
-  const uri =
-    COMMUNITIES_ENABLED && community && postsSource(community) === 'group'
-      ? community.groupUri
-      : undefined
-  return useGroupTimelineQuery(uri)
-}
-
-/**
- * The member list, public tier only. There is no runtime member list for a
- * walled community yet, so nothing is fetched for one.
- */
-export function useCommunityMembersQuery({
-  community,
-}: {
-  community?: CommunityDescriptor
-}) {
-  const uri =
-    COMMUNITIES_ENABLED && community?.tier === 'public'
-      ? community.groupUri
-      : undefined
-  return useGroupMembersQuery(uri)
 }

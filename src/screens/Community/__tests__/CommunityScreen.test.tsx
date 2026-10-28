@@ -37,9 +37,18 @@ jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getTimeline: jest.fn(),
 }))
 
+// group.ts reads through the user's PDS agent (no group-AppView proxy yet), so
+// the screen must never reach it. Any call here is a failure.
 jest.mock('#/state/queries/group', () => ({
   useGroupTimelineQuery: jest.fn(() => ({data: undefined})),
   useGroupMembersQuery: jest.fn(() => ({data: undefined})),
+  useGroupQuery: jest.fn(() => ({data: undefined})),
+}))
+
+const mockAgentCall = jest.fn()
+jest.mock('#/state/session', () => ({
+  ...jest.requireActual<Record<string, unknown>>('#/state/session'),
+  useAgent: () => ({call: mockAgentCall}),
 }))
 
 // Layout's header pulls in navigation, analytics and breakpoints; plain views
@@ -102,7 +111,10 @@ jest.mock('../components/CommunityComposerEntry', () => {
 })
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
-import {useGroupTimelineQuery} from '#/state/queries/group'
+import {
+  useGroupMembersQuery,
+  useGroupTimelineQuery,
+} from '#/state/queries/group'
 import {applyCommunitiesFlag} from '#/screens/Community/linking'
 import {ThemeProvider, useTheme} from '#/alf'
 import {router} from '#/routes'
@@ -117,6 +129,7 @@ const getTimeline = communitiesClient.getTimeline as jest.Mock<
   typeof communitiesClient.getTimeline
 >
 const groupTimeline = useGroupTimelineQuery as unknown as jest.Mock
+const groupMembers = useGroupMembersQuery as unknown as jest.Mock
 
 const ACCENT = '#12AB34'
 const AGENT_DID = 'did:example:agent'
@@ -370,6 +383,55 @@ describe('Community home - member', () => {
     expect(r.queryByTestId('communityPosts')).toBeNull()
     fireEvent.press(r.getByTestId('communityTab-posts'))
     expect(r.getByTestId('communityPosts')).toBeTruthy()
+  })
+})
+
+describe('Community home - public tier', () => {
+  const PUBLIC = configWith({tier: 'com.authorityone.community.config#public'})
+  const GROUP_URI = 'at://did:example:owner/com.authorityone.group.profile/btb'
+
+  it.each([
+    ['non-member', {}],
+    ['member', {role: 'member'}],
+  ])(
+    'shows posts as not available yet and reads nothing for a %s',
+    async (_who, extra) => {
+      getCommunity.mockResolvedValue({
+        ok: true,
+        data: communityResponse({
+          ...extra,
+          config: PUBLIC,
+          groupUri: GROUP_URI,
+        }),
+      })
+      const r = renderScreen()
+      await r.findByTestId(
+        'communityPublicPostsUnavailable',
+        {},
+        {timeout: 3000},
+      )
+      expect(r.queryByTestId('communityPublicTimeline')).toBeNull()
+      expect(groupTimeline).not.toHaveBeenCalled()
+      expect(groupMembers).not.toHaveBeenCalled()
+      expect(mockAgentCall).not.toHaveBeenCalled()
+      expect(getTimeline).not.toHaveBeenCalled()
+    },
+  )
+
+  it('shows the member list as not available yet and reads nothing', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({config: PUBLIC, groupUri: GROUP_URI}),
+    })
+    const r = renderScreen({members: true})
+    await r.findByTestId(
+      'communityPublicMembersUnavailable',
+      {},
+      {timeout: 3000},
+    )
+    expect(groupMembers).not.toHaveBeenCalled()
+    expect(groupTimeline).not.toHaveBeenCalled()
+    expect(mockAgentCall).not.toHaveBeenCalled()
   })
 })
 

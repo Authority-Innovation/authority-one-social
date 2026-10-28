@@ -1,5 +1,4 @@
 import {View} from 'react-native'
-import {type AppBskyFeedDefs} from '@atproto/api'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
@@ -9,10 +8,7 @@ import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
-import {
-  useCommunityPublicTimelineQuery,
-  useCommunityTimelineQuery,
-} from '../queries'
+import {useCommunityTimelineQuery} from '../queries'
 
 export function PostsSection({community}: {community: CommunityDescriptor}) {
   const source = postsSource(community)
@@ -20,10 +16,8 @@ export function PostsSection({community}: {community: CommunityDescriptor}) {
     <View testID="communityPosts">
       {source === 'runtime' ? (
         <MembersTimeline community={community} />
-      ) : source === 'group' ? (
-        <PublicTimeline community={community} />
       ) : community.tier === 'public' ? (
-        <EmptyPosts />
+        <PublicNotAvailable />
       ) : (
         <WallPlaceholder />
       )}
@@ -101,49 +95,20 @@ function MemberPostRow({post}: {post: CommunityPost}) {
   )
 }
 
-function PublicTimeline({community}: {community: CommunityDescriptor}) {
-  const {data, isLoading, isError} = useCommunityPublicTimelineQuery({
-    community,
-  })
-  const items: AppBskyFeedDefs.FeedViewPost[] =
-    data?.pages.flatMap(page => page.feed) ?? []
-
-  if (isLoading) return <SectionLoader />
-  if (isError) return <PostsError />
-  if (items.length === 0) return <EmptyPosts />
-  return (
-    <View testID="communityPublicTimeline">
-      {items.map(item => (
-        <PublicPostRow key={item.post.uri} item={item} />
-      ))}
-    </View>
-  )
-}
-
-function PublicPostRow({item}: {item: AppBskyFeedDefs.FeedViewPost}) {
+/**
+ * Public-tier posts belong to the group AppView, which the app cannot reach
+ * yet (`group.ts` has no group-AppView proxy, so it would call the user's own
+ * PDS). Nothing is read until that transport exists.
+ */
+function PublicNotAvailable() {
   const t = useTheme()
-  const {post} = item
-  const record = post.record as {text?: unknown}
-  const text = typeof record.text === 'string' ? record.text : ''
   return (
     <View
-      style={[
-        a.flex_row,
-        a.gap_sm,
-        a.px_lg,
-        a.py_md,
-        a.border_b,
-        t.atoms.border_contrast_low,
-      ]}>
-      <UserAvatar type="user" size={40} avatar={post.author.avatar} />
-      <View style={[a.flex_1, a.gap_2xs]}>
-        <Text emoji style={[a.text_md, a.font_bold]} numberOfLines={1}>
-          {post.author.displayName || post.author.handle}
-        </Text>
-        <Text emoji style={[a.text_md, a.leading_snug]}>
-          {text}
-        </Text>
-      </View>
+      testID="communityPublicPostsUnavailable"
+      style={[a.align_center, a.py_2xl, a.px_lg]}>
+      <Text style={[a.text_md, a.text_center, t.atoms.text_contrast_medium]}>
+        <Trans>Posts for this community aren’t available yet.</Trans>
+      </Text>
     </View>
   )
 }

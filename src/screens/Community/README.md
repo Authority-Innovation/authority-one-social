@@ -22,11 +22,15 @@ nothing is fetched.
 - Members-tier posts are read only through `communitiesClient.getTimeline`,
   and only when the runtime says the caller is a member. A non-member gets
   placeholder rows and no read. An unknown tier is treated as members-only.
-- Public-tier communities read through `group.ts` (codegen types).
+- Public-tier posts and members are not read yet. They belong to the group
+  AppView, but `group.ts` still calls the user's PDS agent (its group-AppView
+  proxy is a TODO), so the screen shows a "not available yet" state and makes
+  no call. Wire the proxy in `group.ts` before turning these reads on.
 - The accent colour is applied inside `CommunityHeader` only (N3). It must be
   a CSS hex colour or it is dropped.
 - The agent card renders only when the config has both `agent` and
-  `agentSponsor` (N1). A post is labelled as the agent only when the runtime's
-  `is_agent` is set and the author DID matches the config's agent DID.
+  `agentSponsor` (N1). A post is labelled as the agent when the runtime's
+  `is_agent` is true. The runtime door sends no author DID, so there is no DID
+  match; the label fails toward showing.
 - No composer opens from here until T17 wires one whose target is fixed to
   the community. The ordinary composer would publish to the PDS.
