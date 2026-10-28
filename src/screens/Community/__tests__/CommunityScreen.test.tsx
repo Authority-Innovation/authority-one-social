@@ -1,0 +1,637 @@
+import {useEffect} from 'react'
+import {beforeEach, describe, expect, it, jest} from '@jest/globals'
+import {i18n} from '@lingui/core'
+import {I18nProvider} from '@lingui/react'
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {fireEvent, render, waitFor, within} from '@testing-library/react-native'
+
+// The bottom-sheet module reads Platform.Version at load, which is undefined
+// under jest-expo/ios.
+jest.mock('../../../../modules/bottom-sheet', () => ({
+  BottomSheet: () => null,
+  BottomSheetNativeComponent: () => null,
+  BottomSheetSnapPoint: {Hidden: 0, Partial: 1, Full: 2},
+}))
+
+let mockCommunitiesEnabled = true
+jest.mock('#/env', () => {
+  const actual = jest.requireActual<Record<string, unknown>>('#/env')
+  // A real getter, read at render time. (An object-literal getter next to a
+  // spread is flattened to a value by the spread transform.)
+  const env = {...actual}
+  Object.defineProperty(env, '__esModule', {value: true})
+  Object.defineProperty(env, 'COMMUNITIES_ENABLED', {
+    get: () => mockCommunitiesEnabled,
+  })
+  return env
+})
+
+const mockNavigate = jest.fn()
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual<Record<string, unknown>>('@react-navigation/native'),
+  useNavigation: () => ({navigate: mockNavigate}),
+}))
+
+jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
+  getCommunity: jest.fn(),
+  getTimeline: jest.fn(),
+}))
+
+// group.ts reads through the user's PDS agent (no group-AppView proxy yet), so
+// the screen must never reach it. Any call here is a failure.
+jest.mock('#/state/queries/group', () => ({
+  useGroupTimelineQuery: jest.fn(() => ({data: undefined})),
+  useGroupMembersQuery: jest.fn(() => ({data: undefined})),
+  useGroupQuery: jest.fn(() => ({data: undefined})),
+}))
+
+const mockAgentCall = jest.fn()
+let mockViewerDid: string | undefined = 'did:example:alice'
+jest.mock('#/state/session', () => ({
+  useAgent: () => ({call: mockAgentCall}),
+  useSession: () => ({
+    hasSession: !!mockViewerDid,
+    currentAccount: mockViewerDid ? {did: mockViewerDid} : undefined,
+  }),
+}))
+
+// Layout's header pulls in navigation, analytics and breakpoints; plain views
+// are enough to check what the screen puts inside it.
+// Factories use createElement and lower-case names so the React compiler's
+// transform does not reach into them.
+jest.mock('#/components/Layout', () => {
+  const {createElement} = require('react') as typeof import('react')
+  const {View} = require('react-native')
+  const pass = (props: {children?: React.ReactNode}) =>
+    createElement(View, null, props.children)
+  const none = () => null
+  return {
+    ...jest.requireActual<Record<string, unknown>>('#/components/Layout/const'),
+    Screen: pass,
+    Content: pass,
+    Center: pass,
+    Header: {
+      Outer: pass,
+      Content: pass,
+      Slot: pass,
+      BackButton: none,
+      TitleText: pass,
+    },
+  }
+})
+
+jest.mock('#/components/Link', () => {
+  const {createElement} = require('react') as typeof import('react')
+  const {Text} = require('react-native')
+  const link = (props: {children?: React.ReactNode}) =>
+    createElement(Text, null, props.children)
+  return {InlineLinkText: link}
+})
+
+jest.mock('#/view/com/util/UserAvatar', () => {
+  const avatar = () => null
+  return {UserAvatar: avatar}
+})
+
+const mockOpenJoin = jest.fn()
+jest.mock('#/components/Dialog', () => ({
+  useDialogControl: () => ({
+    id: 'join',
+    ref: {current: null},
+    open: mockOpenJoin,
+    close: jest.fn(),
+  }),
+}))
+
+jest.mock('../components/JoinConsentEntry', () => {
+  const entry = () => null
+  return {JoinConsentEntry: entry}
+})
+
+const mockComposerEntry = jest.fn((_props: {communityId: string}) => null)
+jest.mock('../components/CommunityComposerEntry', () => {
+  const entry = (props: {communityId: string}) => mockComposerEntry(props)
+  return {CommunityComposerEntry: entry}
+})
+
+import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
+import {
+  useGroupMembersQuery,
+  useGroupTimelineQuery,
+} from '#/state/queries/group'
+import {applyCommunitiesFlag} from '#/screens/Community/linking'
+import {ThemeProvider, useTheme} from '#/alf'
+import {router} from '#/routes'
+import {CommunityMembersScreen, CommunityScreen} from '../index'
+
+i18n.loadAndActivate({locale: 'en', messages: {}})
+
+const getCommunity = communitiesClient.getCommunity as jest.Mock<
+  typeof communitiesClient.getCommunity
+>
+const getTimeline = communitiesClient.getTimeline as jest.Mock<
+  typeof communitiesClient.getTimeline
+>
+const groupTimeline = useGroupTimelineQuery as unknown as jest.Mock
+const groupMembers = useGroupMembersQuery as unknown as jest.Mock
+
+const ACCENT = '#12AB34'
+const AGENT_DID = 'did:example:agent'
+const SPONSOR_DID = 'did:example:sponsor'
+
+function communityResponse(extra: Record<string, unknown> = {}) {
+  return {
+    id: 'btb',
+    name: 'Between Two Beers Listeners',
+    description: 'For listeners of the show.',
+    memberCount: 1240,
+    agentName: 'Steve',
+    rules: 'Be kind. No spoilers before release day.',
+    config: {
+      tier: 'com.authorityone.community.config#members',
+      theme: {accent: ACCENT},
+      agent: AGENT_DID,
+      agentSponsor: SPONSOR_DID,
+      brand: {displayName: 'Between Two Beers'},
+      consentVersion: 1,
+    },
+    ...extra,
+  } as communitiesClient.Community
+}
+
+function configWith(overrides: Record<string, unknown>) {
+  const base = communityResponse() as unknown as {config: object}
+  return {...base.config, ...overrides}
+}
+
+/** The app theme as any screen outside the community header sees it. */
+const seen = {theme: ''}
+function ThemeProbe() {
+  const t = useTheme()
+  const theme = `${t.palette.primary_500}|${String(t.atoms.bg.backgroundColor)}`
+  useEffect(() => {
+    seen.theme = theme
+  }, [theme])
+  return null
+}
+
+function newQueryClient() {
+  return new QueryClient({defaultOptions: {queries: {retry: false}}})
+}
+
+function renderScreen({
+  id = 'btb',
+  members = false,
+  queryClient = newQueryClient(),
+}: {id?: string; members?: boolean; queryClient?: QueryClient} = {}) {
+  const route = {key: 'k', name: members ? 'CommunityMembers' : 'Community'}
+  const Screen = (members ? CommunityMembersScreen : CommunityScreen) as (p: {
+    route: unknown
+    navigation: unknown
+  }) => React.ReactNode
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider i18n={i18n}>
+        <ThemeProvider theme="light">
+          <Screen route={{...route, params: {id}}} navigation={{}} />
+          <ThemeProbe />
+        </ThemeProvider>
+      </I18nProvider>
+    </QueryClientProvider>,
+  )
+}
+
+type JsonNode = {
+  props: {testID?: string; style?: unknown}
+  children: (JsonNode | string)[] | null
+}
+
+/**
+ * Every rendered host element whose style mentions `colour`, with whether it
+ * sits inside the community header.
+ */
+function elementsUsingColour(r: ReturnType<typeof render>, colour: string) {
+  const found: {testID?: string; inHeader: boolean}[] = []
+  const walk = (node: JsonNode | string, inHeader: boolean) => {
+    if (typeof node === 'string') return
+    const here = inHeader || node.props.testID === 'communityHeader'
+    if (JSON.stringify(node.props.style ?? null).includes(colour)) {
+      found.push({testID: node.props.testID, inHeader: here})
+    }
+    for (const child of node.children ?? []) walk(child, here)
+  }
+  const json = r.toJSON() as unknown as JsonNode | JsonNode[] | null
+  for (const root of Array.isArray(json) ? json : json ? [json] : []) {
+    walk(root, false)
+  }
+  return found
+}
+
+beforeEach(() => {
+  mockCommunitiesEnabled = true
+  mockViewerDid = 'did:example:alice'
+  jest.clearAllMocks()
+  getTimeline.mockResolvedValue({
+    ok: true,
+    data: {
+      posts: [
+        {
+          id: 'p1',
+          author: {displayName: 'Sam R.', is_agent: false},
+          body: 'What should I listen to first?',
+          createdAt: '2026-10-28T09:29:00.000Z',
+        },
+        {
+          id: 'p2',
+          // The runtime door sends no author DID, only the is_agent flag.
+          author: {displayName: 'Steve', is_agent: true},
+          body: 'Episode 12 is a good start.',
+          parentId: 'p1',
+          createdAt: '2026-10-28T09:40:00.000Z',
+        },
+        {
+          // A human whose author object carries a stray agent-like name.
+          id: 'p3',
+          author: {displayName: 'Steve Agent', is_agent: false},
+          body: 'I am not an agent.',
+          createdAt: '2026-10-28T09:41:00.000Z',
+        },
+      ],
+    },
+  })
+})
+
+describe('Community home - non-member', () => {
+  beforeEach(() => {
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+  })
+
+  it('shows the public descriptor and a join button, and never reads the timeline', async () => {
+    const r = renderScreen()
+    await r.findByText('Between Two Beers Listeners', {}, {timeout: 3000})
+
+    expect(getCommunity).toHaveBeenCalledWith('btb')
+    expect(getTimeline).not.toHaveBeenCalled()
+    expect(r.getByTestId('communityJoinButton')).toBeTruthy()
+    expect(r.getByText('Join community')).toBeTruthy()
+    expect(r.getByText('Members only')).toBeTruthy()
+    expect(r.getByText('Be kind. No spoilers before release day.')).toBeTruthy()
+    expect(r.getByTestId('communityAgentCard')).toBeTruthy()
+    expect(r.queryByTestId('communityMemberBadge')).toBeNull()
+  })
+
+  it('renders no members-tier content, only placeholder rows', async () => {
+    const r = renderScreen()
+    await r.findByTestId('communityWallPlaceholder', {}, {timeout: 3000})
+
+    expect(r.queryByTestId('communityMembersTimeline')).toBeNull()
+    expect(r.queryByText('What should I listen to first?')).toBeNull()
+    expect(r.queryByText('Episode 12 is a good start.')).toBeNull()
+    expect(r.getByTestId('communityMembersNotice')).toBeTruthy()
+    // A walled community is never read through group.ts either.
+    for (const call of groupTimeline.mock.calls) {
+      expect(call[0]).toBeUndefined()
+    }
+    // No composer for a non-member.
+    expect(mockComposerEntry).not.toHaveBeenCalled()
+  })
+
+  it('opens the join-consent entry from the join button', async () => {
+    const r = renderScreen()
+    fireEvent.press(
+      await r.findByTestId('communityJoinButton', {}, {timeout: 3000}),
+    )
+    expect(mockOpenJoin).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Community home - member', () => {
+  beforeEach(() => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+  })
+
+  it('reads the timeline with only this community id', async () => {
+    const r = renderScreen({id: 'btb'})
+    await r.findByText('What should I listen to first?', {}, {timeout: 3000})
+
+    expect(getTimeline).toHaveBeenCalled()
+    for (const call of getTimeline.mock.calls) {
+      expect(call[0]).toBe('btb')
+    }
+    expect(getCommunity.mock.calls.every(call => call[0] === 'btb')).toBe(true)
+    expect(r.getByTestId('communityMemberBadge')).toBeTruthy()
+    expect(r.queryByTestId('communityJoinButton')).toBeNull()
+    expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
+  })
+
+  it('labels a post as the agent from is_agent alone, with no author DID', async () => {
+    const r = renderScreen()
+    await r.findByText('Episode 12 is a good start.', {}, {timeout: 3000})
+    expect(r.getByText('I am not an agent.')).toBeTruthy()
+    expect(r.getAllByTestId('communityPostAgentLabel')).toHaveLength(1)
+    expect(
+      within(r.getByTestId('communityPost-p2')).getByTestId(
+        'communityPostAgentLabel',
+      ),
+    ).toBeTruthy()
+    expect(
+      within(r.getByTestId('communityPost-p3')).queryByTestId(
+        'communityPostAgentLabel',
+      ),
+    ).toBeNull()
+  })
+
+  it('labels an is_agent post even when the community config names no agent', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({
+        role: 'member',
+        config: configWith({agent: undefined}),
+      }),
+    })
+    getTimeline.mockResolvedValue({
+      ok: true,
+      data: {
+        posts: [
+          {
+            id: 'a1',
+            author: {displayName: 'Bot', is_agent: true},
+            body: 'Agent with no did.',
+            createdAt: '2026-10-28T09:40:00.000Z',
+          },
+        ],
+      },
+    })
+    const r = renderScreen()
+    await r.findByText('Agent with no did.', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentCard')).toBeNull()
+    expect(
+      within(r.getByTestId('communityPost-a1')).getByTestId(
+        'communityPostAgentLabel',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('passes this community id to the composer entry', async () => {
+    const r = renderScreen({id: 'btb'})
+    await r.findByText('What should I listen to first?', {}, {timeout: 3000})
+    expect(mockComposerEntry).toHaveBeenCalled()
+    for (const call of mockComposerEntry.mock.calls) {
+      expect(call[0]).toEqual({communityId: 'btb'})
+    }
+  })
+
+  it('opens on the Members tab from /c/:id/members', async () => {
+    const r = renderScreen({members: true})
+    await r.findByTestId('communityMembersSection', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityPosts')).toBeNull()
+    fireEvent.press(r.getByTestId('communityTab-posts'))
+    expect(r.getByTestId('communityPosts')).toBeTruthy()
+  })
+})
+
+describe('Community home - account-scoped cache', () => {
+  it('does not show one account the cached community or timeline of another', async () => {
+    const queryClient = newQueryClient()
+    getCommunity.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        data: communityResponse(
+          mockViewerDid === 'did:example:alice' ? {role: 'member'} : {},
+        ),
+      }),
+    )
+
+    // Alice, a member, loads the members-tier timeline.
+    const alice = renderScreen({queryClient})
+    await alice.findByText(
+      'What should I listen to first?',
+      {},
+      {timeout: 3000},
+    )
+    alice.unmount()
+    expect(getTimeline).toHaveBeenCalledTimes(1)
+
+    // Bob, not a member, opens the same community on the same device.
+    mockViewerDid = 'did:example:bob'
+    const bob = renderScreen({queryClient})
+    expect(bob.queryByText('What should I listen to first?')).toBeNull()
+    expect(bob.queryByTestId('communityMemberBadge')).toBeNull()
+    await bob.findByTestId('communityWallPlaceholder', {}, {timeout: 3000})
+    expect(bob.queryByText('What should I listen to first?')).toBeNull()
+    expect(getCommunity).toHaveBeenCalledTimes(2)
+    expect(getTimeline).toHaveBeenCalledTimes(1)
+
+    const keys = queryClient
+      .getQueryCache()
+      .getAll()
+      .map(q => q.queryKey)
+      .filter(k => k[0] === 'community' || k[0] === 'communityTimeline')
+    const viewersOf = (root: string) =>
+      keys
+        .filter(k => k[0] === root)
+        .map(k => (k[1] as {viewer: string}).viewer)
+        .sort()
+    expect(viewersOf('community')).toEqual([
+      'did:example:alice',
+      'did:example:bob',
+    ])
+    // Bob's descriptor says non-member, so no timeline entry exists for him.
+    expect(viewersOf('communityTimeline')).toEqual(['did:example:alice'])
+  })
+
+  it('keeps two members on separate timeline entries', async () => {
+    const queryClient = newQueryClient()
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    getTimeline.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        data: {
+          posts: [
+            {
+              id: `p-${mockViewerDid}`,
+              author: {displayName: 'Someone', is_agent: false},
+              body: `Seen by ${mockViewerDid}`,
+              createdAt: '2026-10-28T09:29:00.000Z',
+            },
+          ],
+        },
+      }),
+    )
+
+    const alice = renderScreen({queryClient})
+    await alice.findByText('Seen by did:example:alice', {}, {timeout: 3000})
+    alice.unmount()
+
+    mockViewerDid = 'did:example:bob'
+    const bob = renderScreen({queryClient})
+    expect(bob.queryByText('Seen by did:example:alice')).toBeNull()
+    await bob.findByText('Seen by did:example:bob', {}, {timeout: 3000})
+    expect(bob.queryByText('Seen by did:example:alice')).toBeNull()
+    expect(getTimeline).toHaveBeenCalledTimes(2)
+  })
+
+  it('makes no timeline read when signed out', async () => {
+    mockViewerDid = undefined
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityHeader', {}, {timeout: 3000})
+    expect(getTimeline).not.toHaveBeenCalled()
+  })
+})
+
+describe('Community home - public tier', () => {
+  const PUBLIC = configWith({tier: 'com.authorityone.community.config#public'})
+  const GROUP_URI = 'at://did:example:owner/com.authorityone.group.profile/btb'
+
+  it.each([
+    ['non-member', {}],
+    ['member', {role: 'member'}],
+  ])(
+    'shows posts as not available yet and reads nothing for a %s',
+    async (_who, extra) => {
+      getCommunity.mockResolvedValue({
+        ok: true,
+        data: communityResponse({
+          ...extra,
+          config: PUBLIC,
+          groupUri: GROUP_URI,
+        }),
+      })
+      const r = renderScreen()
+      await r.findByTestId(
+        'communityPublicPostsUnavailable',
+        {},
+        {timeout: 3000},
+      )
+      expect(r.queryByTestId('communityPublicTimeline')).toBeNull()
+      expect(groupTimeline).not.toHaveBeenCalled()
+      expect(groupMembers).not.toHaveBeenCalled()
+      expect(mockAgentCall).not.toHaveBeenCalled()
+      expect(getTimeline).not.toHaveBeenCalled()
+    },
+  )
+
+  it('shows the member list as not available yet and reads nothing', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({config: PUBLIC, groupUri: GROUP_URI}),
+    })
+    const r = renderScreen({members: true})
+    await r.findByTestId(
+      'communityPublicMembersUnavailable',
+      {},
+      {timeout: 3000},
+    )
+    expect(groupMembers).not.toHaveBeenCalled()
+    expect(groupTimeline).not.toHaveBeenCalled()
+    expect(mockAgentCall).not.toHaveBeenCalled()
+  })
+})
+
+describe('Community home - agent card', () => {
+  it('is hidden when the config has no agent', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({config: configWith({agent: undefined})}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityHeader', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentCard')).toBeNull()
+  })
+
+  it('is hidden when the config has no agentSponsor', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({config: configWith({agentSponsor: undefined})}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityHeader', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentCard')).toBeNull()
+  })
+
+  it('shows the name, sponsor line and scope when both are set', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    const r = renderScreen()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(r.getByText('Steve')).toBeTruthy()
+    expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
+      'AI agent · sponsor: Between Two Beers',
+    )
+    expect(r.getByTestId('communityAgentScope')).toBeTruthy()
+  })
+})
+
+describe('Community home - accent colour', () => {
+  it('appears in the community header only, and the app theme is unchanged', async () => {
+    // The app theme as it is with no community on screen.
+    getCommunity.mockReturnValue(new Promise(() => {}))
+    const before = renderScreen()
+    const baseline = seen.theme
+    before.unmount()
+
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    const r = renderScreen()
+    await r.findByTestId('communityHeader', {}, {timeout: 3000})
+
+    expect(baseline).not.toBe('')
+    expect(seen.theme).toBe(baseline)
+    expect(baseline).not.toContain(ACCENT)
+
+    const users = elementsUsingColour(r, ACCENT)
+    expect(users.length).toBeGreaterThan(0)
+    expect(users.filter(u => !u.inHeader)).toEqual([])
+  })
+
+  it('ignores an accent that is not a hex colour', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({config: configWith({theme: {accent: 'red'}})}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityHeader', {}, {timeout: 3000})
+    expect(elementsUsingColour(r, '"red"')).toHaveLength(0)
+  })
+})
+
+describe('Community home - flag off', () => {
+  it('lands a /c/:id deep link on Home', () => {
+    expect(applyCommunitiesFlag(router.matchPath('/c/btb'), false)).toEqual([
+      'Home',
+      {},
+    ])
+    expect(
+      applyCommunitiesFlag(router.matchPath('/c/btb/members'), false),
+    ).toEqual(['Home', {}])
+  })
+
+  it('sends an in-app push to Home and reads nothing', async () => {
+    mockCommunitiesEnabled = false
+    const r = renderScreen()
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('Home'))
+    expect(r.queryByTestId('communityHeader')).toBeNull()
+    expect(getCommunity).not.toHaveBeenCalled()
+    expect(getTimeline).not.toHaveBeenCalled()
+  })
+})
+
+describe('Community home - errors', () => {
+  it('shows an error state when the runtime refuses', async () => {
+    getCommunity.mockResolvedValue({
+      ok: false,
+      error: {kind: 'http', status: 403},
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityError', {}, {timeout: 3000})
+    expect(getTimeline).not.toHaveBeenCalled()
+  })
+})

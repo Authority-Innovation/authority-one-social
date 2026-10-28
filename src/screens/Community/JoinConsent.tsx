@@ -44,7 +44,7 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
 import {agreeAndJoin, consentGateFor, type JoinConsentConfig} from './consent'
-import {useCommunitiesDisabledFallback} from './index'
+import {useCommunitiesDisabledFallback} from './useCommunitiesDisabledFallback'
 
 const communityJoinConfigQueryKeyRoot = 'communityJoinConfig'
 const createCommunityJoinConfigQueryKey = (args: {id: string}) =>

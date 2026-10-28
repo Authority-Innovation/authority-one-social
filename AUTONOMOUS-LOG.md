@@ -102,3 +102,25 @@
   - No Cloudflare deploy CLI or check:bundle (deny-listed), and no deploy.
   - The config fields for sponsor, agent name, rules and links are assumed. See the open questions.
 - **Details:** `docs/communities/W2-T9-join-consent-report.md`
+
+## 2026-10-28 – Communities W2-T12: community home screen (task 2f8fe123)
+
+- **Branch:** `communities/w2-community-home`, base `569b3b240` with T1, T2 and T8 merged in by merge commits. Code head `5e2704fb4`. This entry and the report are in a follow-up docs commit.
+- **What changed:**
+  - `src/screens/Community/` is now the real community home. It replaces the T1 placeholder and the Group stub, which is deleted.
+  - It has a header with the accent in the header only, an agent card (N1), and Posts and Members tabs.
+  - A non-member sees the descriptor, placeholder rows and the Join slot (T9), and no timeline read is made.
+  - A member reads the timeline through `communitiesClient.getTimeline`. Public tier reads through `group.ts`.
+  - The composer slot receives `communityId` and renders nothing until T17.
+- **Tests:**
+  - Before: 1513 passed, 1 failed, 28 todo (133 suites).
+  - After: 1538 passed, 1 failed, 28 todo (135 suites).
+  - The same 2 pre-existing suites fail before and after.
+  - Typecheck is green.
+- **Verdict:** done, as a draft PR awaiting a separate reviewer.
+- **NOT done:**
+  - JoinConsent (T9) and the composer target (T17) are slots only.
+  - The runtime has no member list for walled communities.
+  - Agent labels on posts need `author.did` from the runtime.
+  - No device run. No `wrangler` or `check:bundle` (deny-listed). No deploy.
+- **Report:** `docs/communities/W2-T12-community-home-report.md`.
