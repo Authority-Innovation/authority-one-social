@@ -1,6 +1,7 @@
 import {describe, expect, it} from '@jest/globals'
 
 import {type ComposerTarget} from '#/lib/communities/composerTarget'
+import {feedPostTarget} from '#/lib/communities/feedPostTarget'
 import {
   type ComposerTargetErrorCode,
   type ComposerTargetRoute,
@@ -50,8 +51,14 @@ describe('resolveTarget', () => {
 
     // Reply inheritance
     [
-      // Could be a public community post; the URI alone cannot tell.
-      'flag on: reply to a PDS post with no target is unknown',
+      // The reply openers set the parent's target from the feed item.
+      'flag on: reply to an ordinary feed post (opener passes its target)',
+      {...on, parent: {uri: PDS_POST, target: feedPostTarget({uri: PDS_POST})}},
+      {target: profile, route: 'pds'},
+    ],
+    [
+      // Only an opener that passed no target gets here: genuinely unknown.
+      'flag on: reply to a PDS post whose target was never passed',
       {...on, parent: {uri: PDS_POST}},
       {error: 'unknown-parent-target'},
     ],

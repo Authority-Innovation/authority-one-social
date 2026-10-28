@@ -29,8 +29,9 @@ export interface ComposerOptsPostRef {
   embed?: AppBskyFeedDefs.PostView['embed']
   moderation?: ModerationDecision
   /**
-   * The parent's target. A reply inherits it; when absent, only an
-   * app.bsky.feed.post AT-URI counts as a known (PDS) parent. For a
+   * The parent's target. A reply inherits it. Every reply opener sets it
+   * (AppView posts use `feedPostTarget`). When absent with the communities
+   * flag on, the reply is refused as `unknown-parent-target`. For a
    * members/paid parent, `uri` is the runtime post id.
    */
   target?: ComposerTarget

@@ -9,6 +9,7 @@ import {
 } from '@atproto/api'
 import {Plural, Trans, useLingui} from '@lingui/react/macro'
 
+import {feedPostTarget} from '#/lib/communities/feedPostTarget'
 import {useNonReactiveCallback} from '#/lib/hooks/useNonReactiveCallback'
 import {useOpenComposer} from '#/lib/hooks/useOpenComposer'
 import {makeProfileLink} from '#/lib/routes/links'
@@ -257,6 +258,7 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
         embed: post.embed,
         moderation,
         langs: record.langs,
+        target: feedPostTarget(post),
       },
       onPostSuccess: onPostSuccess,
       logContext: 'PostReply',
