@@ -8,8 +8,12 @@ signed-in person belongs to.
   one community (`EXPO_PUBLIC_LOCKED_COMMUNITY` empty). Both default off. With
   the flags off, the membership list is never requested.
 - **Data:** `useMyCommunitiesQuery` calls `communitiesClient.listMyCommunities()`.
-  Any client error returns an empty list (fail closed). Malformed or duplicate
-  entries are dropped. A community the person has left is gone on the next
+  A signed-out result is an empty list. Any other client error (network, http,
+  bad response) throws, so a failed refetch keeps the last good list and the
+  current selection; a failed first load shows only "All". This is a deliberate
+  change from the earlier "fail closed to empty", which let one flaky refetch
+  wipe every chip and reset the selection. Malformed or duplicate entries are
+  dropped. A community the person has left is gone on the next successful
   fetch, and a selection pointing at it falls back to "All".
 - **State:** the selected chip is client state in
   `#/state/shell/selected-community` (key `selectedCommunityFeed`). Values are

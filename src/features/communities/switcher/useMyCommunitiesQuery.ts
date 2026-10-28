@@ -12,9 +12,11 @@ export const createMyCommunitiesQueryKey = (args: {did: string}) =>
   createQueryKey(myCommunitiesQueryKeyRoot, args)
 
 /**
- * The communities the signed-in person belongs to. Fails closed: any client
- * error yields an empty list, so a community the person has left never lingers
- * as a chip after the next fetch.
+ * The communities the signed-in person belongs to. A signed-out result is an
+ * empty list. Any other client error throws, so React Query keeps the last good
+ * list (and the selection built on it) through a flaky refetch, and a first
+ * load that fails shows no chips. A community the person has left is still
+ * gone on the next successful fetch.
  */
 export function useMyCommunitiesQuery() {
   const {currentAccount} = useSession()
@@ -24,7 +26,9 @@ export function useMyCommunitiesQuery() {
     queryKey: createMyCommunitiesQueryKey({did}),
     queryFn: async () => {
       const res = await listMyCommunities()
-      return res.ok ? toSwitcherCommunities(res.data) : []
+      if (res.ok) return toSwitcherCommunities(res.data)
+      if (res.error.kind === 'signed_out') return []
+      throw new Error(`listMyCommunities failed: ${res.error.kind}`)
     },
     staleTime: STALE.MINUTES.ONE,
     enabled: !!did && isCommunitySwitcherEnabled(),

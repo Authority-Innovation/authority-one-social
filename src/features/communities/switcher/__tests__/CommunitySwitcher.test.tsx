@@ -143,6 +143,9 @@ import {
   useSelectedCommunityFeed,
 } from '#/state/shell/selected-community'
 import {CommunitySwitcher} from '../index'
+import {createMyCommunitiesQueryKey} from '../useMyCommunitiesQuery'
+
+const MY_KEY = createMyCommunitiesQueryKey({did: 'did:example'})
 
 const mockList = listMyCommunities as jest.MockedFunction<
   typeof listMyCommunities
@@ -256,6 +259,53 @@ describe('CommunitySwitcher chips', () => {
     const r = renderSwitcher()
     await waitFor(() => expect(mockList).toHaveBeenCalled())
     expect(r.getAllByRole('tab')).toHaveLength(1)
+  })
+
+  it('shows only "All" when the first load fails', async () => {
+    mockList.mockResolvedValue({
+      ok: false,
+      error: {kind: 'http', status: 503},
+    })
+    const r = renderSwitcher()
+    await waitFor(() => expect(mockList).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(r.queryClient.getQueryState(MY_KEY)?.status).toBe('error'),
+    )
+    expect(r.getAllByRole('tab')).toHaveLength(1)
+    expect(lastSelected()).toBe('communities')
+  })
+
+  it('shows only "All" when signed out', async () => {
+    mockList.mockResolvedValue({ok: false, error: {kind: 'signed_out'}})
+    const r = renderSwitcher()
+    await waitFor(() => expect(mockList).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(r.queryClient.getQueryState(MY_KEY)?.status).toBe('success'),
+    )
+    expect(r.getAllByRole('tab')).toHaveLength(1)
+  })
+
+  it('keeps the last good list and the selection when a refetch fails', async () => {
+    mockList.mockResolvedValue({ok: true, data: [BTB, AP]})
+    const r = renderSwitcher()
+    await r.findByTestId('communityChip-btb')
+    fireEvent.press(r.getByTestId('communityChip-btb'))
+    expect(lastSelected()).toBe('community|btb')
+
+    mockList.mockResolvedValue({ok: false, error: {kind: 'network'}})
+    const calls = mockList.mock.calls.length
+    await act(async () => {
+      await r.queryClient.refetchQueries()
+    })
+    expect(mockList.mock.calls.length).toBe(calls + 1)
+    expect(r.queryClient.getQueryState(MY_KEY)?.status).toBe('error')
+
+    expect(r.getByTestId('communityChip-btb')).toBeTruthy()
+    expect(r.getByTestId('communityChip-ap')).toBeTruthy()
+    expect(
+      propsOf(r.getByTestId('communityChip-btb')).accessibilityState,
+    ).toEqual({selected: true})
+    expect(lastSelected()).toBe('community|btb')
   })
 
   it('drops malformed and duplicate entries', async () => {
