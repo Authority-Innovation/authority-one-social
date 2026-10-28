@@ -6,10 +6,16 @@ jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getTimeline: jest.fn(),
   listMyCommunities: jest.fn(),
 }))
-jest.mock('#/state/queries/group', () => ({
-  fetchGroupTimeline: jest.fn(),
-  fetchGroupMemberships: jest.fn(),
-}))
+jest.mock('#/state/queries/group', () => {
+  class GroupAppViewUnavailableError extends Error {}
+  return {
+    fetchGroupTimeline: jest.fn(),
+    fetchGroupMemberships: jest.fn(),
+    GroupAppViewUnavailableError,
+    isGroupAppViewUnavailableError: (e: unknown) =>
+      e instanceof GroupAppViewUnavailableError,
+  }
+})
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
 import {
@@ -17,7 +23,11 @@ import {
   createCommunityFeedAPI,
   resolveMyCommunitySources,
 } from '#/lib/api/feed/communities'
-import {fetchGroupMemberships, fetchGroupTimeline} from '#/state/queries/group'
+import {
+  fetchGroupMemberships,
+  fetchGroupTimeline,
+  GroupAppViewUnavailableError,
+} from '#/state/queries/group'
 
 const mockGetTimeline = jest.mocked(communitiesClient.getTimeline)
 const mockListMine = jest.mocked(communitiesClient.listMyCommunities)
@@ -288,10 +298,109 @@ describe('CommunitiesMergeFeedAPI', () => {
         },
       ],
     })
-    await expect(resolveMyCommunitySources(agent)).resolves.toEqual([
-      {id: MEMBERS_A, name: 'A', tier: 'members'},
-      {id: PUBLIC_G, name: 'G', tier: 'public'},
+    await expect(resolveMyCommunitySources(agent)).resolves.toEqual({
+      sources: [
+        {id: MEMBERS_A, name: 'A', tier: 'members'},
+        {id: PUBLIC_G, name: 'G', tier: 'public'},
+      ],
+      publicTier: {kind: 'ok'},
+    })
+  })
+})
+
+describe('public tier failures are visible, not silent (M1)', () => {
+  function viewerAgent(following: ReturnType<typeof feedPost>[] = []) {
+    const made = makeAgent(following)
+    ;(made.agent as {session?: {did: string}}).session = {
+      did: 'did:example:viewer',
+    }
+    return made
+  }
+
+  it('memberships with no group AppView configured: publicTier is unavailable', async () => {
+    const {agent} = viewerAgent()
+    mockListMine.mockResolvedValue({
+      ok: true,
+      data: [{id: MEMBERS_A, name: 'A'}],
+    })
+    mockGroupMemberships.mockRejectedValue(
+      new GroupAppViewUnavailableError('not configured'),
+    )
+    const res = await resolveMyCommunitySources(agent)
+    expect(res.sources).toEqual([{id: MEMBERS_A, name: 'A', tier: 'members'}])
+    expect(res.publicTier).toEqual({
+      kind: 'unavailable',
+      reason: 'not configured',
+    })
+  })
+
+  it('memberships failing at the AppView: publicTier is error', async () => {
+    const {agent} = viewerAgent()
+    mockListMine.mockResolvedValue({ok: true, data: []})
+    mockGroupMemberships.mockRejectedValue(new Error('XRPC 502'))
+    await expect(resolveMyCommunitySources(agent)).resolves.toEqual({
+      sources: [],
+      publicTier: {kind: 'error', reason: 'XRPC 502'},
+    })
+  })
+
+  it('the combined feed carries the resolved publicTier state', async () => {
+    const {agent} = viewerAgent([
+      feedPost('at://did:example:f/app.bsky.feed.post/f1', t(9)),
     ])
+    mockListMine.mockResolvedValue({ok: true, data: []})
+    mockGroupMemberships.mockRejectedValue(
+      new GroupAppViewUnavailableError('not configured'),
+    )
+    const api = new CommunitiesMergeFeedAPI({agent})
+    const res = await api.fetch({cursor: undefined, limit: 30})
+    expect(res.feed).toHaveLength(1)
+    expect(api.publicTier.kind).toBe('unavailable')
+  })
+
+  it('a public timeline error keeps Following but sets publicTier', async () => {
+    const {agent} = makeAgent([
+      feedPost('at://did:example:f/app.bsky.feed.post/f1', t(9)),
+    ])
+    mockGroupTimeline.mockRejectedValue(new Error('XRPC 500'))
+    const api = new CommunitiesMergeFeedAPI({
+      agent,
+      sources: [{id: PUBLIC_G, tier: 'public'}],
+    })
+    expect(api.publicTier).toEqual({kind: 'ok'})
+    const res = await api.fetch({cursor: undefined, limit: 30})
+    expect(res.feed.map(i => i.post.uri)).toEqual([
+      'at://did:example:f/app.bsky.feed.post/f1',
+    ])
+    expect(api.publicTier).toEqual({kind: 'error', reason: 'XRPC 500'})
+  })
+
+  it('a single public community that cannot be fetched fails the feed', async () => {
+    const {agent} = makeAgent()
+    mockGroupTimeline.mockRejectedValue(
+      new GroupAppViewUnavailableError('not configured'),
+    )
+    const api = createCommunityFeedAPI({agent, communityId: PUBLIC_G})
+    await expect(api.fetch({cursor: undefined, limit: 30})).rejects.toThrow(
+      'not configured',
+    )
+    expect(api.publicTier.kind).toBe('unavailable')
+  })
+
+  it('publicTier resets to ok when a refresh succeeds', async () => {
+    const {agent} = makeAgent()
+    mockGroupTimeline.mockRejectedValueOnce(new Error('XRPC 500'))
+    mockGroupTimeline.mockResolvedValueOnce({
+      feed: [feedPost('at://did:example:g/app.bsky.feed.post/g1', t(6))],
+    })
+    const api = new CommunitiesMergeFeedAPI({
+      agent,
+      sources: [{id: PUBLIC_G, tier: 'public'}],
+    })
+    await api.fetch({cursor: undefined, limit: 30})
+    expect(api.publicTier.kind).toBe('error')
+    await api.fetch({cursor: undefined, limit: 30})
+    expect(api.publicTier.kind).toBe('ok')
   })
 })
 

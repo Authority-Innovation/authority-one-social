@@ -9,7 +9,7 @@
  *            (no AppView needed; same as posting/listitem today).
  * Reads   -> our Authority One AppView XRPC (com.authorityone.group.get*),
  *            NOT the bare PDS and NOT bsky's AppView. Routed through a dedicated
- *            group-AppView service DID (see TODO on `callGroupAppView`).
+ *            group-AppView service DID (see `callGroupAppView`).
  *
  * STATUS: interfaces + flow are real; every network call is TODO-marked. The
  * record/response types are generated from /lexicons by `pnpm lexgen`
@@ -40,6 +40,10 @@ import {
 import {type ImageMeta} from '#/state/gallery'
 import {STALE} from '#/state/queries'
 import {useAgent, useSession} from '#/state/session'
+import {
+  AUTHORITYONE_GROUP_PROXY_DID,
+  AUTHORITYONE_GROUP_SERVICE_ID,
+} from '#/env'
 
 // ---------------------------------------------------------------------------
 // NSIDs (single source of truth; see /lexicons/com/authorityone/group/)
@@ -72,19 +76,70 @@ export const MY_GROUPS_RQKEY = (did: string) => [RQKEY_ROOT, 'memberships', did]
 
 // ---------------------------------------------------------------------------
 // AppView transport helper.
-// TODO(appview): route com.authorityone.group.get* through our group-AppView
-// service DID, mirroring how the fork proxies bsky XRPC via
-// EXPO_PUBLIC_BLUESKY_PROXY_DID (src/env/common.ts). Add an
-// EXPO_PUBLIC_AUTHORITYONE_GROUP_PROXY_DID env + `agent.withProxy(...)` here so
-// these never fall back to bsky's public AppView (Day 2 leak hazard).
+// com.authorityone.group.get* is proxied to our group AppView, named by
+// EXPO_PUBLIC_AUTHORITYONE_GROUP_PROXY_DID (+ _SERVICE_ID). Without an explicit
+// per-call header the agent would apply its default bsky_appview proxy, so the
+// header is always set here. When the DID is unset (or names a bsky service)
+// the read is refused with GroupAppViewUnavailableError and nothing is sent.
 // ---------------------------------------------------------------------------
+
+/** Thrown, without any network call, when no group AppView is configured. */
+export class GroupAppViewUnavailableError extends Error {
+  constructor(reason: string) {
+    super(`group AppView not available: ${reason}`)
+    this.name = 'GroupAppViewUnavailableError'
+  }
+}
+
+export function isGroupAppViewUnavailableError(
+  e: unknown,
+): e is GroupAppViewUnavailableError {
+  return e instanceof GroupAppViewUnavailableError
+}
+
+// Never valid as a group proxy target (contract: never proxy to bsky).
+const FORBIDDEN_GROUP_PROXY_DIDS = new Set([
+  'did:web:api.bsky.app',
+  'did:web:bsky.app',
+  'did:web:api.bsky.chat',
+  'did:web:api.staging.bsky.dev',
+])
+
+/**
+ * The `atproto-proxy` header value for group reads, or why there is none.
+ * Takes its inputs as args so it can be tested without reloading the env.
+ */
+export function resolveGroupAppViewProxy({
+  did = AUTHORITYONE_GROUP_PROXY_DID,
+  serviceId = AUTHORITYONE_GROUP_SERVICE_ID,
+}: {did?: string; serviceId?: string} = {}):
+  | {ok: true; header: string}
+  | {ok: false; reason: string} {
+  if (!did) {
+    return {ok: false, reason: 'EXPO_PUBLIC_AUTHORITYONE_GROUP_PROXY_DID unset'}
+  }
+  if (!did.startsWith('did:') || did.includes('#')) {
+    return {ok: false, reason: 'group proxy DID is malformed'}
+  }
+  if (FORBIDDEN_GROUP_PROXY_DIDS.has(did)) {
+    return {ok: false, reason: 'group proxy DID is a bsky service'}
+  }
+  if (!serviceId || serviceId.includes('#') || serviceId.startsWith('bsky_')) {
+    return {ok: false, reason: 'group proxy service id is invalid'}
+  }
+  return {ok: true, header: `${did}#${serviceId}`}
+}
+
 async function callGroupAppView<T>(
   agent: ReturnType<typeof useAgent>,
   nsid: string,
   params: Record<string, unknown>,
 ): Promise<T> {
-  // TODO: const proxied = agent.withProxy('authority_one_group', GROUP_PROXY_DID)
-  const res = await agent.call(nsid, params)
+  const proxy = resolveGroupAppViewProxy()
+  if (!proxy.ok) throw new GroupAppViewUnavailableError(proxy.reason)
+  const res = await agent.call(nsid, params, undefined, {
+    headers: {'atproto-proxy': proxy.header},
+  })
   return res.data as T
 }
 

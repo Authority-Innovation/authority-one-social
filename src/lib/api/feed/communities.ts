@@ -17,7 +17,11 @@ import {AppBskyFeedDefs, type BskyAgent} from '@atproto/api'
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
 import {logger} from '#/logger'
-import {fetchGroupMemberships, fetchGroupTimeline} from '#/state/queries/group'
+import {
+  fetchGroupMemberships,
+  fetchGroupTimeline,
+  isGroupAppViewUnavailableError,
+} from '#/state/queries/group'
 import {
   membersPostToFeedViewPost,
   type ReasonCommunity,
@@ -38,10 +42,13 @@ interface Page {
 }
 
 interface SourceState {
+  kind: 'following' | CommunityFeedSource['tier']
   fetchPage: (cursor: string | undefined, limit: number) => Promise<Page>
   queue: AppBskyFeedDefs.FeedViewPost[]
   cursor: string | undefined
   hasMore: boolean
+  /** Set when the source failed and was dropped. */
+  error?: unknown
 }
 
 export function communityTierForId(id: string): CommunityFeedSource['tier'] {
@@ -111,17 +118,50 @@ function membersTierFetcher(source: CommunityFeedSource) {
 }
 
 /**
+ * Whether the public tier (group AppView) is contributing. `unavailable`
+ * means no group AppView is configured, so nothing was sent; `error` means
+ * the AppView call failed. Either way the feed carries no public items, and
+ * this state is what says so instead of an empty, silent tier.
+ */
+export type PublicTierState =
+  | {kind: 'ok'}
+  | {kind: 'unavailable'; reason: string}
+  | {kind: 'error'; reason: string}
+
+const PUBLIC_TIER_OK: PublicTierState = {kind: 'ok'}
+
+function publicTierStateFor(e: unknown): PublicTierState {
+  const reason = e instanceof Error ? e.message : 'unknown error'
+  return isGroupAppViewUnavailableError(e)
+    ? {kind: 'unavailable', reason}
+    : {kind: 'error', reason}
+}
+
+export interface CommunitySources {
+  sources: CommunityFeedSource[]
+  publicTier: PublicTierState
+}
+
+/**
  * The communities the signed-in person belongs to: members tier from the
- * runtime, public tier from the AppView. A failing side contributes nothing.
+ * runtime, public tier from the AppView. A failing side contributes no
+ * sources; a failing public side is reported in `publicTier`.
  */
 export async function resolveMyCommunitySources(
   agent: BskyAgent,
-): Promise<CommunityFeedSource[]> {
+): Promise<CommunitySources> {
   const did = agent.session?.did
+  let publicTier: PublicTierState = PUBLIC_TIER_OK
   const [members, groups] = await Promise.all([
     communitiesClient.listMyCommunities(),
     did
-      ? fetchGroupMemberships(agent, {actor: did}).catch(() => undefined)
+      ? fetchGroupMemberships(agent, {actor: did}).catch((e: unknown) => {
+          publicTier = publicTierStateFor(e)
+          logger.warn('communities feed: group memberships not available', {
+            safeMessage: publicTier.kind,
+          })
+          return undefined
+        })
       : Promise.resolve(undefined),
   ])
   const out: CommunityFeedSource[] = []
@@ -142,17 +182,23 @@ export async function resolveMyCommunitySources(
     if (m.status && m.status !== 'com.authorityone.group.defs#active') continue
     add({id: m.group.uri, name: m.group.name, tier: 'public'})
   }
-  return out
+  return {sources: out, publicTier}
 }
 
 export class CommunitiesMergeFeedAPI implements FeedAPI {
   agent: BskyAgent
   includeFollowing: boolean
   fixedSources: CommunityFeedSource[] | undefined
-  resolveSources: (agent: BskyAgent) => Promise<CommunityFeedSource[]>
+  resolveSources: (agent: BskyAgent) => Promise<CommunitySources>
   following: FollowingFeedAPI | undefined
   states: SourceState[] = []
   page = 0
+  /**
+   * Whether the public tier is contributing. Read this to show a "public
+   * posts not available yet" state; the feed itself just carries no public
+   * items when it is not `ok`.
+   */
+  publicTier: PublicTierState = PUBLIC_TIER_OK
 
   constructor({
     agent,
@@ -164,7 +210,7 @@ export class CommunitiesMergeFeedAPI implements FeedAPI {
     /** Fixed sources. When omitted, the person's communities are resolved. */
     sources?: CommunityFeedSource[]
     includeFollowing?: boolean
-    resolveSources?: (agent: BskyAgent) => Promise<CommunityFeedSource[]>
+    resolveSources?: (agent: BskyAgent) => Promise<CommunitySources>
   }) {
     this.agent = agent
     this.includeFollowing = includeFollowing
@@ -177,9 +223,16 @@ export class CommunitiesMergeFeedAPI implements FeedAPI {
 
   async reset() {
     this.page = 0
+    this.publicTier = PUBLIC_TIER_OK
     let sources: CommunityFeedSource[] = []
     try {
-      sources = this.fixedSources ?? (await this.resolveSources(this.agent))
+      if (this.fixedSources) {
+        sources = this.fixedSources
+      } else {
+        const resolved = await this.resolveSources(this.agent)
+        sources = resolved.sources
+        this.publicTier = resolved.publicTier
+      }
     } catch (e) {
       logger.warn('communities feed: could not resolve sources', {
         safeMessage: e instanceof Error ? e.message : undefined,
@@ -188,11 +241,16 @@ export class CommunitiesMergeFeedAPI implements FeedAPI {
     const states: SourceState[] = []
     const following = this.following
     if (following) {
-      states.push(newState((cursor, limit) => following.fetch({cursor, limit})))
+      states.push(
+        newState('following', (cursor, limit) =>
+          following.fetch({cursor, limit}),
+        ),
+      )
     }
     for (const source of sources) {
       states.push(
         newState(
+          source.tier,
           source.tier === 'public'
             ? publicTierFetcher(this.agent, source)
             : membersTierFetcher(source),
@@ -229,12 +287,29 @@ export class CommunitiesMergeFeedAPI implements FeedAPI {
     }
 
     // Top up every source that is running low, one request each, in
-    // parallel. A failing source is dropped, it never fails the whole feed.
+    // parallel. A failing source is dropped, it never fails the whole feed,
+    // but a failing public source is recorded in `publicTier`.
     await Promise.all(
       this.states
         .filter(s => s.hasMore && s.queue.length < limit)
         .map(s => topUp(s, limit)),
     )
+    const publicFailure = this.states.find(
+      s => s.kind === 'public' && s.error !== undefined,
+    )
+    if (publicFailure && this.publicTier.kind === 'ok') {
+      this.publicTier = publicTierStateFor(publicFailure.error)
+    }
+    // A single community with nothing else to show: surface the failure as
+    // the feed's error state rather than an empty feed.
+    if (
+      !cursor &&
+      !this.following &&
+      this.states.length > 0 &&
+      this.states.every(s => s.error !== undefined)
+    ) {
+      throw this.states[0].error
+    }
 
     const feed: AppBskyFeedDefs.FeedViewPost[] = []
     while (feed.length < limit) {
@@ -260,8 +335,11 @@ export class CommunitiesMergeFeedAPI implements FeedAPI {
   }
 }
 
-function newState(fetchPage: SourceState['fetchPage']): SourceState {
-  return {fetchPage, queue: [], cursor: undefined, hasMore: true}
+function newState(
+  kind: SourceState['kind'],
+  fetchPage: SourceState['fetchPage'],
+): SourceState {
+  return {kind, fetchPage, queue: [], cursor: undefined, hasMore: true}
 }
 
 async function topUp(state: SourceState, limit: number) {
@@ -272,6 +350,7 @@ async function topUp(state: SourceState, limit: number) {
     state.hasMore = page.feed.length > 0 && !!page.cursor
   } catch (e) {
     state.hasMore = false
+    state.error = e ?? new Error('source failed')
     logger.warn('communities feed: source failed', {
       safeMessage: e instanceof Error ? e.message : undefined,
     })
