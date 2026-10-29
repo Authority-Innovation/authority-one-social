@@ -223,6 +223,26 @@ describe('community agent label rule (N1)', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1)
   })
 
+  it('sponsor with no resolved name shows the agent label and never the community name', () => {
+    const unnamed = {...community, agentSponsorName: null}
+    expect(resolveAuthorLabel(agentReply().author, unnamed)).toEqual({
+      kind: 'agent',
+      sponsorName: '',
+    })
+    const r = render(
+      <CommunityThreadPost post={agentReply()} community={unnamed} />,
+    )
+    expect(r.getByTestId('communityPostAgent')).toBeTruthy()
+    expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
+      'AI agent',
+      {exact: true},
+    )
+    fireEvent.press(r.getByTestId('communityAgentWhy'))
+    const text = JSON.stringify(r.toJSON())
+    expect(text).not.toContain(community.name)
+    expect(text).not.toContain('run by')
+  })
+
   it('agent with no sponsor shows no warning to an ordinary member', () => {
     const r = render(
       <CommunityThreadPost
@@ -288,12 +308,12 @@ describe('community agent sources', () => {
 
 describe('agent grant row', () => {
   it('is off by default and toggling calls setAgentGrant once with true', async () => {
-    mockSetAgentGrant.mockResolvedValue({ok: true, data: {agentGrant: true}})
+    mockSetAgentGrant.mockResolvedValue({ok: true, data: {communityId: 'btb-listeners', on: true}})
     const r = render(<AgentGrantRow communityId="btb-listeners" />)
     const toggle = r.getByTestId('agentGrantToggle')
     expect(isChecked(toggle)).toBe(false)
     expect(
-      r.getByText('Let this community’s agent read my posts here'),
+      r.getByText('Give this community’s agent access to my content here'),
     ).toBeTruthy()
 
     await press(toggle)
@@ -303,7 +323,7 @@ describe('agent grant row', () => {
   })
 
   it('turning it off calls setAgentGrant once with false', async () => {
-    mockSetAgentGrant.mockResolvedValue({ok: true, data: {agentGrant: false}})
+    mockSetAgentGrant.mockResolvedValue({ok: true, data: {communityId: 'btb-listeners', on: false}})
     const r = render(<AgentGrantRow communityId="btb-listeners" initialValue />)
     await press(r.getByTestId('agentGrantToggle'))
     expect(mockSetAgentGrant).toHaveBeenCalledTimes(1)
@@ -314,7 +334,8 @@ describe('agent grant row', () => {
     const r = render(<AgentGrantRow communityId="btb-listeners" />)
     const text = JSON.stringify(r.toJSON())
     expect(text).toContain('community’s agent')
-    expect(text).toContain('members-only')
+    expect(text).toContain('access to your content in this community')
+    expect(text).not.toMatch(/members-only/i)
     expect(text).not.toMatch(/\bBob\b/)
     expect(text).not.toMatch(/\bmy agent\b/i)
     expect(text).not.toMatch(/\byour agent\b/i)

@@ -1,8 +1,8 @@
 /**
  * Per-community settings row for the COMMUNITY agent's grant.
  *
- * `setAgentGrant` controls whether this community's agent may read the
- * caller's content here, which can include members-only posts. It does not
+ * `setAgentGrant` turns the community agent's access to the caller's content
+ * on or off (the contract in `communitiesClient.ts`). It does not
  * touch the person's own agent, so the copy must never name it. A separate
  * grant from membership, for this one community only, and off by default
  * (mockup d). Toggling calls `communitiesClient.setAgentGrant` once.
@@ -34,7 +34,10 @@ export function AgentGrantRow({
 
   if (!COMMUNITIES_ENABLED) return null
 
-  const label = l`Let this community’s agent read my posts here`
+  // TODO(Elliott): final grant copy needs Elliott's sign-off. Until then it
+  // uses only the runtime contract's words and makes no claim about which
+  // posts the agent can read.
+  const label = l`Give this community’s agent access to my content here`
 
   const onChange = async (next: boolean) => {
     if (pending) return
@@ -44,7 +47,7 @@ export function AgentGrantRow({
     const res = await setAgentGrant(communityId, next)
     setPending(false)
     if (res.ok) {
-      setOn(res.data.agentGrant)
+      setOn(res.data.on)
     } else {
       setOn(!next)
       setFailed(true)
@@ -65,9 +68,9 @@ export function AgentGrantRow({
       </Toggle.Item>
       <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
         <Trans>
-          The community’s agent will be able to read what you post in this
-          community, including members-only posts. Off unless you turn it on.
-          You can turn it off any time.
+          While this is on, the community’s agent has access to your content
+          in this community. Off unless you turn it on. You can turn it off
+          any time.
         </Trans>
       </Text>
       {failed ? (
