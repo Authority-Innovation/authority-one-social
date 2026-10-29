@@ -111,11 +111,25 @@ jest.mock('../components/JoinConsentEntry', () => {
   return {JoinConsentEntry: entry}
 })
 
+// The real composer entry renders; this records its props, and the composer
+// itself is a mock so a press can be checked for its target.
 const mockComposerEntry = jest.fn((_props: {communityId: string}) => null)
 jest.mock('../components/CommunityComposerEntry', () => {
-  const entry = (props: {communityId: string}) => mockComposerEntry(props)
+  const {createElement} = require('react') as typeof import('react')
+  const actual = jest.requireActual<{
+    CommunityComposerEntry: (p: object) => React.ReactNode
+  }>('../components/CommunityComposerEntry')
+  const entry = (props: {communityId: string}) => {
+    mockComposerEntry(props)
+    return createElement(actual.CommunityComposerEntry, props)
+  }
   return {CommunityComposerEntry: entry}
 })
+
+const mockOpenComposer = jest.fn()
+jest.mock('#/lib/hooks/useOpenComposer', () => ({
+  useOpenComposer: () => ({openComposer: mockOpenComposer}),
+}))
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
 import {
@@ -479,7 +493,57 @@ describe('Community home - member', () => {
   })
 })
 
+describe('Community home - compose', () => {
+  it('a member finds the compose control and it opens the composer targeted to this community at the members tier', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    const r = renderScreen({id: 'btb'})
+    const entry = await r.findByTestId(
+      'communityComposerEntry',
+      {},
+      {timeout: 3000},
+    )
+    expect(r.getByText('Post to this community')).toBeTruthy()
+    fireEvent.press(entry)
+    expect(mockOpenComposer).toHaveBeenCalledTimes(1)
+    const opts = mockOpenComposer.mock.calls[0][0] as {target: unknown}
+    expect(opts.target).toEqual({kind: 'community', id: 'btb', tier: 'members'})
+  })
+
+  it('a non-member gets no compose control', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    const r = renderScreen()
+    await r.findByTestId('communityHeader', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityComposerEntry')).toBeNull()
+  })
+})
+
 describe('Community home - agent grant row', () => {
+  it('a member sees the grant row in a "Your settings" section, also with no agentSponsor', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({
+        role: 'member',
+        config: configWith({agentSponsor: undefined}),
+      }),
+    })
+    const r = renderScreen()
+    const section = await r.findByTestId(
+      'communityAgentGrantSection',
+      {},
+      {timeout: 3000},
+    )
+    expect(within(section).getByText('Your settings')).toBeTruthy()
+    expect(within(section).getByTestId('communityAgentGrantRow')).toBeTruthy()
+    expect(
+      within(section).getByText(
+        'Give this community’s agent access to my content here',
+      ),
+    ).toBeTruthy()
+  })
+
   it('a member sees the grant row with the runtime value', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
@@ -691,28 +755,77 @@ describe('Community home - agent card', () => {
     expect(r.queryByTestId('communityAgentCard')).toBeNull()
   })
 
-  it('is hidden when the config has no agentSponsor', async () => {
+  it('renders for a member with just "AI agent" when the response has no agentSponsor', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
-      data: communityResponse({config: configWith({agentSponsor: undefined})}),
-    })
-    const r = renderScreen()
-    await r.findByTestId('communityHeader', {}, {timeout: 3000})
-    expect(r.queryByTestId('communityAgentCard')).toBeNull()
-  })
-
-  it('shows the name, sponsor line and scope when both are set', async () => {
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({agentSponsorName: 'Sam R.'}),
+      data: communityResponse({
+        role: 'member',
+        config: configWith({agentSponsor: undefined}),
+      }),
     })
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
-    expect(r.getByText('Steve')).toBeTruthy()
     expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
-      'AI agent · sponsor: Sam R.',
+      /^AI agent$/,
+    )
+    expect(r.getByTestId('communityAgentCard')).not.toHaveTextContent(
+      'Between Two Beers',
+    )
+  })
+
+  it('renders for a member on the REAL Dev runtime response (agent DID, no sponsor)', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: {
+        ...REAL.home.community,
+        viewerIsAdmin: true,
+      } as unknown as communitiesClient.Community,
+    })
+    const r = renderScreen({id: 'ao-dev-test'})
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
+      /^AI agent$/,
+    )
+  })
+
+  it('shows "run by <handle>" from the runtime agentSponsor {did, handle}', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({
+        role: 'member',
+        config: configWith({agentSponsor: undefined}),
+        agentSponsor: {did: SPONSOR_DID, handle: 'sam.example.com'},
+      }),
+    })
+    const r = renderScreen()
+    const card = await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(within(card).getByText('Steve')).toBeTruthy()
+    expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
+      'AI agent · run by sam.example.com',
     )
     expect(r.getByTestId('communityAgentScope')).toBeTruthy()
+    expect(r.getByTestId('communityAgentCard')).not.toHaveTextContent(
+      SPONSOR_DID,
+    )
+  })
+
+  it('never shows the sponsor DID as a name when agentSponsor has no handle', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({
+        role: 'member',
+        config: configWith({agentSponsor: undefined}),
+        agentSponsor: {did: SPONSOR_DID},
+      }),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
+      /^AI agent$/,
+    )
+    expect(r.getByTestId('communityAgentCard')).not.toHaveTextContent(
+      SPONSOR_DID,
+    )
   })
 
   it('shows no sponsor name, and never the community name, when the sponsor has no name', async () => {
@@ -813,6 +926,25 @@ describe('Community home - flag off', () => {
     expect(getTimeline).not.toHaveBeenCalled()
     expect(getAgentGrant).not.toHaveBeenCalled()
     expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
+  })
+
+  it('renders no compose control, agent card or "Your settings" for a member with Communities off', async () => {
+    mockCommunitiesEnabled = false
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({
+        role: 'member',
+        agentSponsor: {did: SPONSOR_DID, handle: 'sam.example.com'},
+      }),
+    })
+    const r = renderScreen()
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('Home'))
+    expect(r.queryByTestId('communityComposerEntry')).toBeNull()
+    expect(r.queryByTestId('communityAgentCard')).toBeNull()
+    expect(r.queryByTestId('communityAgentGrantSection')).toBeNull()
+    expect(r.queryByText('Your settings')).toBeNull()
+    expect(mockComposerEntry).not.toHaveBeenCalled()
+    expect(getCommunity).not.toHaveBeenCalled()
   })
 })
 

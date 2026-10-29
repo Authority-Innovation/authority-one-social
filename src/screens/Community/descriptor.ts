@@ -16,10 +16,14 @@ export type CommunityTier = 'public' | 'members' | 'paid'
 
 export type CommunityAgent = {
   did: string
-  sponsorDid: string
+  /** The sponsor's DID. Never shown as a name. */
+  sponsorDid?: string
   /** Display name, e.g. "Steve". Never derived from a handle. */
   name?: string
-  /** Who runs the agent, e.g. "Between Two Beers". */
+  /**
+   * Who runs the agent, as shown on the card: the sponsor's handle, else a
+   * resolved sponsor name. Never the sponsor's DID or the community's name.
+   */
   sponsorName?: string
   /** What the agent can see, as the community describes it. */
   scope?: string
@@ -34,7 +38,7 @@ export type CommunityDescriptor = {
   tier: CommunityTier
   /** Header-only accent (N3). A validated CSS hex colour, or undefined. */
   accent?: string
-  /** Set only when the config has both `agent` and `agentSponsor` (N1). */
+  /** Set whenever the community names an agent DID; the sponsor is optional. */
   agent?: CommunityAgent
   /**
    * The config's agent DID, with or without a sponsor. The posts list matches
@@ -91,13 +95,17 @@ export function toDescriptor(
   const moderation = obj(config?.moderation)
 
   const agentDid = communityConfigAgentDid(raw)
-  const sponsorDid = str(config?.agentSponsor) ?? str(raw.agentSponsor)
-  // Only the resolved sponsor name. Never the community's own brand name: an
-  // unnamed sponsor is shown as absent, not as the community.
-  const sponsorName = str(raw.agentSponsorName)
+  // The runtime's member response may carry `agentSponsor: {did, handle}`;
+  // the config record holds a bare DID. Either may be missing.
+  const sponsor = obj(raw.agentSponsor)
+  const sponsorDid =
+    str(config?.agentSponsor) ?? str(raw.agentSponsor) ?? str(sponsor?.did)
+  // Only the sponsor's handle or resolved name. Never its DID, and never the
+  // community's own brand name: an unnamed sponsor is shown as absent.
+  const sponsorName = str(sponsor?.handle) ?? str(raw.agentSponsorName)
 
   const agent: CommunityAgent | undefined =
-    agentDid && sponsorDid
+    agentDid && agentDid.trim().length > 0
       ? {
           did: agentDid,
           sponsorDid,

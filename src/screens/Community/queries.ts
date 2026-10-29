@@ -107,7 +107,7 @@ export function useCommunityAgentGrantQuery({
       COMMUNITIES_ENABLED &&
       !!viewer &&
       !!community?.isMember &&
-      !!community.agent,
+      !!community.agentDid,
     staleTime: STALE.MINUTES.ONE,
     async queryFn() {
       const res = await communitiesClient.getAgentGrant(id)

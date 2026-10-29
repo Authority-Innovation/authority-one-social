@@ -133,6 +133,14 @@ function CommunityHomeLoaded({
         />
         <AgentCard community={community} />
         <AgentLaunchControl community={community} />
+        {/* Inside the scroll content, right under the header, so a member
+            always sees it; below the scroll view it was off screen. */}
+        {community.isMember ? (
+          <CommunityComposerEntry
+            communityId={community.id}
+            tier={community.tier}
+          />
+        ) : null}
         <AgentGrantSection community={community} />
         {!community.isMember ? <RulesBlock community={community} /> : null}
         <TabRow tab={tab} onChange={setTab} />
@@ -142,9 +150,6 @@ function CommunityHomeLoaded({
           <MembersSection community={community} />
         )}
       </Layout.Content>
-      {community.isMember ? (
-        <CommunityComposerEntry communityId={community.id} tier={community.tier} />
-      ) : null}
       {!community.isMember ? (
         <JoinConsentEntry control={joinControl} community={community} />
       ) : null}
