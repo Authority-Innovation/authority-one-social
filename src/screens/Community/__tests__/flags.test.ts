@@ -70,6 +70,16 @@ describe('eas.json', () => {
     build: Record<string, {env?: Record<string, string>}>
   }
 
+  // The one profile allowed to turn Communities on (Elliott ruling
+  // 2026-10-29). Switcher and locked community stay off even here.
+  const COMMUNITIES_PROFILE = 'development-communities'
+
+  it('has the development-communities profile with Communities on', () => {
+    expect(eas.build[COMMUNITIES_PROFILE]?.env).toEqual(
+      expect.objectContaining({EXPO_PUBLIC_COMMUNITIES_ENABLED: 'true'}),
+    )
+  })
+
   it('sets every Communities key to its default in every profile', () => {
     const profiles = Object.keys(eas.build)
     expect(profiles.length).toBeGreaterThan(0)
@@ -77,7 +87,8 @@ describe('eas.json', () => {
       expect([profile, eas.build[profile].env]).toEqual([
         profile,
         expect.objectContaining({
-          EXPO_PUBLIC_COMMUNITIES_ENABLED: 'false',
+          EXPO_PUBLIC_COMMUNITIES_ENABLED:
+            profile === COMMUNITIES_PROFILE ? 'true' : 'false',
           EXPO_PUBLIC_COMMUNITY_SWITCHER: 'false',
           EXPO_PUBLIC_LOCKED_COMMUNITY: '',
           EXPO_PUBLIC_BRAND: 'authority-one',
