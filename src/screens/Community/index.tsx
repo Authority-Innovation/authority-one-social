@@ -24,6 +24,7 @@ import {InlineLinkText} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
+import {AgentLaunchControl} from '#/features/communityAgent/AgentLaunchControl'
 import {AgentCard} from './components/AgentCard'
 import {AgentGrantSection} from './components/AgentGrantSection'
 import {CommunityComposerEntry} from './components/CommunityComposerEntry'
@@ -131,6 +132,7 @@ function CommunityHomeLoaded({
           onPressJoin={() => joinControl.open()}
         />
         <AgentCard community={community} />
+        <AgentLaunchControl community={community} />
         <AgentGrantSection community={community} />
         {!community.isMember ? <RulesBlock community={community} /> : null}
         <TabRow tab={tab} onChange={setTab} />

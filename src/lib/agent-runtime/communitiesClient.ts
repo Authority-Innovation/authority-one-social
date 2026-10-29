@@ -55,6 +55,11 @@ export type Community = {
   agent?: CommunityAgent | null
   /** The runtime's refusal code for a misconfigured agent slot. */
   agent_error?: string
+  /**
+   * True only when the runtime says the signed-in caller is a current admin
+   * of this community (`viewer_is_admin`). Absent means not an admin.
+   */
+  viewerIsAdmin?: boolean
 }
 
 /** What a non-member is told before joining (GET /:id/join-info). */
@@ -107,6 +112,20 @@ export type AgentGrantState = {
 }
 
 const COMMUNITIES_PATH = '/app/communities'
+
+/**
+ * Reads the runtime's `viewer_is_admin` into `viewerIsAdmin`, true only for a
+ * literal boolean true. A payload without `viewer_is_admin` passes through
+ * without the field (absent means not an admin), and a `viewerIsAdmin` key
+ * sent by anything else is dropped so it can never grant admin by itself.
+ */
+function readCommunity(raw: Record<string, unknown>): Community {
+  const {viewerIsAdmin: _ignored, ...rest} = raw
+  const community = rest as Community
+  return 'viewer_is_admin' in raw
+    ? {...community, viewerIsAdmin: raw.viewer_is_admin === true}
+    : community
+}
 
 /**
  * Builds the URL from encoded path parts. Called inside `request`'s try block
@@ -233,7 +252,14 @@ export async function listMyCommunities(): Promise<
   CommunitiesResult<Community[]>
 > {
   const res = await request('GET', [])
-  return field(res, 'communities', isArray) as CommunitiesResult<Community[]>
+  const list = field(res, 'communities', isArray)
+  if (!list.ok) return list
+  return {
+    ok: true,
+    data: list.data.map(c =>
+      isObject(c) ? readCommunity(c) : (c as Community),
+    ),
+  }
 }
 
 /** One community's members-only details. */
@@ -242,7 +268,9 @@ export async function getCommunity(
 ): Promise<CommunitiesResult<Community>> {
   if (!validId(id)) return invalid('community id is required')
   const res = await request('GET', [id])
-  return field(res, 'community', isObject) as CommunitiesResult<Community>
+  const community = field(res, 'community', isObject)
+  if (!community.ok) return community
+  return {ok: true, data: readCommunity(community.data)}
 }
 
 /**
@@ -278,7 +306,7 @@ export async function join(
   }
   return {
     ok: true,
-    data: {community: data.community as Community, joined: data.joined},
+    data: {community: readCommunity(data.community), joined: data.joined},
   }
 }
 
@@ -402,4 +430,17 @@ export async function setAgentGrant(
   if (!validId(id)) return invalid('community id is required')
   if (typeof on !== 'boolean') return invalid('grant must be on or off')
   return grantState(await request('POST', [id, 'agent-grant'], {on}))
+}
+
+/**
+ * Launch (sponsor) the community agent. Admin-only: the runtime decides, and
+ * refuses anyone who is not a current admin. The app only offers the control
+ * to an admin (`isCommunityAdmin` in `#/features/communityAgent`). No body
+ * is sent.
+ */
+export async function launchCommunityAgent(
+  id: string,
+): Promise<CommunitiesResult<null>> {
+  if (!validId(id)) return invalid('community id is required')
+  return done(await request('POST', [id, 'agent', 'launch']))
 }
