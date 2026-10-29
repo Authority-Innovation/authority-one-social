@@ -5,7 +5,7 @@
 // in door.json is hand-written: every body is what handleCommunities answered.
 //
 // Usage (from a checkout or `git archive` of the runtime at SOURCE_COMMIT):
-//   node src/lib/communities/__fixtures__/door/generate.mjs <runtimeRoot> > door.json
+//   node scripts/communities/generateDoorFixtures.mjs <runtimeRoot> > door.json
 //
 // Not run by jest. Re-run it against a newer runtime commit to refresh the
 // contract, and update SOURCE_COMMIT in the output.
@@ -23,11 +23,9 @@ globalThis.crypto.getRandomValues = arr => {
 }
 
 const root = process.argv[2]
-if (!root) throw new Error('usage: generate.mjs <runtimeRoot>')
+if (!root) throw new Error('usage: generateDoorFixtures.mjs <runtimeRoot>')
 const load = p => import(pathToFileURL(path.join(root, p)).href)
-const {handleCommunities, newItemId} = await load(
-  'src/communities/door.js',
-)
+const {handleCommunities, newItemId} = await load('src/communities/door.js')
 const {communityKeys: K} = await load('src/communities/keys.js')
 
 const TENANT = 'tenant-a'
@@ -190,7 +188,7 @@ const out = {
     module: 'src/communities/door.js',
     harness:
       'test/communities-agent-slot-fb477fb1.test.js (fakeWorld/setup), flags: communities.enabled, communityAgent, agentGrant, admins all on',
-    generator: 'src/lib/communities/__fixtures__/door/generate.mjs',
+    generator: 'scripts/communities/generateDoorFixtures.mjs',
   },
   list: await call('GET', '/app/communities'),
   listAsMember: await call('GET', '/app/communities', {as: BOB}),
