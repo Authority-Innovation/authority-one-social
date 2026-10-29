@@ -9,9 +9,9 @@ function community(extra: Record<string, unknown> = {}): Community {
 
 describe('toDescriptor', () => {
   it('carries viewerIsAdmin only when the client says true', () => {
-    expect(toDescriptor('c1', community({viewerIsAdmin: true})).viewerIsAdmin).toBe(
-      true,
-    )
+    expect(
+      toDescriptor('c1', community({viewerIsAdmin: true})).viewerIsAdmin,
+    ).toBe(true)
     expect(
       toDescriptor('c1', community({viewerIsAdmin: false})).viewerIsAdmin,
     ).toBe(false)
@@ -71,11 +71,42 @@ describe('toDescriptor', () => {
     ).toBe('Sam R.')
   })
 
-  it('has no agent unless both agent and agentSponsor are set (N1)', () => {
+  it('reads the runtime agentSponsor {did, handle} defensively', () => {
+    const config = {agent: 'did:example:agent'}
+    const withHandle = toDescriptor(
+      'c1',
+      community({
+        config,
+        agentSponsor: {did: 'did:example:sponsor', handle: 'sam.example.com'},
+      }),
+    ).agent
+    expect(withHandle?.sponsorDid).toBe('did:example:sponsor')
+    expect(withHandle?.sponsorName).toBe('sam.example.com')
+    // A DID alone is never used as the sponsor's name.
+    const didOnly = toDescriptor(
+      'c1',
+      community({config, agentSponsor: {did: 'did:example:sponsor'}}),
+    ).agent
+    expect(didOnly?.sponsorDid).toBe('did:example:sponsor')
+    expect(didOnly?.sponsorName).toBeUndefined()
+    for (const junk of [null, 42, [], {handle: ''}, {handle: 7}]) {
+      const d = toDescriptor('c1', community({config, agentSponsor: junk}))
+      expect(d.agent?.did).toBe('did:example:agent')
+      expect(d.agent?.sponsorName).toBeUndefined()
+    }
+  })
+
+  it('has an agent whenever an agent DID is set, with or without a sponsor', () => {
     expect(
       toDescriptor('c1', community({config: {agent: 'did:example:agent'}}))
         .agent,
-    ).toBeUndefined()
+    ).toEqual({
+      did: 'did:example:agent',
+      sponsorDid: undefined,
+      name: undefined,
+      sponsorName: undefined,
+      scope: undefined,
+    })
     expect(
       toDescriptor(
         'c1',
@@ -83,8 +114,8 @@ describe('toDescriptor', () => {
       ).agent,
     ).toBeUndefined()
     expect(
-      toDescriptor('c1', community({agentDid: 'did:example:agent'})).agent,
-    ).toBeUndefined()
+      toDescriptor('c1', community({agentDid: 'did:example:agent'})).agent?.did,
+    ).toBe('did:example:agent')
     expect(
       toDescriptor(
         'c1',
@@ -131,8 +162,12 @@ describe('toDescriptor', () => {
   })
 
   it('treats a door response carrying viewer_is_admin as a member (the door sends no role)', () => {
-    expect(toDescriptor('c1', community({viewerIsAdmin: true})).isMember).toBe(true)
-    expect(toDescriptor('c1', community({viewerIsAdmin: false})).isMember).toBe(true)
+    expect(toDescriptor('c1', community({viewerIsAdmin: true})).isMember).toBe(
+      true,
+    )
+    expect(toDescriptor('c1', community({viewerIsAdmin: false})).isMember).toBe(
+      true,
+    )
   })
 
   it('falls back to the id for a missing name', () => {

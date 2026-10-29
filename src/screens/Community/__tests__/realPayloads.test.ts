@@ -63,8 +63,10 @@ describe('real Dev runtime payloads', () => {
     expect(d.isMember).toBe(true)
     expect(d.viewerIsAdmin).toBe(true)
     expect(d.agentDid).toBe('did:plc:agentagentagentaaaaaaaaa')
-    // No agentSponsor on the member response: no agent card (known runtime gap).
-    expect(d.agent).toBeUndefined()
+    // No agentSponsor on this member response: the card still renders, as
+    // "AI agent" with no sponsor name.
+    expect(d.agent?.did).toBe('did:plc:agentagentagentaaaaaaaaa')
+    expect(d.agent?.sponsorName).toBeUndefined()
     expect(postsSource(d)).toBe('runtime')
   })
 
