@@ -11,11 +11,13 @@
 import {useState} from 'react'
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
+import {useQueryClient} from '@tanstack/react-query'
 
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
 } from '#/lib/routes/types'
+import {useSession} from '#/state/session'
 import {atoms as a, platform, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {useDialogControl} from '#/components/Dialog'
@@ -33,7 +35,11 @@ import {JoinConsentEntry} from './components/JoinConsentEntry'
 import {MembersSection} from './components/MembersSection'
 import {PostsSection} from './components/PostsSection'
 import {type CommunityDescriptor} from './descriptor'
-import {useCommunityQuery} from './queries'
+import {
+  createCommunityAgentGrantQueryKey,
+  createCommunityQueryKey,
+  useCommunityQuery,
+} from './queries'
 import {useCommunitiesDisabledFallback} from './useCommunitiesDisabledFallback'
 
 export {useCommunitiesDisabledFallback}
@@ -122,6 +128,20 @@ function CommunityHomeLoaded({
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
   const joinControl = useDialogControl()
+  const queryClient = useQueryClient()
+  const viewer = useSession().currentAccount?.did ?? ''
+
+  // The launch answer carries no community. Refetch the home so the response,
+  // which now names the agent and its sponsor, brings in the agent card and
+  // the grant row without a reload.
+  const onAgentLaunched = () => {
+    void queryClient.invalidateQueries({
+      queryKey: createCommunityQueryKey({id: community.id, viewer}),
+    })
+    void queryClient.invalidateQueries({
+      queryKey: createCommunityAgentGrantQueryKey({id: community.id, viewer}),
+    })
+  }
 
   return (
     <>
@@ -132,7 +152,18 @@ function CommunityHomeLoaded({
           onPressJoin={() => joinControl.open()}
         />
         <AgentCard community={community} />
-        <AgentLaunchControl community={community} />
+        <AgentLaunchControl
+          community={community}
+          onLaunched={onAgentLaunched}
+        />
+        {/* Inside the scroll content, right under the header, so a member
+            always sees it; below the scroll view it was off screen. */}
+        {community.isMember ? (
+          <CommunityComposerEntry
+            communityId={community.id}
+            tier={community.tier}
+          />
+        ) : null}
         <AgentGrantSection community={community} />
         {!community.isMember ? <RulesBlock community={community} /> : null}
         <TabRow tab={tab} onChange={setTab} />
@@ -142,9 +173,6 @@ function CommunityHomeLoaded({
           <MembersSection community={community} />
         )}
       </Layout.Content>
-      {community.isMember ? (
-        <CommunityComposerEntry communityId={community.id} tier={community.tier} />
-      ) : null}
       {!community.isMember ? (
         <JoinConsentEntry control={joinControl} community={community} />
       ) : null}

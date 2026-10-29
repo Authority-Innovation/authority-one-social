@@ -13,6 +13,8 @@ nothing is fetched.
   `config`) into a `CommunityDescriptor`. `postsSource()` decides where posts
   are read from.
 - `queries.ts` - TanStack Query hooks. No writes.
+- `roster.ts` - pure helpers that turn the runtime's thread rosters into the
+  Members tab's rows.
 - `components/` - header, agent card, posts, members, and two slots for work
   owned by other tasks (`JoinConsentEntry` for T9, `CommunityComposerEntry`
   for T17).
@@ -28,8 +30,14 @@ nothing is fetched.
   no call. Wire the proxy in `group.ts` before turning these reads on.
 - The accent colour is applied inside `CommunityHeader` only (N3). It must be
   a CSS hex colour or it is dropped.
-- The agent card renders only when the config has both `agent` and
-  `agentSponsor` (N1). A post is labelled as the agent only when the
+- The agent card renders whenever the community names an agent DID. Its
+  sponsor line is "AI agent · run by <handle>" only when the runtime sends
+  `agentSponsor: {did, handle}` with a handle (read defensively; a bare DID
+  string is also accepted as the sponsor DID). Otherwise it is just "AI
+  agent": never the sponsor DID, never the community name.
+- A member's own settings (today the community agent's grant row) sit in a
+  "Your settings" section of their own, not inside the agent card.
+- A post is labelled as the agent only when the
   runtime's `is_agent` is true AND `author.did` equals the community config's
   agent DID (`isCommunityAgentAuthor` in `features/communities/agentLabel.ts`).
   An item with `did: null`, a different DID, or a community with no agent DID
@@ -38,5 +46,19 @@ nothing is fetched.
   `agent.did` (`toDescriptor` in `descriptor.ts`); the match is still on DID
   only. Members-tier feed views (`membersPost.ts`) use the same rule, and are
   never marked as the agent when the mapper has no agent DID.
-- No composer opens from here until T17 wires one whose target is fixed to
-  the community. The ordinary composer would publish to the PDS.
+- The composer entry (`CommunityComposerEntry`) sits inside the scroll
+  content under the header, for members only. It opens the composer with its
+  target fixed to this community and tier, never the PDS.
+- After "Launch community agent" succeeds, the home refetches the community
+  (and the grant) so the agent card and the grant row appear without a
+  reload. The launch response itself carries no community.
+- The Members tab, for a member of a walled community, lists the people in
+  the runtime's thread rosters (`GET /app/communities/:id/posts/:postId/roster`)
+  for the top-level posts already loaded, merged by id, with the community
+  agent last. The runtime has no community-wide member list, so someone who
+  has not posted in a loaded thread is not listed. Member entries carry no DID;
+  their id is the account handle, which is what the profile cache is asked
+  for. The agent label goes only to an `is_agent` entry whose DID is the
+  config's agent DID. ADMIN is shown only where the app already knows it: the
+  signed-in member when the runtime said `viewer_is_admin`, and the agent's
+  sponsor (`agentSponsor.handle`; only an admin can launch).

@@ -14,6 +14,7 @@ import {
   getAgentGrant,
   getCommunity,
   getJoinInfo,
+  getThreadRoster,
   getTimeline,
   join,
   launchCommunityAgent,
@@ -35,6 +36,18 @@ const COMMUNITY = {
   description: null,
   accent: null,
   wording_version: 2,
+}
+// The real Dev roster payload (src/screens/Community/__tests__/fixtures).
+const ROSTER = {
+  postId: '0mvtv8lvw-6341f31d509f',
+  roster: [
+    {id: 'member.example.test', did: null, is_agent: false},
+    {
+      id: 'community-agent',
+      did: 'did:plc:agentagentagentaaaaaaaaa',
+      is_agent: true,
+    },
+  ],
 }
 const ITEM = {
   id: 'p1',
@@ -207,6 +220,22 @@ const CASES: Case[] = [
     body: {on: true},
     response: {communityId: 'c1', on: true},
     data: {communityId: 'c1', on: true},
+  },
+  {
+    name: 'getThreadRoster',
+    run: () => getThreadRoster('c1', ROSTER.postId),
+    method: 'GET',
+    path: `/app/communities/c1/posts/${ROSTER.postId}/roster`,
+    response: ROSTER,
+    data: ROSTER,
+  },
+  {
+    name: 'getThreadRoster (drops malformed entries)',
+    run: () => getThreadRoster('c1', 'p1'),
+    method: 'GET',
+    path: '/app/communities/c1/posts/p1/roster',
+    response: {postId: 'p1', roster: [null, {did: 'x'}, ROSTER.roster[0]]},
+    data: {postId: 'p1', roster: [ROSTER.roster[0]]},
   },
   {
     name: 'launchCommunityAgent',
@@ -425,6 +454,8 @@ describe('communitiesClient errors never throw', () => {
       exportMine(''),
       getJoinInfo(''),
       getAgentGrant(''),
+      getThreadRoster('', 'p1'),
+      getThreadRoster('c1', ''),
       setAgentGrant('c1', 'yes' as unknown as boolean),
     ])
     for (const r of results) {

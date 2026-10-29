@@ -7,6 +7,7 @@
 import {
   type InfiniteData,
   useInfiniteQuery,
+  useQueries,
   useQuery,
 } from '@tanstack/react-query'
 
@@ -84,6 +85,45 @@ export function useCommunityTimelineQuery({
   })
 }
 
+export const createCommunityRosterQueryKey = (args: {
+  id: string
+  postId: string
+  viewer: string
+}) => createQueryKey('communityRoster', args)
+
+/**
+ * The thread rosters of the given top-level posts, for the Members tab. Read
+ * only where the timeline is (a member of a walled community), so a
+ * non-member never makes the call.
+ */
+export function useCommunityRosterQueries({
+  community,
+  postIds,
+}: {
+  community?: CommunityDescriptor
+  postIds: string[]
+}) {
+  const id = community?.id ?? ''
+  const viewer = useSession().currentAccount?.did ?? ''
+  const enabled =
+    COMMUNITIES_ENABLED &&
+    !!viewer &&
+    !!community &&
+    postsSource(community) === 'runtime'
+  return useQueries({
+    queries: postIds.map(postId => ({
+      queryKey: createCommunityRosterQueryKey({id, postId, viewer}),
+      enabled,
+      staleTime: STALE.MINUTES.ONE,
+      async queryFn() {
+        const res = await communitiesClient.getThreadRoster(id, postId)
+        if (!res.ok) throw new CommunityReadError(res.error)
+        return res.data.roster
+      },
+    })),
+  })
+}
+
 export const createCommunityAgentGrantQueryKey = (args: {
   id: string
   viewer: string
@@ -107,7 +147,7 @@ export function useCommunityAgentGrantQuery({
       COMMUNITIES_ENABLED &&
       !!viewer &&
       !!community?.isMember &&
-      !!community.agent,
+      !!community.agentDid,
     staleTime: STALE.MINUTES.ONE,
     async queryFn() {
       const res = await communitiesClient.getAgentGrant(id)
