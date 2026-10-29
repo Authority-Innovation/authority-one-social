@@ -1,13 +1,13 @@
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
-import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
+import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
 import {useCommunityTimelineQuery} from '../queries'
 
