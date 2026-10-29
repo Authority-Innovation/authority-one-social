@@ -272,7 +272,7 @@ describe('community agent sources', () => {
     expect(r.getAllByTestId('communityAgentSource')).toHaveLength(2)
     expect(r.getByText('Between Two Beers, Episode 12 (sample)')).toBeTruthy()
     expect(r.getByText('Between Two Beers, Episode 7 (sample)')).toBeTruthy()
-    expect(r.getByText(/From 14:32 · episode transcript · /)).toBeTruthy()
+    expect(r.getByText(/^episode transcript · /)).toBeTruthy()
     expect(r.getByText('Sources')).toBeTruthy()
     expect(r.queryByTestId('communityAgentNoSource')).toBeNull()
   })
