@@ -25,6 +25,8 @@ export type CommunityAgent = {
    * resolved sponsor name. Never the sponsor's DID or the community's name.
    */
   sponsorName?: string
+  /** The runtime's `agentSponsor.handle`: the sponsor's account handle. */
+  sponsorHandle?: string
   /** What the agent can see, as the community describes it. */
   scope?: string
 }
@@ -102,7 +104,8 @@ export function toDescriptor(
     str(config?.agentSponsor) ?? str(raw.agentSponsor) ?? str(sponsor?.did)
   // Only the sponsor's handle or resolved name. Never its DID, and never the
   // community's own brand name: an unnamed sponsor is shown as absent.
-  const sponsorName = str(sponsor?.handle) ?? str(raw.agentSponsorName)
+  const sponsorHandle = str(sponsor?.handle)
+  const sponsorName = sponsorHandle ?? str(raw.agentSponsorName)
 
   const agent: CommunityAgent | undefined =
     agentDid && agentDid.trim().length > 0
@@ -111,6 +114,7 @@ export function toDescriptor(
           sponsorDid,
           name: str(raw.agentName),
           sponsorName,
+          sponsorHandle,
           scope: str(raw.agentScope),
         }
       : undefined

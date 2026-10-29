@@ -106,6 +106,23 @@ export type CommunityExport = {
   items: CommunityItem[]
 }
 
+/**
+ * One thread-roster entry (`memberRosterEntry` / `agentRosterEntry` in the
+ * runtime's agent-slot.js). A member is `{id: memberId, did: null, is_agent:
+ * false}`, where the member id is the account handle; the agent is `{id:
+ * 'community-agent', did: <config agent DID>, is_agent: true}`.
+ */
+export type CommunityRosterEntry = {
+  id: string
+  did: string | null
+  is_agent: boolean
+}
+
+export type CommunityThreadRoster = {
+  postId: string
+  roster: CommunityRosterEntry[]
+}
+
 export type AgentGrantState = {
   communityId: string
   on: boolean
@@ -338,6 +355,33 @@ export async function getTimeline(
       cursor: typeof data.cursor === 'string' ? data.cursor : null,
     },
   }
+}
+
+/**
+ * The roster of one thread (GET /:id/posts/:postId/roster): the member
+ * authors of the post and its replies, plus the community agent. The runtime
+ * matches the route only while its community agent flag is on. Malformed
+ * entries are dropped.
+ */
+export async function getThreadRoster(
+  id: string,
+  postId: string,
+): Promise<CommunitiesResult<CommunityThreadRoster>> {
+  if (!validId(id)) return invalid('community id is required')
+  if (!validId(postId)) return invalid('post id is required')
+  const res = await request('GET', [id, 'posts', postId, 'roster'])
+  const roster = field(res, 'roster', isArray)
+  if (!roster.ok) return roster
+  const entries: CommunityRosterEntry[] = []
+  for (const e of roster.data) {
+    if (!isObject(e) || !validId(e.id)) continue
+    entries.push({
+      id: e.id,
+      did: typeof e.did === 'string' && e.did ? e.did : null,
+      is_agent: e.is_agent === true,
+    })
+  }
+  return {ok: true, data: {postId, roster: entries}}
 }
 
 /** New members-only post. */

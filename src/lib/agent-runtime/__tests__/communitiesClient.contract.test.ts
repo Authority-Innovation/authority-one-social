@@ -7,6 +7,8 @@
  *   (b30ba816, coord/independent-fix-pass-w1-t5-commu-06041e6d)
  * - agent-grant GET/POST and the agent fields: W2-T7 (64b2b80a,
  *   coord/communities-w2-t7-community-agen-fb477fb1)
+ * - the thread roster: door.js `case 'roster'` with memberRosterEntry and
+ *   agentRosterEntry from agent-slot.js (runtime origin/main)
  *
  * The request side is asserted against what the door reads: the method and
  * path in COMMUNITY_ROUTES / AGENT_ROUTES, and the body fields it checks
@@ -29,6 +31,7 @@ import {
   getAgentGrant,
   getCommunity,
   getJoinInfo,
+  getThreadRoster,
   getTimeline,
   join,
   leave,
@@ -254,6 +257,21 @@ const CONTRACTS: Contract[] = [
     path: `/app/communities/${ID}/agent-grant`,
     status: 200,
     envelope: {communityId: ID, on: false},
+  },
+  {
+    name: 'GET /:id/posts/:postId/roster -> {postId, roster}',
+    run: () => getThreadRoster(ID, ITEM.id),
+    method: 'GET',
+    path: `/app/communities/${ID}/posts/${ITEM.id}/roster`,
+    status: 200,
+    // memberRosterEntry(authorId), then agentRosterEntry(slot).
+    envelope: {
+      postId: ITEM.id,
+      roster: [
+        {id: 'acct-ada', did: null, is_agent: false},
+        {id: 'community-agent', did: 'did:plc:agent123', is_agent: true},
+      ],
+    },
   },
   {
     name: 'POST /:id/agent-grant {on} -> {communityId, on}',
