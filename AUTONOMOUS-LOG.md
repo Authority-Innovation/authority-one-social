@@ -208,3 +208,11 @@
   - No device test.
   - No `wrangler` or `check:bundle` (deny-listed), and no deploy.
 - **Details:** `docs/communities/W2-T11-switcher-report.md`
+## 2026-10-28 - Communities W2-T13: community agent slot UI (task 29293950)
+
+- Branch `communities/w2-agent-slot-ui`, base `569b3b240` with T1, T2 and T8 merged in; feature head `c98b7f3a0`.
+- Changed: new `src/features/communityAgent/`. It has the N1 label rule (`is_agent` AND the author DID equals the config agent DID AND a sponsor is set; the handle is never read; with no sponsor it fails closed to a member reply plus an operator warning). It also has the agent pill, sponsor line, square avatar, Sources block or "No source cited", the "Why am I seeing an agent?" disclosure, and the `AgentGrantRow` toggle, which calls `setAgentGrant`. Everything is behind `EXPO_PUBLIC_COMMUNITIES_ENABLED` (default off).
+- Tests: +14. Full suite: 1479 -> 1493 passed. The same 1 failing test and 3 failing suites appear before and after (environment).
+- Verdict: done, draft PR, awaiting a separate reviewer.
+- NOT done: not wired into a screen (the community home and settings are other tasks); the runtime fields `did`, `sources`, `agentSponsor*` and `agentDisclosureUrl` are assumed; no intl extraction; no Cloudflare deploy CLI or check:bundle (deny-listed); no deploy or EAS build.
+- Report: `docs/communities/W2-T13-agent-slot-ui-report.md`.
