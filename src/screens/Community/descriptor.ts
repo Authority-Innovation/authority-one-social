@@ -43,6 +43,8 @@ export type CommunityDescriptor = {
   rulesUrl?: string
   /** AT URI of the com.authorityone.group.profile, for public-tier reads. */
   groupUri?: string
+  /** The runtime's `viewer_is_admin`, via the client. Absent means not admin. */
+  viewerIsAdmin?: boolean
 }
 
 const TIER_PREFIX = 'com.authorityone.community.config#'
@@ -122,6 +124,7 @@ export function toDescriptor(
     rules: str(raw.rules),
     rulesUrl: str(moderation?.rulesUrl) ?? str(raw.rulesUrl),
     groupUri: str(raw.groupUri),
+    viewerIsAdmin: community.viewerIsAdmin === true,
   }
 }
 

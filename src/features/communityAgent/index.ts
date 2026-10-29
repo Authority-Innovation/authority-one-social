@@ -1,4 +1,6 @@
 export {AgentGrantRow} from './AgentGrantRow'
+export {AgentLaunchControl} from './AgentLaunchControl'
+export {isCommunityAdmin} from './isCommunityAdmin'
 export {
   AgentPill,
   CommunityThreadPost,

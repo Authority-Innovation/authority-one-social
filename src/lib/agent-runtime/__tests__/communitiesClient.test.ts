@@ -16,6 +16,7 @@ import {
   getJoinInfo,
   getTimeline,
   join,
+  launchCommunityAgent,
   leave,
   listMyCommunities,
   post,
@@ -207,6 +208,15 @@ const CASES: Case[] = [
     response: {communityId: 'c1', on: true},
     data: {communityId: 'c1', on: true},
   },
+  {
+    name: 'launchCommunityAgent',
+    run: () => launchCommunityAgent('c1'),
+    method: 'POST',
+    path: '/app/communities/c1/agent/launch',
+    body: undefined,
+    response: {launched: true},
+    data: null,
+  },
 ]
 
 describe('communitiesClient requests', () => {
@@ -249,12 +259,49 @@ describe('communitiesClient requests', () => {
       exportMine(bad),
       getAgentGrant(bad),
       setAgentGrant(bad, true),
+      launchCommunityAgent(bad),
     ])
     for (const r of results) {
       expect(r.ok === false && r.error.kind).toBe('invalid_argument')
     }
     expect(mockFetch).not.toHaveBeenCalled()
     expect(mockToken).not.toHaveBeenCalled()
+  })
+
+  it('reads viewer_is_admin into viewerIsAdmin, true only for literal true', async () => {
+    const read = async (extra: Record<string, unknown>) => {
+      mockFetch.mockResolvedValueOnce(
+        json(200, {community: {...COMMUNITY, ...extra}}),
+      )
+      const res = await getCommunity('c1')
+      if (!res.ok) throw new Error('expected ok')
+      return res.data.viewerIsAdmin
+    }
+    expect(await read({viewer_is_admin: true})).toBe(true)
+    expect(await read({viewer_is_admin: false})).toBe(false)
+    expect(await read({viewer_is_admin: 'true'})).toBe(false)
+    expect(await read({viewer_is_admin: 1})).toBe(false)
+    expect(await read({})).toBeUndefined()
+    // Only the runtime's snake_case field counts.
+    expect(await read({viewerIsAdmin: true})).toBeUndefined()
+
+    mockFetch.mockResolvedValueOnce(
+      json(200, {communities: [{...COMMUNITY, viewer_is_admin: true}]}),
+    )
+    const list = await listMyCommunities()
+    expect(list.ok && list.data[0].viewerIsAdmin).toBe(true)
+  })
+
+  it('launch failure comes back typed, never thrown', async () => {
+    mockFetch.mockResolvedValueOnce(json(403, {error: 'not an admin'}))
+    expect(await launchCommunityAgent('c1')).toEqual({
+      ok: false,
+      error: {kind: 'http', status: 403, message: 'not an admin'},
+    })
+    expect(await launchCommunityAgent('  ')).toEqual({
+      ok: false,
+      error: {kind: 'invalid_argument', message: 'community id is required'},
+    })
   })
 
   it('accepts an empty 2xx body for leave and delete', async () => {
