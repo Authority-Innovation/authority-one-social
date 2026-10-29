@@ -7,6 +7,8 @@ import {
   type AppBskyEmbedRecordWithMedia,
   type AppBskyEmbedVideo,
   AppBskyFeedPost,
+  AppBskyFeedPostgate,
+  AppBskyFeedThreadgate,
   BlobRef,
   type BskyAgent,
   ChatBskyGroupDefs,
@@ -29,6 +31,7 @@ import {
   buildGroupPostBindingWrite,
   findCidMismatches,
   type GroupPostBinding,
+  GroupPostBindingDisabledError,
   GroupPostCidMismatchError,
 } from '#/lib/communities/groupPostBinding'
 import {validateGroupPostRecord} from '#/lib/communities/groupPostBindingLexicon'
@@ -50,6 +53,7 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
+import {COMMUNITIES_ENABLED} from '#/env'
 import * as bsky from '#/types/bsky'
 import {createGIFDescription} from '../gif-alt-text'
 import {uploadBlob} from './upload-blob'
@@ -93,6 +97,9 @@ export async function post(
   // reach a PDS write.
   const binding = opts.binding
   if (binding !== undefined) {
+    // The binding path is dark: with the communities flag off nothing may
+    // reach it, whatever the caller passes.
+    if (!COMMUNITIES_ENABLED) throw new GroupPostBindingDisabledError()
     assertGroupPostBinding(binding)
     // The bound path is not combined with the runtime video embed; nothing in
     // the design covers it, so refuse rather than guess.
@@ -287,23 +294,42 @@ export async function post(
 
 /**
  * Client-side lexicon validation for a bound community batch, which the PDS
- * receives with validate:false (OPEN Q7). Throws before any write on failure.
+ * receives with validate:false (OPEN Q7). Every record in the batch is
+ * validated: posts, bindings, threadgates and postgates. A collection with no
+ * validator here is refused, so nothing unvalidated slips through. Throws
+ * before any write on failure.
  */
 function validateBoundBatch(
   writes: $Typed<ComAtprotoRepoApplyWrites.Create>[],
 ) {
   for (const w of writes) {
-    const result =
-      w.collection === 'com.authorityone.group.post'
-        ? validateGroupPostRecord(w.value)
-        : w.collection === 'app.bsky.feed.post'
-          ? AppBskyFeedPost.validateRecord(w.value)
-          : {success: true as const}
+    const result = validateBoundRecord(w.collection, w.value)
     if (!result.success) {
       throw new Error(
         `Group post batch failed validation (${w.collection}): ${result.error.message}`,
       )
     }
+  }
+}
+
+function validateBoundRecord(
+  collection: string,
+  value: unknown,
+): {success: true} | {success: false; error: Error} {
+  switch (collection) {
+    case 'com.authorityone.group.post':
+      return validateGroupPostRecord(value)
+    case 'app.bsky.feed.post':
+      return AppBskyFeedPost.validateRecord(value)
+    case 'app.bsky.feed.threadgate':
+      return AppBskyFeedThreadgate.validateRecord(value)
+    case 'app.bsky.feed.postgate':
+      return AppBskyFeedPostgate.validateRecord(value)
+    default:
+      return {
+        success: false,
+        error: new Error('no client-side validator for this collection'),
+      }
   }
 }
 

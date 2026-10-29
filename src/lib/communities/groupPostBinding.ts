@@ -87,6 +87,17 @@ export class GroupPostBindingRefusedError extends Error {
   }
 }
 
+/**
+ * Thrown before any write or network call when a binding is passed while the
+ * communities flag (EXPO_PUBLIC_COMMUNITIES_ENABLED) is off.
+ */
+export class GroupPostBindingDisabledError extends Error {
+  constructor() {
+    super('Group post binding refused: communities are not enabled')
+    this.name = 'GroupPostBindingDisabledError'
+  }
+}
+
 /** Throws GroupPostBindingRefusedError unless `binding` is a well-formed public binding. */
 export function assertGroupPostBinding(
   binding: unknown,

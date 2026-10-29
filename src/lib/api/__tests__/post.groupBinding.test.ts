@@ -1,11 +1,12 @@
 import {type BskyAgent, RichText} from '@atproto/api'
-import {describe, expect, it, jest} from '@jest/globals'
+import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {sha256} from 'js-sha256'
 import {CID} from 'multiformats/cid'
 import {create as createDigest} from 'multiformats/hashes/digest'
 
 import {
   type GroupPostBinding,
+  GroupPostBindingDisabledError,
   GroupPostBindingRefusedError,
   GroupPostCidMismatchError,
 } from '#/lib/communities/groupPostBinding'
@@ -19,6 +20,15 @@ jest.mock('../../../../modules/bottom-sheet', () => ({
   BottomSheet: () => null,
   BottomSheetSnapPoint: {Hidden: 0, Partial: 1, Full: 2},
 }))
+// The binding path is gated on the communities flag; tests turn it off.
+const mockFlags = {communities: true}
+jest.mock('#/env', () =>
+  Object.defineProperty(
+    {...jest.requireActual<object>('#/env')},
+    'COMMUNITIES_ENABLED',
+    {get: () => mockFlags.communities},
+  ),
+)
 // @ipld/dag-cbor is ESM-only and does not resolve under jest. Encode as JSON
 // instead; the CID is still a real CIDv1 over a sha256 of those bytes, so the
 // test can recompute it independently (see expectedCid). The real DAG-CBOR
@@ -123,6 +133,10 @@ function callArg(applyWrites: ReturnType<typeof makeAgent>['applyWrites']) {
 }
 
 describe('apilib.post with a group binding (public community)', () => {
+  beforeEach(() => {
+    mockFlags.communities = true
+  })
+
   it('writes the binding in the same applyWrites as the post: same rkey, computed CID', async () => {
     const {agent, applyWrites, createRecord} = makeAgent()
     const {uris} = await post(agent, {} as never, {
@@ -284,6 +298,57 @@ describe('apilib.post with a group binding (public community)', () => {
       }),
     ).rejects.toThrow(/failed validation \(app\.bsky\.feed\.post\)/)
     expect(applyWrites).not.toHaveBeenCalled()
+  })
+
+  it('validates the threadgate and postgate in a bound batch too', async () => {
+    const {agent, applyWrites} = makeAgent()
+    const thread = makeThread(['gated'], [{type: 'mention'}])
+    thread.postgate.embeddingRules = [
+      {$type: 'app.bsky.feed.postgate#disableRule'},
+    ]
+    // detachedEmbeddingUris must be at-uris; a bad one fails the postgate.
+    thread.postgate.detachedEmbeddingUris = ['not a uri']
+    await expect(
+      post(agent, {} as never, {thread, binding: BINDING}),
+    ).rejects.toThrow(/failed validation \(app\.bsky\.feed\.postgate\)/)
+    expect(applyWrites).not.toHaveBeenCalled()
+  })
+
+  it('sends a valid threadgate and postgate in a bound batch', async () => {
+    const {agent, applyWrites} = makeAgent()
+    const thread = makeThread(['gated'], [{type: 'mention'}])
+    thread.postgate.embeddingRules = [
+      {$type: 'app.bsky.feed.postgate#disableRule'},
+    ]
+    await post(agent, {} as never, {thread, binding: BINDING})
+    expect(callArg(applyWrites).writes.map(w => w.collection)).toEqual([
+      'app.bsky.feed.post',
+      'app.bsky.feed.threadgate',
+      'app.bsky.feed.postgate',
+      'com.authorityone.group.post',
+    ])
+  })
+
+  it('communities flag off: a bound write is refused before any network call', async () => {
+    mockFlags.communities = false
+    const {agent, applyWrites, createRecord, getPosts} = makeAgent()
+    await expect(
+      post(agent, {} as never, {
+        thread: makeThread(['flag off']),
+        replyTo: `at://${DID}/app.bsky.feed.post/parent`,
+        binding: BINDING,
+      }),
+    ).rejects.toBeInstanceOf(GroupPostBindingDisabledError)
+    expect(getPosts).not.toHaveBeenCalled()
+    expect(applyWrites).not.toHaveBeenCalled()
+    expect(createRecord).not.toHaveBeenCalled()
+  })
+
+  it('communities flag off: an unbound post is unaffected', async () => {
+    mockFlags.communities = false
+    const {agent, applyWrites} = makeAgent()
+    await post(agent, {} as never, {thread: makeThread(['plain'])})
+    expect(applyWrites).toHaveBeenCalledTimes(1)
   })
 
   it('an unbound post is unchanged: no binding write, strict validation', async () => {
