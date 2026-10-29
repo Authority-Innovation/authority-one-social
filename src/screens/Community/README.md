@@ -13,6 +13,8 @@ nothing is fetched.
   `config`) into a `CommunityDescriptor`. `postsSource()` decides where posts
   are read from.
 - `queries.ts` - TanStack Query hooks. No writes.
+- `roster.ts` - pure helpers that turn the runtime's thread rosters into the
+  Members tab's rows.
 - `components/` - header, agent card, posts, members, and two slots for work
   owned by other tasks (`JoinConsentEntry` for T9, `CommunityComposerEntry`
   for T17).
@@ -47,3 +49,16 @@ nothing is fetched.
 - The composer entry (`CommunityComposerEntry`) sits inside the scroll
   content under the header, for members only. It opens the composer with its
   target fixed to this community and tier, never the PDS.
+- After "Launch community agent" succeeds, the home refetches the community
+  (and the grant) so the agent card and the grant row appear without a
+  reload. The launch response itself carries no community.
+- The Members tab, for a member of a walled community, lists the people in
+  the runtime's thread rosters (`GET /app/communities/:id/posts/:postId/roster`)
+  for the top-level posts already loaded, merged by id, with the community
+  agent last. The runtime has no community-wide member list, so someone who
+  has not posted in a loaded thread is not listed. Member entries carry no DID;
+  their id is the account handle, which is what the profile cache is asked
+  for. The agent label goes only to an `is_agent` entry whose DID is the
+  config's agent DID. ADMIN is shown only where the app already knows it: the
+  signed-in member when the runtime said `viewer_is_admin`, and the agent's
+  sponsor (`agentSponsor.handle`; only an admin can launch).
