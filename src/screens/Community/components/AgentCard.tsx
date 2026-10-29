@@ -19,7 +19,9 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
   if (!agent) return null
 
   const name = agent.name ?? l`Community agent`
-  const sponsor = agent.sponsorName ?? community.runBy
+  // No fallback to the community name: with no resolved sponsor name the
+  // line is just "AI agent".
+  const sponsor = agent.sponsorName
 
   return (
     <View
@@ -55,7 +57,7 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
           {sponsor ? (
             <Trans>AI agent · sponsor: {sponsor}</Trans>
           ) : (
-            <Trans>AI agent · sponsored by this community</Trans>
+            <Trans>AI agent</Trans>
           )}
         </Text>
         <Text testID="communityAgentScope" style={[a.text_sm]}>

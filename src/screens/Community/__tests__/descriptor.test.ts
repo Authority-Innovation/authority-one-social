@@ -37,9 +37,24 @@ describe('toDescriptor', () => {
       did: 'did:example:agent',
       sponsorDid: 'did:example:sponsor',
       name: 'Steve',
-      sponsorName: 'Between Two Beers',
+      sponsorName: undefined,
       scope: undefined,
     })
+  })
+
+  it('never uses the community brand name as the sponsor name', () => {
+    const config = {
+      agent: 'did:example:agent',
+      agentSponsor: 'did:example:sponsor',
+      brand: {displayName: 'Between Two Beers'},
+    }
+    expect(
+      toDescriptor('c1', community({config})).agent?.sponsorName,
+    ).toBeUndefined()
+    expect(
+      toDescriptor('c1', community({config, agentSponsorName: 'Sam R.'})).agent
+        ?.sponsorName,
+    ).toBe('Sam R.')
   })
 
   it('has no agent unless both agent and agentSponsor are set (N1)', () => {

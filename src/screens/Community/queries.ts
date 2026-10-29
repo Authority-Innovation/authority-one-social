@@ -83,3 +83,36 @@ export function useCommunityTimelineQuery({
     },
   })
 }
+
+export const createCommunityAgentGrantQueryKey = (args: {
+  id: string
+  viewer: string
+}) => createQueryKey('communityAgentGrant', args)
+
+/**
+ * The caller's community-agent grant for one community. Read only for a
+ * member of a community whose config names an agent, so the grant row starts
+ * from the runtime's real value rather than the off default.
+ */
+export function useCommunityAgentGrantQuery({
+  community,
+}: {
+  community?: CommunityDescriptor
+}) {
+  const id = community?.id ?? ''
+  const viewer = useSession().currentAccount?.did ?? ''
+  return useQuery<boolean, CommunityReadError>({
+    queryKey: createCommunityAgentGrantQueryKey({id, viewer}),
+    enabled:
+      COMMUNITIES_ENABLED &&
+      !!viewer &&
+      !!community?.isMember &&
+      !!community.agent,
+    staleTime: STALE.MINUTES.ONE,
+    async queryFn() {
+      const res = await communitiesClient.getAgentGrant(id)
+      if (!res.ok) throw new CommunityReadError(res.error)
+      return res.data.on
+    },
+  })
+}

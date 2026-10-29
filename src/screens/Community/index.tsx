@@ -25,6 +25,7 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
 import {AgentCard} from './components/AgentCard'
+import {AgentGrantSection} from './components/AgentGrantSection'
 import {CommunityComposerEntry} from './components/CommunityComposerEntry'
 import {CommunityHeader} from './components/CommunityHeader'
 import {JoinConsentEntry} from './components/JoinConsentEntry'
@@ -130,6 +131,7 @@ function CommunityHomeLoaded({
           onPressJoin={() => joinControl.open()}
         />
         <AgentCard community={community} />
+        <AgentGrantSection community={community} />
         {!community.isMember ? <RulesBlock community={community} /> : null}
         <TabRow tab={tab} onChange={setTab} />
         {tab === 'posts' ? (
