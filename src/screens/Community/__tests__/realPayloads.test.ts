@@ -24,7 +24,7 @@ import {
 import {toSwitcherCommunities} from '#/features/communities/switcher/util'
 import {postsSource, toDescriptor} from '../descriptor'
 import {toMemberPostRows} from '../memberRows'
-import REAL from './fixtures/dev-runtime-2026-10-30.json'
+import REAL from '#/lib/communities/__fixtures__/door/dev-runtime-2026-10-30.json'
 
 const realFetch = globalThis.fetch
 const mockFetch = jest.fn<typeof fetch>()

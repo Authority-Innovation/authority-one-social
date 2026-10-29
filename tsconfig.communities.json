@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*.d.ts",
+    "src/screens/Community",
+    "src/features/communit*/**/*",
+    "src/lib/communities",
+    "src/lib/agent-runtime/communitiesClient.ts",
+    "src/lib/api/feed/communities.ts",
+    "src/lib/api/feed/__tests__/communities.test.ts",
+    "src/view/com/composer/state/submit.ts",
+    "src/view/com/composer/state/__tests__/submit.test.ts"
+  ]
+}
