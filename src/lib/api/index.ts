@@ -96,7 +96,8 @@ export async function post(
     assertGroupPostBinding(binding)
     // The bound path is not combined with the runtime video embed; nothing in
     // the design covers it, so refuse rather than guess.
-    if (opts.videoEmbed) throw new Error('Video posts cannot be bound to a group')
+    if (opts.videoEmbed)
+      throw new Error('Video posts cannot be bound to a group')
     const decision = guardComposerPdsWrite(binding.target, {binding})
     if (!decision.allowed) throw new Error(decision.reason)
   }

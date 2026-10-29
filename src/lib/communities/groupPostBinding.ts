@@ -146,7 +146,9 @@ export class GroupPostCidMismatchError extends Error {
   ) {
     super(
       `Group post CID mismatch: ${mismatches
-        .map(m => `${m.uri} computed ${m.computed}, PDS ${m.returned ?? 'none'}`)
+        .map(
+          m => `${m.uri} computed ${m.computed}, PDS ${m.returned ?? 'none'}`,
+        )
         .join('; ')}`,
     )
     this.name = 'GroupPostCidMismatchError'

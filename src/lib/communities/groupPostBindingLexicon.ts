@@ -11,6 +11,9 @@
  * `lexicons/com/authorityone/group/post.json`.
  */
 import {schemas as atprotoSchemas} from '@atproto/api'
+// @atproto/lexicon is not a direct dependency; it ships with @atproto/api (the
+// node linker is hoisted) and the generated lexicon module already uses it.
+// eslint-disable-next-line import-x/no-extraneous-dependencies
 import {
   type LexiconDoc,
   Lexicons,

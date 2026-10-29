@@ -1,7 +1,7 @@
 import {type BskyAgent, RichText} from '@atproto/api'
 import {describe, expect, it, jest} from '@jest/globals'
-import {CID} from 'multiformats/cid'
 import {sha256} from 'js-sha256'
+import {CID} from 'multiformats/cid'
 import {create as createDigest} from 'multiformats/hashes/digest'
 
 import {
@@ -50,7 +50,7 @@ const BINDING: GroupPostBinding = {
   group: GROUP,
 }
 
-async function expectedCid(record: unknown): Promise<string> {
+function expectedCid(record: unknown): string {
   const bytes = new TextEncoder().encode(JSON.stringify(record))
   const digest = createDigest(0x12, new Uint8Array(sha256.arrayBuffer(bytes)))
   return CID.createV1(0x71, digest).toString()
@@ -83,7 +83,7 @@ type Write = {
   $type: string
   collection: string
   rkey: string
-  value: Record<string, any>
+  value: Record<string, unknown>
 }
 type ApplyWritesArg = {repo: string; validate: boolean; writes: Write[]}
 
@@ -95,19 +95,17 @@ type ApplyWritesArg = {repo: string; validate: boolean; writes: Write[]}
 function makeAgent({
   results = 'echo',
 }: {results?: 'echo' | 'tamper' | 'none'} = {}) {
-  const applyWrites = jest.fn(async (arg: ApplyWritesArg) => {
-    if (results === 'none') return {data: {}}
-    const out = await Promise.all(
-      arg.writes.map(async w => ({
-        $type: 'com.atproto.repo.applyWrites#createResult',
-        uri: `at://${DID}/${w.collection}/${w.rkey}`,
-        cid:
-          results === 'tamper' && w.collection === 'app.bsky.feed.post'
-            ? GROUP.cid
-            : await expectedCid(w.value),
-      })),
-    )
-    return {data: {results: out}}
+  const applyWrites = jest.fn((arg: ApplyWritesArg) => {
+    if (results === 'none') return Promise.resolve({data: {}})
+    const out = arg.writes.map(w => ({
+      $type: 'com.atproto.repo.applyWrites#createResult',
+      uri: `at://${DID}/${w.collection}/${w.rkey}`,
+      cid:
+        results === 'tamper' && w.collection === 'app.bsky.feed.post'
+          ? GROUP.cid
+          : expectedCid(w.value),
+    }))
+    return Promise.resolve({data: {results: out}})
   })
   const createRecord = jest.fn()
   const deleteRecord = jest.fn()
@@ -121,7 +119,7 @@ function makeAgent({
 }
 
 function callArg(applyWrites: ReturnType<typeof makeAgent>['applyWrites']) {
-  return applyWrites.mock.calls[0][0] as ApplyWritesArg
+  return applyWrites.mock.calls[0][0]
 }
 
 describe('apilib.post with a group binding (public community)', () => {
@@ -147,7 +145,7 @@ describe('apilib.post with a group binding (public community)', () => {
     expect(bindingWrite.rkey).toBe(postWrite.rkey)
     expect(bindingWrite.value).toEqual({
       $type: 'com.authorityone.group.post',
-      subject: {uri: uris[0], cid: await expectedCid(postWrite.value)},
+      subject: {uri: uris[0], cid: expectedCid(postWrite.value)},
       group: GROUP,
       createdAt: postWrite.value.createdAt,
     })
@@ -173,13 +171,16 @@ describe('apilib.post with a group binding (public community)', () => {
     expect(posts).toHaveLength(3)
     expect(bindings).toHaveLength(3)
     for (let i = 0; i < posts.length; i++) {
-      const cid = await expectedCid(posts[i].value)
+      const cid = expectedCid(posts[i].value)
       expect(bindings[i].rkey).toBe(posts[i].rkey)
       expect(bindings[i].value.subject).toEqual({uri: uris[i], cid})
       expect(bindings[i].value.group).toEqual(GROUP)
       // The CID pinned in the binding is the one the next post replies to.
       if (i + 1 < posts.length) {
-        expect(posts[i + 1].value.reply.parent).toEqual({uri: uris[i], cid})
+        expect((posts[i + 1].value.reply as {parent: unknown}).parent).toEqual({
+          uri: uris[i],
+          cid,
+        })
       }
     }
   })
@@ -202,7 +203,7 @@ describe('apilib.post with a group binding (public community)', () => {
     expect((thrown as GroupPostCidMismatchError).mismatches).toEqual([
       {
         uri: `at://${DID}/app.bsky.feed.post/${writes[0].rkey}`,
-        computed: await expectedCid(writes[0].value),
+        computed: expectedCid(writes[0].value),
         returned: GROUP.cid,
       },
     ])

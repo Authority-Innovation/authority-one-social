@@ -2,7 +2,7 @@
 import {readFileSync} from 'node:fs'
 import path from 'node:path'
 
-import {describe, expect, it} from '@jest/globals'
+import {describe, expect, it, jest} from '@jest/globals'
 
 import {
   buildGroupPostBindingWrite,
@@ -14,9 +14,13 @@ import {
   validateGroupPostRecord,
 } from '#/lib/communities/groupPostBindingLexicon'
 
+// The repo-wide __mocks__ stub multiformats/cid; lexicon validation of a
+// `cid` field needs the real parser.
+jest.mock('multiformats/cid', () => jest.requireActual('multiformats/cid'))
+
 const DID = 'did:plc:author'
 const CID_A = 'bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm'
-const CID_B = 'bafyreih4mfbxrnuqmmzmypp4ty3rzfxrxt2tqdmxsypoplf7sjzhmmtjqi'
+const CID_B = 'bafyreick4zaw3oxx6ltzob5khfcplaquk4s3ulinexijye7wswntszajm4'
 const GROUP = {
   uri: 'at://did:plc:owner/com.authorityone.group.profile/self',
   cid: CID_A,
