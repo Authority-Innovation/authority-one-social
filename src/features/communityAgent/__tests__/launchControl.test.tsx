@@ -96,14 +96,14 @@ describe('AgentLaunchControl', () => {
   it('an admin sees the control, and pressing launches once', async () => {
     mockLaunch.mockResolvedValue({ok: true, data: null})
     const onLaunched = jest.fn()
-    const {getByTestId, queryByTestId} = render(
+    const {getByTestId, getByLabelText, queryByTestId} = render(
       <AgentLaunchControl
         community={{id: ID, viewerIsAdmin: true}}
         onLaunched={onLaunched}
       />,
     )
-    const button = getByTestId('communityAgentLaunchButton')
-    expect(button.props.accessibilityLabel).toBe('Launch community agent')
+    const button = getByLabelText('Launch community agent')
+    expect(button).toBe(getByTestId('communityAgentLaunchButton'))
 
     await press(button)
     expect(mockLaunch).toHaveBeenCalledTimes(1)

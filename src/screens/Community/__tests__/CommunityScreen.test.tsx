@@ -37,6 +37,7 @@ jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getTimeline: jest.fn(),
   getAgentGrant: jest.fn(),
   setAgentGrant: jest.fn(),
+  launchCommunityAgent: jest.fn(),
 }))
 
 // group.ts reads through the user's PDS agent (no group-AppView proxy yet), so
@@ -649,6 +650,38 @@ describe('Community home - agent card', () => {
     expect(r.getByTestId('communityAgentCard')).not.toHaveTextContent(
       'Between Two Beers',
     )
+  })
+})
+
+describe('Community home - agent launch control', () => {
+  it('an admin sees the launch control below the agent card', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member', viewerIsAdmin: true}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityAgentLaunchControl', {}, {timeout: 3000})
+    expect(r.getByTestId('communityAgentCard')).toBeTruthy()
+  })
+
+  it('an owner without viewerIsAdmin gets no launch control', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'owner'}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentLaunchControl')).toBeNull()
+  })
+
+  it('a former admin (viewerIsAdmin false) gets no launch control', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member', viewerIsAdmin: false}),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentLaunchControl')).toBeNull()
   })
 })
 

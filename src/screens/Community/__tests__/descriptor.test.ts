@@ -8,6 +8,20 @@ function community(extra: Record<string, unknown> = {}): Community {
 }
 
 describe('toDescriptor', () => {
+  it('carries viewerIsAdmin only when the client says true', () => {
+    expect(toDescriptor('c1', community({viewerIsAdmin: true})).viewerIsAdmin).toBe(
+      true,
+    )
+    expect(
+      toDescriptor('c1', community({viewerIsAdmin: false})).viewerIsAdmin,
+    ).toBe(false)
+    expect(toDescriptor('c1', community()).viewerIsAdmin).toBe(false)
+    // Membership role is not admin.
+    expect(toDescriptor('c1', community({role: 'owner'})).viewerIsAdmin).toBe(
+      false,
+    )
+  })
+
   it('reads the community config record when the runtime returns one', () => {
     const d = toDescriptor(
       'c1',
