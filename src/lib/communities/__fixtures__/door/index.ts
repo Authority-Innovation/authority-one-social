@@ -15,6 +15,7 @@
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
 import {
   type DoorAgentGrant,
+  type DoorAgentSponsor,
   type DoorCommunity,
   type DoorCommunityList,
   type DoorCommunityResponse,
@@ -40,6 +41,7 @@ export const DOOR = DOOR_JSON satisfies {
   export: DoorExport
   roster: DoorRoster
   grant: DoorAgentGrant
+  communityWithSponsorMember: DoorCommunityResponse
 }
 
 export const DEV_RUNTIME = DEV_JSON satisfies {
@@ -65,9 +67,25 @@ export function doorTimeline(): DoorTimelinePage {
   return copy(DOOR.timeline as DoorTimelinePage)
 }
 
-/** The community (`GET /:id`), as the signed-in admin sees it. */
+/** The configured agent sponsor DID in door.json (a fake). */
+export const DOOR_SPONSOR_DID = (
+  DOOR.community.community.agentSponsor as DoorAgentSponsor
+).did
+
+/**
+ * The community (`GET /:id`), as the signed-in admin sees it. The sponsor
+ * holds no membership here, so `agentSponsor.handle` is null.
+ */
 export function doorCommunity(): DoorCommunity {
   return copy(DOOR.community.community as DoorCommunity)
+}
+
+/**
+ * The same community after the sponsor joined, as a member (not an admin)
+ * sees it: `agentSponsor.handle` is the sponsor's member id.
+ */
+export function doorCommunityWithSponsorMember(): DoorCommunity {
+  return copy(DOOR.communityWithSponsorMember.community as DoorCommunity)
 }
 
 /**
@@ -107,11 +125,22 @@ export function doorPage(
 }
 
 /**
+ * A door community as communitiesClient hands it to the app: the door's own
+ * fields, with `viewer_is_admin` read into `viewerIsAdmin` (readCommunity).
+ */
+export function asClientCommunity(c: DoorCommunity): Community {
+  const {viewer_is_admin, ...rest} = copy(c)
+  return viewer_is_admin === undefined
+    ? rest
+    : {...rest, viewerIsAdmin: viewer_is_admin}
+}
+
+/**
  * A community as communitiesClient returns it (`viewer_is_admin` read into
  * `viewerIsAdmin`), built from door.json's community. By default it is what
  * the door answers for a config with only a name and every agent/admin flag
- * off: no description, accent or wording version, and no `agent` or
- * `viewer_is_admin` key. `overrides` sets fields on top.
+ * off: no description, accent or wording version, and no `agent`,
+ * `agentSponsor` or `viewer_is_admin` key. `overrides` sets fields on top.
  */
 export function clientCommunity(
   overrides: Partial<Community> & Record<string, unknown> = {},
@@ -119,6 +148,7 @@ export function clientCommunity(
   const {
     agent: _agent,
     agent_error: _agentError,
+    agentSponsor: _agentSponsor,
     viewer_is_admin: _admin,
     ...base
   } = doorCommunity()

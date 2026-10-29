@@ -28,9 +28,15 @@ const AVATAR_SIZE = 36
 export function CommunityThreadPost({
   post,
   community,
+  agentDisclosureUrl,
 }: {
   post: Post
   community: CommunityAgentConfig | null | undefined
+  /**
+   * Public page explaining the community's agent. The door sends none, so a
+   * caller passes it only from its own source; without it no link is shown.
+   */
+  agentDisclosureUrl?: string | null
 }) {
   const t = useTheme()
   const {i18n} = useLingui()
@@ -75,7 +81,7 @@ export function CommunityThreadPost({
         </View>
 
         {label.kind === 'agent' ? (
-          <SponsorLine sponsorName={label.sponsorName} />
+          <SponsorLine sponsorHandle={label.sponsorHandle} />
         ) : null}
 
         {label.kind === 'member' && label.warning && isOperator ? (
@@ -92,8 +98,8 @@ export function CommunityThreadPost({
           <>
             <SourcesBlock sources={post.sources ?? []} />
             <WhyAgentDisclosure
-              disclosureUrl={community?.agentDisclosureUrl}
-              sponsorName={label.kind === 'agent' ? label.sponsorName : ''}
+              disclosureUrl={agentDisclosureUrl}
+              sponsorHandle={label.kind === 'agent' ? label.sponsorHandle : ''}
             />
           </>
         ) : null}
@@ -125,16 +131,16 @@ export function AgentPill() {
   )
 }
 
-function SponsorLine({sponsorName}: {sponsorName: string}) {
+function SponsorLine({sponsorHandle}: {sponsorHandle: string}) {
   const t = useTheme()
   return (
     <Text
       testID="communityAgentSponsor"
       emoji
       style={[a.text_xs, t.atoms.text_contrast_medium]}>
-      {sponsorName ? (
-        <Trans comment="Under an AI agent's name; the sponsor is the account accountable for the agent">
-          AI agent · run by {sponsorName}
+      {sponsorHandle ? (
+        <Trans comment="Under an AI agent's name; sponsorHandle is the handle of the account accountable for the agent">
+          AI agent · run by @{sponsorHandle}
         </Trans>
       ) : (
         <Trans>AI agent</Trans>
@@ -236,10 +242,10 @@ function SourceRow({source}: {source: CommunitySource}) {
 
 function WhyAgentDisclosure({
   disclosureUrl,
-  sponsorName,
+  sponsorHandle,
 }: {
   disclosureUrl?: string | null
-  sponsorName: string
+  sponsorHandle: string
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -262,11 +268,11 @@ function WhyAgentDisclosure({
       {open ? (
         <View testID="communityAgentWhyBody" style={[a.gap_xs]}>
           <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-            {sponsorName ? (
+            {sponsorHandle ? (
               <Trans>
-                {sponsorName} added this agent to the community. It answers from
-                the community’s own material and says which item it used. It
-                can’t see your profile or your other communities.
+                @{sponsorHandle} added this agent to the community. It answers
+                from the community’s own material and says which item it used.
+                It can’t see your profile or your other communities.
               </Trans>
             ) : (
               <Trans>

@@ -17,6 +17,7 @@ import {
   DEV_RUNTIME,
   DOOR,
   DOOR_SOURCE_COMMIT,
+  DOOR_SPONSOR_DID,
   doorItem,
 } from '#/lib/communities/__fixtures__/door'
 import {
@@ -35,6 +36,7 @@ const COMMUNITY_KEYS = [
   'wording_version',
   'agent',
   'agent_error',
+  'agentSponsor',
   'viewer_is_admin',
 ]
 
@@ -117,11 +119,12 @@ describe('door contract fixtures', () => {
     expect(doorItem('legacy').author).toEqual({did: null, is_agent: false})
   })
 
-  it('communities carry only publicConfig keys (no role, no agentSponsor)', () => {
+  it('communities carry only publicConfig keys (no role)', () => {
     const communities = [
       ...DOOR.list.communities,
       ...DOOR.listAsMember.communities,
       DOOR.community.community,
+      DOOR.communityWithSponsorMember.community,
       ...DEV_RUNTIME.list.communities,
       DEV_RUNTIME.home.community,
     ]
@@ -129,7 +132,27 @@ describe('door contract fixtures', () => {
       expect(Object.keys(c).filter(k => !COMMUNITY_KEYS.includes(k))).toEqual(
         [],
       )
+      expect(c).not.toHaveProperty('role')
     }
+  })
+
+  it('a member community carries agentSponsor {did, handle}, handle null or a member id', () => {
+    expect(DOOR.community.community.agentSponsor).toEqual({
+      did: DOOR_SPONSOR_DID,
+      handle: null,
+    })
+    expect(DOOR.communityWithSponsorMember.community.agentSponsor).toEqual({
+      did: DOOR_SPONSOR_DID,
+      handle: expect.any(String),
+    })
+    for (const c of [
+      DOOR.community.community,
+      DOOR.communityWithSponsorMember.community,
+    ]) {
+      expect(Object.keys(c.agentSponsor).sort()).toEqual(['did', 'handle'])
+    }
+    // The Dev capture predates the sponsor view.
+    expect(DEV_RUNTIME.home.community).not.toHaveProperty('agentSponsor')
   })
 })
 

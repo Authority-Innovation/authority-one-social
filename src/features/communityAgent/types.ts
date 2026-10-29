@@ -13,24 +13,15 @@ import {
 } from '#/lib/communities/doorContract'
 
 /**
- * What the agent slot needs to know about the community. Assembled by the
- * caller: `agentDid` is the door's `agent.did`; the sponsor fields come from
- * the community config, which the door (as of the contract's source commit)
- * does not send to members, so without them no agent label is shown.
+ * What the agent slot needs to know about the community: the member
+ * community response's own fields, as communitiesClient returns them. `agent`
+ * is the config's agent DID (N1); `agentSponsor` is the runtime's sponsor
+ * view `{did, handle}`. Without `agentSponsor` no agent label is shown.
  */
 export type CommunityAgentConfig = Pick<
   Community,
-  'id' | 'name' | 'viewerIsAdmin'
-> & {
-  /** The config's `agent` DID (N1). */
-  agentDid?: string | null
-  /** The config's `agentSponsor` DID. No sponsor means no agent label. */
-  agentSponsor?: string | null
-  /** Display name of the sponsor, resolved by the runtime. */
-  agentSponsorName?: string | null
-  /** Public page explaining the community's agent. */
-  agentDisclosureUrl?: string | null
-}
+  'id' | 'name' | 'viewerIsAdmin' | 'agent' | 'agentSponsor'
+>
 
 export type CommunitySource = DoorItemSource
 
