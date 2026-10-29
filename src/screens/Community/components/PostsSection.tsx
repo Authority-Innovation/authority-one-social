@@ -1,6 +1,7 @@
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
+import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
@@ -36,19 +37,28 @@ function MembersTimeline({community}: {community: CommunityDescriptor}) {
   return (
     <View testID="communityMembersTimeline">
       {posts.map(post => (
-        <MemberPostRow key={post.id} post={post} />
+        <MemberPostRow
+          key={post.id}
+          post={post}
+          agentDid={community.agentDid}
+        />
       ))}
     </View>
   )
 }
 
-function MemberPostRow({post}: {post: CommunityPost}) {
+function MemberPostRow({
+  post,
+  agentDid,
+}: {
+  post: CommunityPost
+  agentDid?: string
+}) {
   const t = useTheme()
   const {i18n} = useLingui()
-  // N1: the runtime's is_agent flag alone decides the label. The door does
-  // not send an author DID, so requiring a DID match would hide every agent
-  // label. Mislabelling a human as an agent is the safer failure.
-  const isAgent = post.author.is_agent === true
+  // N1/R3: is_agent AND author.did matching the config's agent DID. An old
+  // item (did null) or a community with no agent DID gets no label.
+  const isAgent = isCommunityAgentAuthor(post.author, agentDid)
   const created = new Date(post.createdAt)
 
   return (
@@ -65,12 +75,12 @@ function MemberPostRow({post}: {post: CommunityPost}) {
       <UserAvatar
         type={isAgent ? 'algo' : 'user'}
         size={40}
-        avatar={post.author.avatar}
+        avatar={post.author?.avatar}
       />
       <View style={[a.flex_1, a.gap_2xs]}>
         <View style={[a.flex_row, a.align_center, a.gap_xs]}>
           <Text emoji style={[a.text_md, a.font_bold]} numberOfLines={1}>
-            {post.author.displayName}
+            {post.author?.displayName}
           </Text>
           {isAgent ? (
             <Text

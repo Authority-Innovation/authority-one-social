@@ -246,14 +246,18 @@ beforeEach(() => {
       posts: [
         {
           id: 'p1',
-          author: {displayName: 'Sam R.', is_agent: false},
+          author: {
+            displayName: 'Sam R.',
+            is_agent: false,
+            did: 'did:example:sam',
+          },
           body: 'What should I listen to first?',
           createdAt: '2026-10-28T09:29:00.000Z',
         },
         {
           id: 'p2',
-          // The runtime door sends no author DID, only the is_agent flag.
-          author: {displayName: 'Steve', is_agent: true},
+          // R3: the runtime sends the author DID with the is_agent flag.
+          author: {displayName: 'Steve', is_agent: true, did: AGENT_DID},
           body: 'Episode 12 is a good start.',
           parentId: 'p1',
           createdAt: '2026-10-28T09:40:00.000Z',
@@ -336,7 +340,7 @@ describe('Community home - member', () => {
     expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
   })
 
-  it('labels a post as the agent from is_agent alone, with no author DID', async () => {
+  it('labels only the item whose is_agent and author.did match the config agent', async () => {
     const r = renderScreen()
     await r.findByText('Episode 12 is a good start.', {}, {timeout: 3000})
     expect(r.getByText('I am not an agent.')).toBeTruthy()
@@ -346,14 +350,74 @@ describe('Community home - member', () => {
         'communityPostAgentLabel',
       ),
     ).toBeTruthy()
-    expect(
-      within(r.getByTestId('communityPost-p3')).queryByTestId(
-        'communityPostAgentLabel',
-      ),
-    ).toBeNull()
+    // A member item, and a member named like the agent.
+    for (const id of ['p1', 'p3']) {
+      expect(
+        within(r.getByTestId(`communityPost-${id}`)).queryByTestId(
+          'communityPostAgentLabel',
+        ),
+      ).toBeNull()
+    }
   })
 
-  it('labels an is_agent post even when the community config names no agent', async () => {
+  function timelineOf(posts: Record<string, unknown>[]) {
+    getTimeline.mockResolvedValue({
+      ok: true,
+      data: {posts} as unknown as communitiesClient.CommunityTimelinePage,
+    })
+  }
+
+  it('gives no label to a spoofed agent name with a different did', async () => {
+    timelineOf([
+      {
+        id: 's1',
+        author: {displayName: 'Steve', is_agent: true, did: 'did:example:eve'},
+        body: 'I am Steve, honest.',
+        createdAt: '2026-10-28T09:40:00.000Z',
+      },
+    ])
+    const r = renderScreen()
+    await r.findByText('I am Steve, honest.', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
+  })
+
+  it('gives no label to an old item whose author did is null', async () => {
+    timelineOf([
+      {
+        id: 'o1',
+        author: {displayName: 'Steve', is_agent: false, did: null},
+        body: 'Old agent reply.',
+        createdAt: '2026-10-28T09:40:00.000Z',
+      },
+      {
+        // Even a stray is_agent true does not label an item with no did.
+        id: 'o2',
+        author: {displayName: 'Steve', is_agent: true, did: null},
+        body: 'Old flagged reply.',
+        createdAt: '2026-10-28T09:41:00.000Z',
+      },
+    ])
+    const r = renderScreen()
+    await r.findByText('Old agent reply.', {}, {timeout: 3000})
+    expect(r.getByText('Old flagged reply.')).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
+  })
+
+  it('renders an item with no author as a member row with no label', async () => {
+    timelineOf([
+      {
+        id: 'n1',
+        body: 'No author here.',
+        createdAt: '2026-10-28T09:40:00.000Z',
+      },
+    ])
+    const r = renderScreen()
+    await r.findByText('No author here.', {}, {timeout: 3000})
+    expect(r.getByTestId('communityPost-n1')).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
+  })
+
+  it('gives no label when the community config names no agent', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
       data: communityResponse({
@@ -361,27 +425,18 @@ describe('Community home - member', () => {
         config: configWith({agent: undefined}),
       }),
     })
-    getTimeline.mockResolvedValue({
-      ok: true,
-      data: {
-        posts: [
-          {
-            id: 'a1',
-            author: {displayName: 'Bot', is_agent: true},
-            body: 'Agent with no did.',
-            createdAt: '2026-10-28T09:40:00.000Z',
-          },
-        ],
+    timelineOf([
+      {
+        id: 'a1',
+        author: {displayName: 'Bot', is_agent: true, did: AGENT_DID},
+        body: 'Agent with no config agent.',
+        createdAt: '2026-10-28T09:40:00.000Z',
       },
-    })
+    ])
     const r = renderScreen()
-    await r.findByText('Agent with no did.', {}, {timeout: 3000})
+    await r.findByText('Agent with no config agent.', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAgentCard')).toBeNull()
-    expect(
-      within(r.getByTestId('communityPost-a1')).getByTestId(
-        'communityPostAgentLabel',
-      ),
-    ).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
   })
 
   it('passes this community id to the composer entry', async () => {

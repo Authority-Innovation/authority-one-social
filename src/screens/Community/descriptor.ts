@@ -35,6 +35,11 @@ export type CommunityDescriptor = {
   accent?: string
   /** Set only when the config has both `agent` and `agentSponsor` (N1). */
   agent?: CommunityAgent
+  /**
+   * The config's agent DID, with or without a sponsor. The posts list matches
+   * `author.did` against it to label agent items.
+   */
+  agentDid?: string
   runBy?: string
   memberCount?: number
   isMember: boolean
@@ -82,7 +87,8 @@ export function toDescriptor(
   const brand = obj(config?.brand)
   const moderation = obj(config?.moderation)
 
-  const agentDid = str(config?.agent) ?? str(raw.agentDid)
+  const agentDid =
+    str(config?.agent) ?? str(raw.agentDid) ?? str(obj(raw.agent)?.did)
   const sponsorDid = str(config?.agentSponsor) ?? str(raw.agentSponsor)
   // Only the resolved sponsor name. Never the community's own brand name: an
   // unnamed sponsor is shown as absent, not as the community.
@@ -114,6 +120,7 @@ export function toDescriptor(
     tier: parseTier(config?.tier ?? raw.tier),
     accent: parseAccent(theme?.accent ?? raw.accent),
     agent,
+    agentDid: agentDid?.trim(),
     runBy: str(raw.runBy) ?? str(brand?.displayName),
     memberCount:
       typeof raw.memberCount === 'number' ? raw.memberCount : undefined,
