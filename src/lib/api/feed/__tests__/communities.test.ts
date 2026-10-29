@@ -4,6 +4,7 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 jest.mock('#/logger', () => ({logger: {warn: jest.fn(), error: jest.fn()}}))
 jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getTimeline: jest.fn(),
+  getCommunity: jest.fn(),
   listMyCommunities: jest.fn(),
 }))
 jest.mock('#/state/queries/group', () => {
@@ -20,6 +21,7 @@ jest.mock('#/state/queries/group', () => {
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
 import {
   CommunitiesMergeFeedAPI,
+  type CommunityFeedSource,
   createCommunityFeedAPI,
   resolveMyCommunitySources,
 } from '#/lib/api/feed/communities'
@@ -28,9 +30,11 @@ import {
   fetchGroupTimeline,
   GroupAppViewUnavailableError,
 } from '#/state/queries/group'
+import {getMembersPostRef} from '#/features/communities/membersPost'
 
 const mockGetTimeline = jest.mocked(communitiesClient.getTimeline)
 const mockListMine = jest.mocked(communitiesClient.listMyCommunities)
+const mockGetCommunity = jest.mocked(communitiesClient.getCommunity)
 const mockGroupTimeline = jest.mocked(fetchGroupTimeline)
 const mockGroupMemberships = jest.mocked(fetchGroupMemberships)
 
@@ -434,5 +438,138 @@ describe('members-tier items never reach the agent', () => {
     })
     await api.fetch({cursor: undefined, limit: 30})
     expect(new Set(touched)).toEqual(new Set(['getTimeline']))
+  })
+})
+
+describe('members-tier feed marks the config agent (N1, R3)', () => {
+  // Placeholder DIDs only.
+  const AGENT_DID = 'did:example:communityagent'
+  const OTHER_DID = 'did:example:someoneelse'
+
+  function agentPost(id: string, did: string | null) {
+    return {
+      id,
+      author: {displayName: 'Steve', is_agent: true, did},
+      body: `body ${id}`,
+      createdAt: t(9),
+    }
+  }
+
+  function serve(posts: ReturnType<typeof agentPost>[]) {
+    mockGetTimeline.mockResolvedValue({ok: true, data: {posts}})
+  }
+
+  async function isAgentFlags(api: CommunitiesMergeFeedAPI) {
+    const res = await api.fetch({cursor: undefined, limit: 30})
+    return res.feed.map(i => getMembersPostRef(i.post)?.isAgent)
+  }
+
+  function viaSources(sources: CommunityFeedSource[]) {
+    return new CommunitiesMergeFeedAPI({
+      agent: makeAgent().agent,
+      includeFollowing: false,
+      sources,
+    })
+  }
+
+  async function viaResolved(community: Record<string, unknown>) {
+    const {agent} = makeAgent()
+    mockListMine.mockResolvedValue({
+      ok: true,
+      data: [{id: MEMBERS_A, name: 'A', ...community}],
+    } as never)
+    const {sources} = await resolveMyCommunitySources(agent)
+    return viaSources(sources)
+  }
+
+  it('a matching DID shows the agent label', async () => {
+    serve([agentPost('a1', AGENT_DID)])
+    const api = await viaResolved({config: {agent: AGENT_DID}})
+    expect(await isAgentFlags(api)).toEqual([true])
+  })
+
+  it('reads the DID in the community home order: config.agent, agentDid, agent.did', async () => {
+    serve([agentPost('a1', AGENT_DID)])
+    expect(
+      await isAgentFlags(await viaResolved({agentDid: AGENT_DID})),
+    ).toEqual([true])
+    expect(
+      await isAgentFlags(
+        await viaResolved({agent: {did: AGENT_DID, is_agent: true}}),
+      ),
+    ).toEqual([true])
+    // config.agent wins over the fallbacks.
+    expect(
+      await isAgentFlags(
+        await viaResolved({config: {agent: OTHER_DID}, agentDid: AGENT_DID}),
+      ),
+    ).toEqual([false])
+  })
+
+  it('a non-matching DID shows no label', async () => {
+    serve([agentPost('a1', OTHER_DID), agentPost('a2', null)])
+    const api = await viaResolved({config: {agent: AGENT_DID}})
+    expect(await isAgentFlags(api)).toEqual([false, false])
+  })
+
+  it('a missing config DID shows no label', async () => {
+    serve([agentPost('a1', AGENT_DID)])
+    expect(await isAgentFlags(await viaResolved({}))).toEqual([false])
+    expect(
+      await isAgentFlags(await viaResolved({agent: null, agentDid: '  '})),
+    ).toEqual([false])
+    expect(
+      await isAgentFlags(
+        viaSources([{id: MEMBERS_A, tier: 'members', agentDid: undefined}]),
+      ),
+    ).toEqual([false])
+    // A source that already carries its DID never looks it up again.
+    expect(mockGetCommunity).not.toHaveBeenCalled()
+  })
+
+  it('one community’s feed looks the DID up once via getCommunity', async () => {
+    const {agent, touched} = makeAgent()
+    mockGetTimeline.mockResolvedValue({
+      ok: true,
+      data: {posts: [agentPost('a1', AGENT_DID)], cursor: 'next'},
+    })
+    mockGetCommunity.mockResolvedValue({
+      ok: true,
+      data: {id: MEMBERS_A, name: 'A', config: {agent: AGENT_DID}},
+    } as never)
+    const api = createCommunityFeedAPI({agent, communityId: MEMBERS_A})
+    const first = await api.fetch({cursor: undefined, limit: 30})
+    const second = await api.fetch({cursor: first.cursor, limit: 30})
+
+    expect(
+      [...first.feed, ...second.feed].map(
+        i => getMembersPostRef(i.post)?.isAgent,
+      ),
+    ).toEqual([true, true])
+    expect(mockGetCommunity.mock.calls).toEqual([[MEMBERS_A]])
+    expect(touched).toEqual([])
+  })
+
+  it('one community’s feed fails closed when getCommunity fails', async () => {
+    serve([agentPost('a1', AGENT_DID)])
+    const {agent} = makeAgent()
+
+    mockGetCommunity.mockResolvedValue({
+      ok: false,
+      error: {kind: 'network', message: 'down'},
+    } as never)
+    const notOk = createCommunityFeedAPI({agent, communityId: MEMBERS_A})
+    expect(await isAgentFlags(notOk)).toEqual([false])
+
+    mockGetCommunity.mockRejectedValue(new Error('boom'))
+    const thrown = createCommunityFeedAPI({agent, communityId: MEMBERS_A})
+    expect(await isAgentFlags(thrown)).toEqual([false])
+
+    mockGetCommunity.mockResolvedValue({
+      ok: true,
+      data: {id: MEMBERS_A, name: 'A'},
+    } as never)
+    const noDid = createCommunityFeedAPI({agent, communityId: MEMBERS_A})
+    expect(await isAgentFlags(noDid)).toEqual([false])
   })
 })

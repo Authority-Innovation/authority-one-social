@@ -1,6 +1,9 @@
 import {describe, expect, it} from '@jest/globals'
 
-import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
+import {
+  communityConfigAgentDid,
+  isCommunityAgentAuthor,
+} from '#/features/communities/agentLabel'
 
 const AGENT_DID = 'did:example:agent'
 
@@ -10,7 +13,10 @@ describe('isCommunityAgentAuthor', () => {
       isCommunityAgentAuthor({is_agent: true, did: AGENT_DID}, AGENT_DID),
     ).toBe(true)
     expect(
-      isCommunityAgentAuthor({is_agent: true, did: ` ${AGENT_DID} `}, AGENT_DID),
+      isCommunityAgentAuthor(
+        {is_agent: true, did: ` ${AGENT_DID} `},
+        AGENT_DID,
+      ),
     ).toBe(true)
   })
 
@@ -56,6 +62,40 @@ describe('isCommunityAgentAuthor', () => {
       expect(
         isCommunityAgentAuthor({is_agent: true, did: AGENT_DID}, config),
       ).toBe(false)
+    }
+  })
+})
+
+describe('communityConfigAgentDid', () => {
+  it('reads config.agent, then agentDid, then agent.did', () => {
+    expect(
+      communityConfigAgentDid({
+        config: {agent: AGENT_DID},
+        agentDid: 'did:example:b',
+        agent: {did: 'did:example:c'},
+      }),
+    ).toBe(AGENT_DID)
+    expect(
+      communityConfigAgentDid({
+        config: {agent: ' '},
+        agentDid: AGENT_DID,
+        agent: {did: 'did:example:c'},
+      }),
+    ).toBe(AGENT_DID)
+    expect(communityConfigAgentDid({agent: {did: AGENT_DID}})).toBe(AGENT_DID)
+  })
+
+  it('is undefined when no DID is set', () => {
+    for (const c of [
+      undefined,
+      null,
+      'x',
+      [],
+      {},
+      {config: null, agentDid: '', agent: null},
+      {config: {agent: 42}, agent: {did: '  '}},
+    ]) {
+      expect(communityConfigAgentDid(c)).toBeUndefined()
     }
   })
 })
