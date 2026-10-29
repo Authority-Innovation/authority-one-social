@@ -7,7 +7,9 @@ import {
   DEFAULT_COMPOSER_TARGET,
   guardComposerPdsWrite,
   GUARDED_PDS_WRITES,
+  type GuardedPdsWrite,
 } from '#/lib/communities/composerTarget'
+import {type GroupPostBinding} from '#/lib/communities/groupPostBinding'
 
 describe('guardComposerPdsWrite', () => {
   it('defaults to the profile: no target is allowed', () => {
@@ -22,10 +24,10 @@ describe('guardComposerPdsWrite', () => {
   it.each<[string, ComposerTarget, boolean, string | undefined]>([
     ['profile', {kind: 'profile'}, true, undefined],
     [
-      'community public',
+      'community public, no binding',
       {kind: 'community', id: 'c1', tier: 'public'},
-      true,
-      undefined,
+      false,
+      'public-community-not-available',
     ],
     [
       'community members',
@@ -88,11 +90,71 @@ describe('guardComposerPdsWrite', () => {
   })
 })
 
+describe('guardComposerPdsWrite: the binding is the only public PDS write', () => {
+  const PUBLIC: ComposerTarget = {kind: 'community', id: 'c1', tier: 'public'}
+  const GROUP = {
+    uri: 'at://did:plc:owner/com.authorityone.group.profile/self',
+    cid: 'bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm',
+  }
+  const BINDING: GroupPostBinding = {
+    target: {kind: 'community', id: 'c1', tier: 'public'},
+    group: GROUP,
+  }
+
+  it('allows a public target with a well-formed binding to that community', () => {
+    expect(guardComposerPdsWrite(PUBLIC, {binding: BINDING})).toEqual({
+      allowed: true,
+    })
+  })
+
+  it.each<[string, unknown]>([
+    ['no binding', undefined],
+    [
+      'a binding to another community',
+      {...BINDING, target: {kind: 'community', id: 'c2', tier: 'public'}},
+    ],
+    [
+      'a members binding',
+      {...BINDING, target: {kind: 'community', id: 'c1', tier: 'members'}},
+    ],
+    ['a binding with no group', {target: BINDING.target}],
+    [
+      'a binding with no group cid',
+      {target: BINDING.target, group: {uri: GROUP.uri}},
+    ],
+  ])('refuses a public write with %s', (_name, binding) => {
+    expect(guardComposerPdsWrite(PUBLIC, {binding})).toEqual({
+      allowed: false,
+      reason: 'public-community-not-available',
+      refusedWrites: GUARDED_PDS_WRITES,
+    })
+  })
+
+  it.each<GuardedPdsWrite>(GUARDED_PDS_WRITES)(
+    'assertComposerPdsWrite refuses %s for a public target (no binding)',
+    write => {
+      expect(() => assertComposerPdsWrite(PUBLIC, write)).toThrow(
+        ComposerPdsWriteRefusedError,
+      )
+    },
+  )
+
+  it('a binding never unlocks members or paid', () => {
+    for (const tier of ['members', 'paid'] as const) {
+      expect(
+        guardComposerPdsWrite(
+          {kind: 'community', id: 'c1', tier},
+          {binding: BINDING},
+        ),
+      ).toMatchObject({allowed: false, reason: 'members-write-not-available'})
+    }
+  })
+})
+
 describe('assertComposerPdsWrite', () => {
   it.each<[string, ComposerTarget | undefined]>([
     ['default', undefined],
     ['profile', {kind: 'profile'}],
-    ['community public', {kind: 'community', id: 'c1', tier: 'public'}],
   ])('allows %s', (_name, target) => {
     expect(() =>
       assertComposerPdsWrite(target, 'app.bsky.draft.deleteDraft'),
@@ -111,6 +173,11 @@ describe('assertComposerPdsWrite', () => {
       'members-write-not-available',
     ],
     ['an unknown kind', {kind: 'group'}, 'unknown-target'],
+    [
+      'community public (no binding)',
+      {kind: 'community', id: 'c1', tier: 'public'},
+      'public-community-not-available',
+    ],
   ])('throws a typed refusal for %s', (_name, target, reason) => {
     let thrown: unknown
     try {
