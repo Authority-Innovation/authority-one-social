@@ -1,7 +1,12 @@
 # Design: public-tier community posts carry a `com.authorityone.group.post` binding
 
 Status: DESIGN ONLY. Nothing here is built. No code, no lexicon changes.
-Base: `communities/integration` at `1201076cc`.
+Bases (two, not the same):
+- PR base: `f6448b0a5` (revision 1 of this doc, the commit this PR builds on).
+- Integration base: `communities/integration` at `1201076cc`, the earlier
+  code state that revision 1 was written against. Code references and line
+  numbers in this doc are as of `1201076cc`.
+
 Revision 2: review fixes (review verdict SOUND WITH CHANGES). Items that need
 a decision by Elliott are marked **OPEN** and collected in section 8.
 
@@ -18,9 +23,12 @@ a decision by Elliott are marked **OPEN** and collected in section 8.
   be lost (it would just be a profile post).
 - `guardComposerPdsWrite` (`src/lib/communities/composerTarget.ts:72`) already
   returns `{allowed: true}` for `{kind: 'community', tier: 'public'}`, with no
-  flag check. It is the gate for drafts (`drafts/state/queries.ts`), blob
-  upload (`Composer.tsx`), video (`state/video.ts`), the drafts dialog, and
-  `submitComposerThread` (`state/submit.ts:69`), which on `allowed` calls
+  flag check. It is the gate for drafts
+  (`src/view/com/composer/drafts/state/queries.ts`), blob upload
+  (`src/view/com/composer/Composer.tsx`), video
+  (`src/view/com/composer/state/video.ts`), the drafts dialog, and
+  `submitComposerThread` (`src/view/com/composer/state/submit.ts:69`), which
+  on `allowed` calls
   `apilib.post` with no binding.
 - `usePostToGroupMutation` (`src/state/queries/group.ts`) writes a
   `com.authorityone.group.post` with its own `createRecord`, after the post
@@ -130,7 +138,10 @@ that does not match its post. Required:
   error, log it, and do not report success. (The batch is already committed,
   so "fail" means the client treats it as an error and the mismatch is
   logged; whether to also issue a compensating delete of the batch is part of
-  the delete decision, D3.)
+  the delete decision, D3.) D3 is **OPEN (Q6)**. Until Q6 is decided, this
+  client-side failure has **no compensating action**: the post and its
+  binding stay committed on the PDS with the mismatched CID, and the only
+  effects are the surfaced error and the log entry.
 - A test asserts the same, see test 6 in 4.
 
 ### Validation (unverified, OPEN)
@@ -147,8 +158,10 @@ code change.
 
 The claim in revision 1 that "the PDS accepts the binding unvalidated under
 default validation" is **unverified**. It has not been tested against our PDS
-version. Under `validate: true` (today's value for non-video posts) a record
-in an unknown lexicon is rejected and the whole batch fails.
+version. The expected behaviour under `validate: true` (today's value for
+non-video posts) is that a record in an unknown lexicon is rejected and the
+whole batch fails. This is also **unverified**: it is the documented
+behaviour, not something tested against our PDS version.
 
 One of these changes is required before this design can work:
 
@@ -201,7 +214,9 @@ Each of these is an explicit decision (D) or an explicit OPEN item.
 - An explicit target that disagrees with the parent's (e.g. replying to a
   profile post "into" a community) stays `reply-target-mismatch`.
 - `replyTo.target` must be correct for community posts. Today
-  `feedPostTarget` (e0a04a1b) maps every AppView `app.bsky.feed.post` URI to
+  `feedPostTarget` (`src/lib/communities/feedPostTarget.ts`, added in
+  commit `bcb50086ff99ab03513a1bda543409e71bb12ae4`; `e0a04a1b` is the
+  coord task id, not a commit) maps every AppView `app.bsky.feed.post` URI to
   `{kind: 'profile'}`, which is only true because no bound public posts exist.
   Once they do, that assumption breaks. Change:
   - Items from a community source (`getTimeline`, carrying `ReasonCommunity`)
@@ -315,12 +330,14 @@ It already returns `{allowed: true}` for a public community target, with no
 flag check and no route check. Everything that calls it directly (not via
 `resolveTarget`) lets a public target write to the PDS today:
 
-- drafts: `assertComposerPdsWrite` in `drafts/state/queries.ts` (save,
-  delete) and `DraftsListDialog.tsx`;
+- drafts: `assertComposerPdsWrite` in
+  `src/view/com/composer/drafts/state/queries.ts` (save, delete) and
+  `src/view/com/composer/drafts/DraftsListDialog.tsx`;
 - blobs: `assertComposerPdsWrite(target, 'com.atproto.repo.uploadBlob')` in
-  `Composer.tsx`;
-- video: `state/video.ts:276`;
-- publish: `submitComposerThread` (`state/submit.ts:69`), which on `allowed`
+  `src/view/com/composer/Composer.tsx`;
+- video: `src/view/com/composer/state/video.ts:276`;
+- publish: `submitComposerThread`
+  (`src/view/com/composer/state/submit.ts:69`), which on `allowed`
   calls `apilib.post` with **no binding**. A public target that reached it
   without going through `resolveTarget` would become a plain profile post.
 
