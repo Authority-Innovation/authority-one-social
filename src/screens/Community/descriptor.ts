@@ -35,6 +35,11 @@ export type CommunityDescriptor = {
   accent?: string
   /** Set only when the config has both `agent` and `agentSponsor` (N1). */
   agent?: CommunityAgent
+  /**
+   * The config's agent DID, whether or not a sponsor is set. Used only to
+   * match `author.did` on timeline items, never to show the agent card.
+   */
+  agentDid?: string
   runBy?: string
   memberCount?: number
   isMember: boolean
@@ -83,6 +88,9 @@ export function toDescriptor(
   const moderation = obj(config?.moderation)
 
   const agentDid = str(config?.agent) ?? str(raw.agentDid)
+  // The door's own agent slot (`agent: {did, is_agent}`) when the config
+  // record is not included in the response.
+  const timelineAgentDid = agentDid ?? str(obj(raw.agent)?.did)
   const sponsorDid = str(config?.agentSponsor) ?? str(raw.agentSponsor)
   const sponsorName = str(raw.agentSponsorName) ?? str(brand?.displayName)
 
@@ -112,6 +120,7 @@ export function toDescriptor(
     tier: parseTier(config?.tier ?? raw.tier),
     accent: parseAccent(theme?.accent ?? raw.accent),
     agent,
+    agentDid: timelineAgentDid,
     runBy: str(raw.runBy) ?? str(brand?.displayName),
     memberCount:
       typeof raw.memberCount === 'number' ? raw.memberCount : undefined,

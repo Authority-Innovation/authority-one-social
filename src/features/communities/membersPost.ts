@@ -3,7 +3,9 @@
  *
  * Members-tier posts live in the community's walled store and are read through
  * the runtime door (communitiesClient). They are not atproto records, so they
- * have no at:// uri, no cid and no author DID. To let FeedPage and the post
+ * have no at:// uri and no cid. The door's `author.did` is used only to match
+ * the community agent (see isCommunityAgentAuthor) and is never put in the
+ * view. To let FeedPage and the post
  * renderers show them, each one is mapped to a view with a synthetic uri,
  * `ao-community://<communityId>/<postId>`. Anything that assumes a real record
  * must check `isMembersPostUri` first - see postActionGuard.ts.
@@ -41,8 +43,34 @@ export function isReasonCommunity(v: unknown): v is ReasonCommunity {
 export interface MembersPostRef {
   communityId: string
   postId: string
-  /** From the runtime's `is_agent` flag (N1), never the handle. */
+  /** From isCommunityAgentAuthor (N1), never the handle or display name. */
   isAgent: boolean
+}
+
+function nonEmpty(v: unknown): string | undefined {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s ? s : undefined
+}
+
+/**
+ * Whether a runtime item's author is the community agent (N1).
+ *
+ * The runtime's `author.is_agent` must be true. When the community's agent
+ * DID is known from its config, `author.did` must also equal it, so an item
+ * flagged as an agent but signed by any other DID (or by none) is a member.
+ * When no agent DID is known, the runtime flag alone decides. The display
+ * name and handle are never read. A missing or malformed author is a member.
+ */
+export function isCommunityAgentAuthor(
+  author: unknown,
+  agentDid?: string | null,
+): boolean {
+  if (!author || typeof author !== 'object') return false
+  const a = author as {is_agent?: unknown; did?: unknown}
+  if (a.is_agent !== true) return false
+  const expected = nonEmpty(agentDid)
+  if (!expected) return true
+  return nonEmpty(a.did) === expected
 }
 
 export function membersPostUri(communityId: string, postId: string): string {
@@ -75,15 +103,17 @@ export function parseMembersPostUri(
 /**
  * Maps one members-tier post to a FeedViewPost-shaped view. Reads only the
  * runtime's CommunityPost fields; nothing in the result points at a PDS.
+ * `agentDid` is the community config's agent DID, when the caller knows it.
  */
 export function membersPostToFeedViewPost(
   communityId: string,
   post: CommunityPost,
   badge: ReasonCommunity,
+  agentDid?: string | null,
 ): AppBskyFeedDefs.FeedViewPost {
   const uri = membersPostUri(communityId, post.id)
   const createdAt = post.createdAt
-  const isAgent = post.author?.is_agent === true
+  const isAgent = isCommunityAgentAuthor(post.author, agentDid)
   const ref: MembersPostRef = {communityId, postId: post.id, isAgent}
   const view = {
     post: {
@@ -91,7 +121,7 @@ export function membersPostToFeedViewPost(
       // Not a content hash. Present only because PostView requires a cid.
       cid: uri,
       author: {
-        // Not a DID. The runtime does not expose member identities here.
+        // Not a DID. Member identities from the door stay out of the view.
         did: `${uri}#author`,
         handle: '',
         displayName: post.author?.displayName ?? '',

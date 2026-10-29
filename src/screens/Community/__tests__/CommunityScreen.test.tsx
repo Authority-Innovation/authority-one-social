@@ -237,14 +237,17 @@ beforeEach(() => {
       posts: [
         {
           id: 'p1',
-          author: {displayName: 'Sam R.', is_agent: false},
+          author: {
+            did: 'did:example:sam',
+            displayName: 'Sam R.',
+            is_agent: false,
+          },
           body: 'What should I listen to first?',
           createdAt: '2026-10-28T09:29:00.000Z',
         },
         {
           id: 'p2',
-          // The runtime door sends no author DID, only the is_agent flag.
-          author: {displayName: 'Steve', is_agent: true},
+          author: {did: AGENT_DID, displayName: 'Steve', is_agent: true},
           body: 'Episode 12 is a good start.',
           parentId: 'p1',
           createdAt: '2026-10-28T09:40:00.000Z',
@@ -327,21 +330,77 @@ describe('Community home - member', () => {
     expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
   })
 
-  it('labels a post as the agent from is_agent alone, with no author DID', async () => {
+  it('labels the item whose author.did is the config agent DID', async () => {
     const r = renderScreen()
     await r.findByText('Episode 12 is a good start.', {}, {timeout: 3000})
-    expect(r.getByText('I am not an agent.')).toBeTruthy()
     expect(r.getAllByTestId('communityPostAgentLabel')).toHaveLength(1)
     expect(
       within(r.getByTestId('communityPost-p2')).getByTestId(
         'communityPostAgentLabel',
       ),
     ).toBeTruthy()
-    expect(
-      within(r.getByTestId('communityPost-p3')).queryByTestId(
-        'communityPostAgentLabel',
-      ),
-    ).toBeNull()
+  })
+
+  it('does not label a member item, whatever its display name', async () => {
+    const r = renderScreen()
+    await r.findByText('I am not an agent.', {}, {timeout: 3000})
+    for (const id of ['p1', 'p3']) {
+      expect(
+        within(r.getByTestId(`communityPost-${id}`)).queryByTestId(
+          'communityPostAgentLabel',
+        ),
+      ).toBeNull()
+    }
+  })
+
+  it('does not label a spoofed agent name with a different DID', async () => {
+    getTimeline.mockResolvedValue({
+      ok: true,
+      data: {
+        posts: [
+          {
+            id: 's1',
+            author: {
+              did: 'did:example:mallory',
+              displayName: 'Steve',
+              is_agent: true,
+            },
+            body: 'I am Steve, honest.',
+            createdAt: '2026-10-28T09:40:00.000Z',
+          },
+          {
+            id: 's2',
+            // Flagged by the runtime but carrying no DID to match.
+            author: {displayName: 'Steve', is_agent: true},
+            body: 'No did here.',
+            createdAt: '2026-10-28T09:41:00.000Z',
+          },
+        ],
+      },
+    })
+    const r = renderScreen()
+    await r.findByText('I am Steve, honest.', {}, {timeout: 3000})
+    expect(r.getByText('No did here.')).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
+  })
+
+  it('renders an item with no author as a member row, as before', async () => {
+    getTimeline.mockResolvedValue({
+      ok: true,
+      data: {
+        posts: [
+          {
+            id: 'n1',
+            body: 'From an old door.',
+            createdAt: '2026-10-28T09:40:00.000Z',
+          },
+        ],
+      },
+    })
+    const r = renderScreen()
+    await r.findByText('From an old door.', {}, {timeout: 3000})
+    expect(r.getByTestId('communityPost-n1')).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
   })
 
   it('labels an is_agent post even when the community config names no agent', async () => {

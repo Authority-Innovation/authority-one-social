@@ -67,6 +67,33 @@ describe('toDescriptor', () => {
     ).toBe('did:example:agent')
   })
 
+  it('keeps the agent DID for timeline matching without a sponsor', () => {
+    expect(
+      toDescriptor('c1', community({config: {agent: 'did:example:agent'}}))
+        .agentDid,
+    ).toBe('did:example:agent')
+    expect(
+      toDescriptor('c1', community({agentDid: 'did:example:agent'})).agentDid,
+    ).toBe('did:example:agent')
+    expect(
+      toDescriptor(
+        'c1',
+        community({agent: {did: 'did:example:door', is_agent: true}}),
+      ).agentDid,
+    ).toBe('did:example:door')
+    expect(
+      toDescriptor(
+        'c1',
+        community({
+          config: {agent: 'did:example:agent'},
+          agent: {did: 'did:example:door', is_agent: true},
+        }),
+      ).agentDid,
+    ).toBe('did:example:agent')
+    expect(toDescriptor('c1', community()).agentDid).toBeUndefined()
+    expect(toDescriptor('c1', community({agent: null})).agentDid).toBeUndefined()
+  })
+
   it('is a non-member when the runtime returns no role', () => {
     expect(toDescriptor('c1', community()).isMember).toBe(false)
     expect(toDescriptor('c1', community({role: null})).isMember).toBe(false)

@@ -5,6 +5,7 @@ import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
 import {FeedTuner} from '#/lib/api/feed-manip'
 import {
   getMembersPostRef,
+  isCommunityAgentAuthor,
   isMembersPostUri,
   membersPostToFeedViewPost,
   membersPostUri,
@@ -60,6 +61,7 @@ describe('membersPostToFeedViewPost', () => {
       'body',
       'author',
       'author.is_agent',
+      'author.did',
       'author.displayName',
       'author.avatar',
     ])
@@ -85,6 +87,42 @@ describe('membersPostToFeedViewPost', () => {
       BADGE,
     )
     expect(getMembersPostRef(human.post)?.isAgent).toBe(false)
+  })
+
+  it('requires author.did to match the agent DID when one is known', () => {
+    const AGENT = 'did:example:agent'
+    const agent = membersPostToFeedViewPost(
+      'community-a',
+      {...POST, author: {...POST.author, did: AGENT}} as CommunityPost,
+      BADGE,
+      AGENT,
+    )
+    expect(getMembersPostRef(agent.post)?.isAgent).toBe(true)
+    // The real DID never lands in the view.
+    expect(JSON.stringify(agent)).not.toContain(AGENT)
+
+    const spoof = membersPostToFeedViewPost(
+      'community-a',
+      {
+        ...POST,
+        author: {...POST.author, did: 'did:example:mallory'},
+      } as CommunityPost,
+      BADGE,
+      AGENT,
+    )
+    expect(getMembersPostRef(spoof.post)?.isAgent).toBe(false)
+  })
+
+  it('treats a missing author as a member, as before', () => {
+    const {author: _author, ...noAuthor} = POST
+    const view = membersPostToFeedViewPost(
+      'community-a',
+      noAuthor as CommunityPost,
+      BADGE,
+      'did:example:agent',
+    )
+    expect(getMembersPostRef(view.post)?.isAgent).toBe(false)
+    expect(view.post.author.displayName).toBe('')
   })
 
   it('renders through the feed pipeline (valid record, moderation, tuner)', () => {
@@ -127,5 +165,49 @@ describe('members post uri', () => {
     )
     expect(parseMembersPostUri('ao-community://only-one')).toBe(undefined)
     expect(parseMembersPostUri('ao-community://a/b/c')).toBe(undefined)
+  })
+})
+
+describe('isCommunityAgentAuthor', () => {
+  const AGENT = 'did:example:agent'
+
+  it('matches is_agent plus the agent DID', () => {
+    expect(isCommunityAgentAuthor({did: AGENT, is_agent: true}, AGENT)).toBe(
+      true,
+    )
+  })
+
+  it('refuses a member, a different DID or a missing DID', () => {
+    expect(isCommunityAgentAuthor({did: AGENT, is_agent: false}, AGENT)).toBe(
+      false,
+    )
+    expect(
+      isCommunityAgentAuthor({did: 'did:example:other', is_agent: true}, AGENT),
+    ).toBe(false)
+    expect(isCommunityAgentAuthor({is_agent: true}, AGENT)).toBe(false)
+    expect(isCommunityAgentAuthor({did: AGENT, is_agent: 'true'}, AGENT)).toBe(
+      false,
+    )
+  })
+
+  it('never matches on the display name', () => {
+    expect(
+      isCommunityAgentAuthor(
+        {did: 'did:example:other', displayName: AGENT, is_agent: true},
+        AGENT,
+      ),
+    ).toBe(false)
+  })
+
+  it('falls back to is_agent alone when no agent DID is known', () => {
+    expect(isCommunityAgentAuthor({is_agent: true}, undefined)).toBe(true)
+    expect(isCommunityAgentAuthor({is_agent: true}, '')).toBe(true)
+    expect(isCommunityAgentAuthor({is_agent: false}, undefined)).toBe(false)
+  })
+
+  it('treats a missing or malformed author as a member', () => {
+    expect(isCommunityAgentAuthor(undefined, AGENT)).toBe(false)
+    expect(isCommunityAgentAuthor(null, undefined)).toBe(false)
+    expect(isCommunityAgentAuthor('agent', undefined)).toBe(false)
   })
 })
