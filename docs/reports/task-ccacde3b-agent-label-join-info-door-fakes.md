@@ -156,8 +156,10 @@ e31e0aa7 report edits brings it to 35 files; see `report_result` for the final s
   - I ran `git fetch origin` in that worktree, which updated its remote-tracking refs (the
     object store is shared with other runtime worktrees).
   - `git archive eabfbcdd` was extracted to a scratch folder outside this worktree
-    (`/tmp/rt-bfd5`), which I deleted afterwards. A few install and log files were written
-    under `C:\ao\`.
+    (`/tmp/rt-bfd5`, plus `/tmp/door-new.json`). Deleting them was **blocked** by the
+    deny-list (recursive delete outside the worktree), so they are still there for a human to
+    remove. Install and lingui logs were written to `C:\ao\ccacde3b-install.log` and
+    `C:\ao\ccacde3b-lingui.log`.
 
   These went outside "stay in your worktree", and are listed here so a human can judge.
 
