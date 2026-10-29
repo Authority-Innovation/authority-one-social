@@ -450,7 +450,7 @@ describe('Community home - agent grant row', () => {
     getAgentGrant.mockResolvedValue({
       ok: false,
       error: {kind: 'http', status: 500},
-    } as Awaited<ReturnType<typeof communitiesClient.getAgentGrant>>)
+    })
     const r = renderScreen()
     await r.findByText('What should I listen to first?', {}, {timeout: 3000})
     await waitFor(() => expect(getAgentGrant).toHaveBeenCalled())
