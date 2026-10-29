@@ -107,6 +107,14 @@ describe('guardComposerPdsWrite: the binding is the only public PDS write', () =
     })
   })
 
+  it('allows a binding with no group cid (OPEN Q1 default (a))', () => {
+    expect(
+      guardComposerPdsWrite(PUBLIC, {
+        binding: {target: BINDING.target, group: {uri: GROUP.uri}},
+      }),
+    ).toEqual({allowed: true})
+  })
+
   it.each<[string, unknown]>([
     ['no binding', undefined],
     [
@@ -119,8 +127,8 @@ describe('guardComposerPdsWrite: the binding is the only public PDS write', () =
     ],
     ['a binding with no group', {target: BINDING.target}],
     [
-      'a binding with no group cid',
-      {target: BINDING.target, group: {uri: GROUP.uri}},
+      'a binding with an empty group cid',
+      {target: BINDING.target, group: {uri: GROUP.uri, cid: ''}},
     ],
   ])('refuses a public write with %s', (_name, binding) => {
     expect(guardComposerPdsWrite(PUBLIC, {binding})).toEqual({

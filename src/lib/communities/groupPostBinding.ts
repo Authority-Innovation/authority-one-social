@@ -26,13 +26,15 @@ export const GROUP_POST_COLLECTION = 'com.authorityone.group.post'
 /**
  * The group a public post binds to.
  *
- * OPEN (Q1, design doc section 1): plain AT-URI vs pinned strongRef. The
- * existing lexicon types `group` as a strongRef, so this keeps `{uri, cid}`
- * and changes no lexicon. The caller supplies the CID; no `getGroup` fetch is
- * built here. If Q1 lands on (a), `cid` goes away along with the lexicon
- * change.
+ * OPEN (Q1, design doc section 1). Both options are accepted:
+ * - (a) plain AT-URI, no CID pinned: the default, and the doc's
+ *   recommendation, since a pinned CID dangles after every owner edit of the
+ *   group profile.
+ * - (b) pinned `{uri, cid}`: the profile version at posting time.
+ * The lexicon's `group` is `#groupRef` ({uri, cid?}), so both shapes validate.
+ * The caller supplies the CID if any; no `getGroup` fetch is built here.
  */
-export type ResolvedGroupRef = {uri: string; cid: string}
+export type ResolvedGroupRef = {uri: string; cid?: string}
 
 export type PublicCommunityTarget = Extract<
   ComposerTarget,
@@ -53,7 +55,8 @@ const GROUP_PROFILE_URI =
 
 /**
  * Pure. True only for a binding to a public community with a group profile
- * AT-URI and a CID. Members/paid, a missing group, or anything malformed is
+ * AT-URI. The CID is optional (OPEN Q1, default (a)); when present it must be
+ * a non-empty string. Members/paid, a missing group, or anything malformed is
  * false.
  */
 export function isWellFormedGroupPostBinding(
@@ -74,8 +77,8 @@ export function isWellFormedGroupPostBinding(
     typeof group === 'object' &&
     typeof group.uri === 'string' &&
     GROUP_PROFILE_URI.test(group.uri) &&
-    typeof group.cid === 'string' &&
-    group.cid.length > 0
+    (group.cid === undefined ||
+      (typeof group.cid === 'string' && group.cid.length > 0))
   )
 }
 
@@ -110,7 +113,8 @@ export function assertGroupPostBinding(
 /**
  * The binding create for one post. Same rkey as the post (Q2 in the doc asks
  * whether to keep this; it is what the doc builds). `subject` is the post's
- * URI and its locally computed CID.
+ * URI and its locally computed CID. `group.cid` is written only when the
+ * caller supplied one (OPEN Q1).
  */
 export function buildGroupPostBindingWrite({
   did,
@@ -135,7 +139,7 @@ export function buildGroupPostBindingWrite({
         uri: `at://${did}/app.bsky.feed.post/${postRkey}`,
         cid: postCid,
       },
-      group: {uri: group.uri, cid: group.cid},
+      group: group.cid ? {uri: group.uri, cid: group.cid} : {uri: group.uri},
       createdAt,
     },
   }

@@ -166,6 +166,22 @@ describe('apilib.post with a group binding (public community)', () => {
     expect(uris[0]).toBe(`at://${DID}/app.bsky.feed.post/${postWrite.rkey}`)
   })
 
+  it('OPEN Q1 default (a): a binding with no group cid writes the group URI only', async () => {
+    const {agent, applyWrites} = makeAgent()
+    const {uris} = await post(agent, {} as never, {
+      thread: makeThread(['no group cid']),
+      binding: {target: BINDING.target, group: {uri: GROUP.uri}},
+    })
+    expect(applyWrites).toHaveBeenCalledTimes(1)
+    const [postWrite, bindingWrite] = callArg(applyWrites).writes
+    expect(bindingWrite.value).toEqual({
+      $type: 'com.authorityone.group.post',
+      subject: {uri: uris[0], cid: expectedCid(postWrite.value)},
+      group: {uri: GROUP.uri},
+      createdAt: postWrite.value.createdAt,
+    })
+  })
+
   it('binds every post of a thread in the one batch, alongside the threadgate', async () => {
     const {agent, applyWrites} = makeAgent()
     const {uris} = await post(agent, {} as never, {
@@ -253,7 +269,7 @@ describe('apilib.post with a group binding (public community)', () => {
       {target: BINDING.target, group: {uri: `at://${DID}/x.y/z`, cid: 'x'}},
     ],
     [
-      'group with no cid',
+      'group with an empty cid',
       {target: BINDING.target, group: {uri: GROUP.uri, cid: ''}},
     ],
     ['null', null],

@@ -64,6 +64,34 @@ describe('buildGroupPostBindingWrite', () => {
     expect(validateGroupPostRecord(w.value).success).toBe(true)
   })
 
+  it('with no group cid (OPEN Q1 default (a)) writes the group URI only, and it validates', () => {
+    const w = buildGroupPostBindingWrite({
+      did: DID,
+      postRkey: '3kabc',
+      postCid: CID_B,
+      group: {uri: GROUP.uri},
+      createdAt: '2026-10-29T00:00:00.000Z',
+    })
+    expect(w.value.group).toEqual({uri: GROUP.uri})
+    expect('cid' in w.value.group).toBe(false)
+    expect(validateGroupPostRecord(w.value).success).toBe(true)
+  })
+
+  it('client-side validation rejects a group with a malformed uri or cid', () => {
+    const base = {
+      $type: 'com.authorityone.group.post',
+      subject: {uri: `at://${DID}/app.bsky.feed.post/3kabc`, cid: CID_B},
+      createdAt: '2026-10-29T00:00:00.000Z',
+    }
+    expect(
+      validateGroupPostRecord({...base, group: {uri: GROUP.uri, cid: 'nope'}})
+        .success,
+    ).toBe(false)
+    expect(
+      validateGroupPostRecord({...base, group: {cid: CID_A}}).success,
+    ).toBe(false)
+  })
+
   it('client-side validation rejects a malformed binding', () => {
     expect(
       validateGroupPostRecord({
@@ -87,7 +115,10 @@ describe('isWellFormedGroupPostBinding', () => {
     ['paid', {target: {...target, tier: 'paid'}, group: GROUP}, false],
     ['empty id', {target: {...target, id: ' '}, group: GROUP}, false],
     ['no group', {target}, false],
+    // OPEN Q1 default (a): a plain AT-URI with no CID is well formed.
+    ['public with group and no cid', {target, group: {uri: GROUP.uri}}, true],
     ['group cid empty', {target, group: {...GROUP, cid: ''}}, false],
+    ['group cid not a string', {target, group: {...GROUP, cid: 1}}, false],
     [
       'group uri is a post',
       {target, group: {...GROUP, uri: `at://${DID}/app.bsky.feed.post/x`}},
