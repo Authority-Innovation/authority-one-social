@@ -14,6 +14,11 @@ import {communityConfigAgentDid} from '#/features/communities/agentLabel'
 
 export type CommunityTier = 'public' | 'members' | 'paid'
 
+/**
+ * The community agent card's data, from the door's member response only:
+ * `agent.did` and the `agentSponsor` view `{did, handle}`. The door sends no
+ * agent name, sponsor display name or scope.
+ */
 export type CommunityAgent = {
   did: string
   /** The sponsor's DID. Never shown as a name. */

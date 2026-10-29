@@ -170,8 +170,17 @@ import {CommunityMembersScreen, CommunityScreen} from '../index'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
-import {doorItem, doorPage} from '#/lib/communities/__fixtures__/door'
-import REAL from '#/lib/communities/__fixtures__/door/dev-runtime-2026-10-30.json'
+import {
+  asClientCommunity,
+  clientCommunity,
+  DEV_RUNTIME as REAL,
+  DOOR_AGENT_DID,
+  DOOR_SPONSOR_DID,
+  doorCommunity,
+  doorCommunityWithSponsorMember,
+  doorItem,
+  doorPage,
+} from '#/lib/communities/__fixtures__/door'
 import {type DoorItem} from '#/lib/communities/doorContract'
 
 const getCommunity = communitiesClient.getCommunity as jest.Mock<
@@ -193,32 +202,44 @@ const launchCommunityAgent =
 const groupTimeline = useGroupTimelineQuery as unknown as jest.Mock
 const groupMembers = useGroupMembersQuery as unknown as jest.Mock
 
-const ACCENT = '#12AB34'
-const AGENT_DID = 'did:example:agent'
-const SPONSOR_DID = 'did:example:sponsor'
+type Community = communitiesClient.Community
 
-function communityResponse(extra: Record<string, unknown> = {}) {
-  return {
-    id: 'btb',
-    name: 'Between Two Beers Listeners',
-    description: 'For listeners of the show.',
-    memberCount: 1240,
-    agentName: 'Steve',
-    rules: 'Be kind. No spoilers before release day.',
-    config: {
-      tier: 'com.authorityone.community.config#members',
-      theme: {accent: ACCENT},
-      agent: AGENT_DID,
-      agentSponsor: SPONSOR_DID,
-      brand: {displayName: 'Between Two Beers'},
-      consentVersion: 1,
-    },
-    ...extra,
-    // The community-level fields above (config, memberCount, rules, ...) are
-    // not in the door contract; the descriptor reads them off the raw
-    // response. Open item in the e31e0aa7 report.
-  } as unknown as communitiesClient.Community
+const AGENT_DID = DOOR_AGENT_DID
+
+/**
+ * door.json's community (GET /:id) after its sponsor joined, as the client
+ * hands it to a member who is not an admin: `agent.did`, `agentSponsor:
+ * {did, handle: 'carol-sponsor'}`, `accent`, `viewerIsAdmin: false`. Only
+ * door fields; `extra` changes the value of door fields.
+ */
+function memberCommunity(extra: Partial<Community> = {}): Community {
+  return {...asClientCommunity(doorCommunityWithSponsorMember()), ...extra}
 }
+
+/** The same member response without `agent` (the agent flag off). */
+function withoutAgent(c: Community = memberCommunity()): Community {
+  const {agent: _agent, agentSponsor: _sponsor, ...rest} = c
+  return rest
+}
+
+/** The same member response without `agentSponsor` (a runtime before bfd5a63c). */
+function withoutSponsor(c: Community = memberCommunity()): Community {
+  const {agentSponsor: _sponsor, ...rest} = c
+  return rest
+}
+
+/**
+ * door.json's community with every agent/admin flag off (no `agent`,
+ * `agentSponsor` or `viewer_is_admin`), which the descriptor reads as a
+ * non-member. The real door answers GET /:id `not_found` to a non-member, so
+ * this is the only door shape that reaches the non-member home.
+ */
+function nonMemberCommunity(): Community {
+  return clientCommunity()
+}
+
+const COMMUNITY_NAME = doorCommunity().name
+const ACCENT = doorCommunity().accent!
 
 /** door.json's member post, re-keyed. Never a hand-made item shape. */
 function item(
@@ -228,11 +249,6 @@ function item(
   extra: Partial<DoorItem> = {},
 ): DoorItem {
   return {...doorItem('post'), id, text, author, ...extra}
-}
-
-function configWith(overrides: Record<string, unknown>) {
-  const base = communityResponse() as unknown as {config: object}
-  return {...base.config, ...overrides}
 }
 
 /** The app theme as any screen outside the community header sees it. */
@@ -338,20 +354,20 @@ beforeEach(() => {
 
 describe('Community home - non-member', () => {
   beforeEach(() => {
-    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    getCommunity.mockResolvedValue({ok: true, data: nonMemberCommunity()})
   })
 
   it('shows the public descriptor and a join button, and never reads the timeline', async () => {
     const r = renderScreen()
-    await r.findByText('Between Two Beers Listeners', {}, {timeout: 3000})
+    await r.findByText(COMMUNITY_NAME, {}, {timeout: 3000})
 
     expect(getCommunity).toHaveBeenCalledWith('btb')
     expect(getTimeline).not.toHaveBeenCalled()
     expect(r.getByTestId('communityJoinButton')).toBeTruthy()
     expect(r.getByText('Join community')).toBeTruthy()
     expect(r.getByText('Members only')).toBeTruthy()
-    expect(r.getByText('Be kind. No spoilers before release day.')).toBeTruthy()
-    expect(r.getByTestId('communityAgentCard')).toBeTruthy()
+    // The flags-off response has no agent, so no agent card.
+    expect(r.queryByTestId('communityAgentCard')).toBeNull()
     expect(r.queryByTestId('communityMemberBadge')).toBeNull()
   })
 
@@ -382,19 +398,13 @@ describe('Community home - non-member', () => {
 
 describe('Community home - member', () => {
   beforeEach(() => {
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({role: 'member'}),
-    })
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
   })
 
   it('renders the REAL Dev runtime timeline page ({items}, text, authorId) without crashing (One Dev 38)', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
-      data: {
-        ...REAL.home.community,
-        viewerIsAdmin: true,
-      } as unknown as communitiesClient.Community,
+      data: asClientCommunity(REAL.home.community),
     })
     getTimeline.mockResolvedValue({
       ok: true,
@@ -483,10 +493,7 @@ describe('Community home - member', () => {
   it('gives no label when the community config names no agent', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
-      data: communityResponse({
-        role: 'member',
-        config: configWith({agent: undefined}),
-      }),
+      data: withoutAgent(),
     })
     timelineOf([
       item('a1', 'Agent with no config agent.', {
@@ -570,10 +577,7 @@ describe('Community home - agent grant row', () => {
   })
 
   it('a member sees the grant row with the runtime value', async () => {
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({role: 'member'}),
-    })
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
     getAgentGrant.mockResolvedValue({
       ok: true,
       data: {communityId: 'btb', on: true},
@@ -587,7 +591,7 @@ describe('Community home - agent grant row', () => {
   })
 
   it('a non-member gets no grant row and no grant read', async () => {
-    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    getCommunity.mockResolvedValue({ok: true, data: nonMemberCommunity()})
     const r = renderScreen()
     await r.findByTestId('communityJoinButton', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
@@ -595,13 +599,7 @@ describe('Community home - agent grant row', () => {
   })
 
   it('a community with no agent gets no grant row and no grant read', async () => {
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({
-        role: 'member',
-        config: configWith({agent: undefined}),
-      }),
-    })
+    getCommunity.mockResolvedValue({ok: true, data: withoutAgent()})
     const r = renderScreen()
     await r.findByText('What should I listen to first?', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
@@ -609,10 +607,7 @@ describe('Community home - agent grant row', () => {
   })
 
   it('shows no grant row when the grant read fails', async () => {
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({role: 'member'}),
-    })
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
     getAgentGrant.mockResolvedValue({
       ok: false,
       error: {kind: 'http', status: 500},
@@ -630,9 +625,10 @@ describe('Community home - account-scoped cache', () => {
     getCommunity.mockImplementation(() =>
       Promise.resolve({
         ok: true,
-        data: communityResponse(
-          mockViewerDid === 'did:example:alice' ? {role: 'member'} : {},
-        ),
+        data:
+          mockViewerDid === 'did:example:alice'
+            ? memberCommunity()
+            : nonMemberCommunity(),
       }),
     )
 
@@ -676,10 +672,7 @@ describe('Community home - account-scoped cache', () => {
 
   it('keeps two members on separate timeline entries', async () => {
     const queryClient = newQueryClient()
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({role: 'member'}),
-    })
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
     getTimeline.mockImplementation(() =>
       Promise.resolve({
         ok: true,
@@ -706,33 +699,32 @@ describe('Community home - account-scoped cache', () => {
 
   it('makes no timeline read when signed out', async () => {
     mockViewerDid = undefined
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({role: 'member'}),
-    })
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
     const r = renderScreen()
     await r.findByTestId('communityHeader', {}, {timeout: 3000})
     expect(getTimeline).not.toHaveBeenCalled()
   })
 })
 
+// NOT a door shape: the door sends no tier and no group URI, so the public
+// tier is unreachable against it. These hold the descriptor's fail-closed
+// reads (nothing is fetched for a public tier) on top of door.json's
+// community; open item in the ccacde3b report.
 describe('Community home - public tier', () => {
-  const PUBLIC = configWith({tier: 'com.authorityone.community.config#public'})
-  const GROUP_URI = 'at://did:example:owner/com.authorityone.group.profile/btb'
+  const PUBLIC = {
+    config: {tier: 'com.authorityone.community.config#public'},
+    groupUri: 'at://did:example:owner/com.authorityone.group.profile/btb',
+  }
 
   it.each([
-    ['non-member', {}],
-    ['member', {role: 'member'}],
+    ['non-member', nonMemberCommunity],
+    ['member', memberCommunity],
   ])(
     'shows posts as not available yet and reads nothing for a %s',
-    async (_who, extra) => {
+    async (_who, base) => {
       getCommunity.mockResolvedValue({
         ok: true,
-        data: communityResponse({
-          ...extra,
-          config: PUBLIC,
-          groupUri: GROUP_URI,
-        }),
+        data: {...base(), ...PUBLIC},
       })
       const r = renderScreen()
       await r.findByTestId(
@@ -751,7 +743,7 @@ describe('Community home - public tier', () => {
   it('shows the member list as not available yet and reads nothing', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
-      data: communityResponse({config: PUBLIC, groupUri: GROUP_URI}),
+      data: {...nonMemberCommunity(), ...PUBLIC},
     })
     const r = renderScreen({members: true})
     await r.findByTestId(
@@ -766,11 +758,8 @@ describe('Community home - public tier', () => {
 })
 
 describe('Community home - agent card', () => {
-  it('is hidden when the config has no agent', async () => {
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({config: configWith({agent: undefined})}),
-    })
+  it('is hidden when the door sends no agent', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: withoutAgent()})
     const r = renderScreen()
     await r.findByTestId('communityHeader', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAgentCard')).toBeNull()
@@ -849,17 +838,19 @@ describe('Community home - agent card', () => {
     )
   })
 
-  it('shows no sponsor name, and never the community name, when the sponsor has no name', async () => {
-    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+  it('shows no sponsor, never the DID or the community name, when the handle is null', async () => {
+    // door.json's community before the sponsor joined: handle null.
+    const c = asClientCommunity(doorCommunity())
+    expect(c.agentSponsor).toEqual({did: DOOR_SPONSOR_DID, handle: null})
+    getCommunity.mockResolvedValue({ok: true, data: c})
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
     const line = r.getByTestId('communityAgentSponsor')
     expect(line).toHaveTextContent(/^AI agent$/)
     expect(line).not.toHaveTextContent(/sponsor/i)
-    expect(line).not.toHaveTextContent('Between Two Beers')
-    expect(r.getByTestId('communityAgentCard')).not.toHaveTextContent(
-      'Between Two Beers',
-    )
+    const card = r.getByTestId('communityAgentCard')
+    expect(card).not.toHaveTextContent(DOOR_SPONSOR_DID)
+    expect(card).not.toHaveTextContent(COMMUNITY_NAME)
   })
 })
 
@@ -867,18 +858,16 @@ describe('Community home - agent launch control', () => {
   it('an admin sees the launch control below the agent card', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
-      data: communityResponse({role: 'member', viewerIsAdmin: true}),
+      data: memberCommunity({viewerIsAdmin: true}),
     })
     const r = renderScreen()
     await r.findByTestId('communityAgentLaunchControl', {}, {timeout: 3000})
     expect(r.getByTestId('communityAgentCard')).toBeTruthy()
   })
 
-  it('an owner without viewerIsAdmin gets no launch control', async () => {
-    getCommunity.mockResolvedValue({
-      ok: true,
-      data: communityResponse({role: 'owner'}),
-    })
+  it('no viewer_is_admin (the admin role off) gets no launch control', async () => {
+    const {viewerIsAdmin: _admin, ...noAdminKey} = memberCommunity()
+    getCommunity.mockResolvedValue({ok: true, data: noAdminKey})
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAgentLaunchControl')).toBeNull()
@@ -887,7 +876,7 @@ describe('Community home - agent launch control', () => {
   it('a former admin (viewerIsAdmin false) gets no launch control', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
-      data: communityResponse({role: 'member', viewerIsAdmin: false}),
+      data: memberCommunity({viewerIsAdmin: false}),
     })
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
@@ -903,7 +892,7 @@ describe('Community home - accent colour', () => {
     const baseline = seen.theme
     before.unmount()
 
-    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
     const r = renderScreen()
     await r.findByTestId('communityHeader', {}, {timeout: 3000})
 
@@ -919,7 +908,7 @@ describe('Community home - accent colour', () => {
   it('ignores an accent that is not a hex colour', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
-      data: communityResponse({config: configWith({theme: {accent: 'red'}})}),
+      data: memberCommunity({accent: 'red'}),
     })
     const r = renderScreen()
     await r.findByTestId('communityHeader', {}, {timeout: 3000})

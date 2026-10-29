@@ -71,12 +71,10 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
           )}
         </Text>
         <Text testID="communityAgentScope" style={[a.text_sm]}>
-          {agent.scope ?? (
-            <Trans>
-              Sees posts in this community only. It can’t see your profile or
-              your other communities.
-            </Trans>
-          )}
+          <Trans>
+            Sees posts in this community only. It can’t see your profile or your
+            other communities.
+          </Trans>
         </Text>
       </View>
     </View>

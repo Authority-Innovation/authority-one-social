@@ -1,7 +1,14 @@
 import {describe, expect, it} from '@jest/globals'
 
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
-import {clientCommunity} from '#/lib/communities/__fixtures__/door'
+import {
+  asClientCommunity,
+  clientCommunity,
+  DOOR_AGENT_DID,
+  DOOR_SPONSOR_DID,
+  doorCommunity,
+  doorCommunityWithSponsorMember,
+} from '#/lib/communities/__fixtures__/door'
 import {parseAccent, parseTier, postsSource, toDescriptor} from '../descriptor'
 
 function community(extra: Record<string, unknown> = {}): Community {
@@ -29,12 +36,9 @@ describe('toDescriptor', () => {
       community({
         role: 'member',
         memberCount: 1240,
-        agentName: 'Steve',
         config: {
           tier: 'com.authorityone.community.config#members',
           theme: {accent: '#FF8800'},
-          agent: 'did:example:agent',
-          agentSponsor: 'did:example:sponsor',
           brand: {displayName: 'Between Two Beers'},
           moderation: {rulesUrl: 'https://example.com/rules'},
           consentVersion: 2,
@@ -48,28 +52,31 @@ describe('toDescriptor', () => {
     expect(d.runBy).toBe('Between Two Beers')
     expect(d.rulesUrl).toBe('https://example.com/rules')
     expect(d.consentVersion).toBe('2')
-    expect(d.agent).toEqual({
-      did: 'did:example:agent',
-      sponsorDid: 'did:example:sponsor',
-      name: 'Steve',
-      sponsorName: undefined,
-      scope: undefined,
+  })
+
+  it('builds the agent from the door’s agent.did and agentSponsor {did, handle}', () => {
+    expect(
+      toDescriptor(
+        'garden',
+        asClientCommunity(doorCommunityWithSponsorMember()),
+      ).agent,
+    ).toEqual({
+      did: DOOR_AGENT_DID,
+      sponsorDid: DOOR_SPONSOR_DID,
+      sponsorHandle: 'carol-sponsor',
     })
   })
 
-  it('never uses the community brand name as the sponsor name', () => {
-    const config = {
-      agent: 'did:example:agent',
-      agentSponsor: 'did:example:sponsor',
-      brand: {displayName: 'Between Two Beers'},
-    }
-    expect(
-      toDescriptor('c1', community({config})).agent?.sponsorName,
-    ).toBeUndefined()
-    expect(
-      toDescriptor('c1', community({config, agentSponsorName: 'Sam R.'})).agent
-        ?.sponsorName,
-    ).toBe('Sam R.')
+  it('a null sponsor handle is absent, never the DID or the community name', () => {
+    const agent = toDescriptor(
+      'garden',
+      asClientCommunity(doorCommunity()),
+    ).agent
+    expect(agent).toEqual({
+      did: DOOR_AGENT_DID,
+      sponsorDid: DOOR_SPONSOR_DID,
+      sponsorHandle: undefined,
+    })
   })
 
   it('reads the runtime agentSponsor {did, handle} defensively', () => {
