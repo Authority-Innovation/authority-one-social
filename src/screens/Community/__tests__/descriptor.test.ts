@@ -72,6 +72,20 @@ describe('toDescriptor', () => {
     expect(toDescriptor('c1', community({role: null})).isMember).toBe(false)
   })
 
+  it('is an admin only when the runtime says viewerIsAdmin: true', () => {
+    expect(toDescriptor('c1', community({viewerIsAdmin: true})).isAdmin).toBe(
+      true,
+    )
+    expect(toDescriptor('c1', community()).isAdmin).toBe(false)
+    expect(toDescriptor('c1', community({viewerIsAdmin: false})).isAdmin).toBe(
+      false,
+    )
+    expect(
+      toDescriptor('c1', community({viewerIsAdmin: 'true'})).isAdmin,
+    ).toBe(false)
+    expect(toDescriptor('c1', community({role: 'owner'})).isAdmin).toBe(false)
+  })
+
   it('falls back to the id for a missing name', () => {
     expect(toDescriptor('c1', community({name: ''})).name).toBe('c1')
   })

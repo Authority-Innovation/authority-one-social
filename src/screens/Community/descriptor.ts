@@ -10,6 +10,7 @@
  * fails closed and never shows a wall as public.
  */
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
+import {isCommunityAdmin} from '#/features/communityAgent/adminGate'
 
 export type CommunityTier = 'public' | 'members' | 'paid'
 
@@ -38,6 +39,8 @@ export type CommunityDescriptor = {
   runBy?: string
   memberCount?: number
   isMember: boolean
+  /** Runtime `viewerIsAdmin`; only an admin may launch the agent. */
+  isAdmin: boolean
   consentVersion?: string
   rules?: string
   rulesUrl?: string
@@ -116,6 +119,7 @@ export function toDescriptor(
     memberCount:
       typeof raw.memberCount === 'number' ? raw.memberCount : undefined,
     isMember: !!community.role,
+    isAdmin: isCommunityAdmin(raw),
     consentVersion,
     rules: str(raw.rules),
     rulesUrl: str(moderation?.rulesUrl) ?? str(raw.rulesUrl),

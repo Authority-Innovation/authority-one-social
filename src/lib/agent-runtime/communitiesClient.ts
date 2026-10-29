@@ -55,6 +55,13 @@ export type Community = {
   agent?: CommunityAgent | null
   /** The runtime's refusal code for a misconfigured agent slot. */
   agent_error?: string
+  /**
+   * Whether the signed-in caller is a current admin of this community. Only an
+   * admin may launch (sponsor) the community agent. The runtime does not
+   * return this yet, so it is optional and anything but `true` means not an
+   * admin (see `isCommunityAdmin`).
+   */
+  viewerIsAdmin?: boolean
 }
 
 /** What a non-member is told before joining (GET /:id/join-info). */
