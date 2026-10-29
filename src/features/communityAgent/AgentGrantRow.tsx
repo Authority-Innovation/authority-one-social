@@ -22,9 +22,12 @@ import {COMMUNITIES_ENABLED} from '#/env'
 export function AgentGrantRow({
   communityId,
   initialValue = false,
+  onSaved,
 }: {
   communityId: string
   initialValue?: boolean
+  /** Called with the runtime's confirmed value after a successful save. */
+  onSaved?: (on: boolean) => void
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -48,6 +51,7 @@ export function AgentGrantRow({
     setPending(false)
     if (res.ok) {
       setOn(res.data.on)
+      onSaved?.(res.data.on)
     } else {
       setOn(!next)
       setFailed(true)

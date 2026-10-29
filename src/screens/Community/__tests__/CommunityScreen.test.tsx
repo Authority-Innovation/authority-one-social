@@ -35,6 +35,8 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getCommunity: jest.fn(),
   getTimeline: jest.fn(),
+  getAgentGrant: jest.fn(),
+  setAgentGrant: jest.fn(),
 }))
 
 // group.ts reads through the user's PDS agent (no group-AppView proxy yet), so
@@ -131,6 +133,9 @@ const getCommunity = communitiesClient.getCommunity as jest.Mock<
 >
 const getTimeline = communitiesClient.getTimeline as jest.Mock<
   typeof communitiesClient.getTimeline
+>
+const getAgentGrant = communitiesClient.getAgentGrant as jest.Mock<
+  typeof communitiesClient.getAgentGrant
 >
 const groupTimeline = useGroupTimelineQuery as unknown as jest.Mock
 const groupMembers = useGroupMembersQuery as unknown as jest.Mock
@@ -231,6 +236,10 @@ beforeEach(() => {
   mockCommunitiesEnabled = true
   mockViewerDid = 'did:example:alice'
   jest.clearAllMocks()
+  getAgentGrant.mockResolvedValue({
+    ok: true,
+    data: {communityId: 'btb', on: false},
+  })
   getTimeline.mockResolvedValue({
     ok: true,
     data: {
@@ -390,6 +399,62 @@ describe('Community home - member', () => {
     expect(r.queryByTestId('communityPosts')).toBeNull()
     fireEvent.press(r.getByTestId('communityTab-posts'))
     expect(r.getByTestId('communityPosts')).toBeTruthy()
+  })
+})
+
+describe('Community home - agent grant row', () => {
+  it('a member sees the grant row with the runtime value', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    getAgentGrant.mockResolvedValue({
+      ok: true,
+      data: {communityId: 'btb', on: true},
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityAgentGrantRow', {}, {timeout: 3000})
+    expect(getAgentGrant).toHaveBeenCalledWith('btb')
+    expect(
+      r.getByText('Give this community’s agent access to my content here'),
+    ).toBeTruthy()
+  })
+
+  it('a non-member gets no grant row and no grant read', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    const r = renderScreen()
+    await r.findByTestId('communityJoinButton', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
+    expect(getAgentGrant).not.toHaveBeenCalled()
+  })
+
+  it('a community with no agent gets no grant row and no grant read', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({
+        role: 'member',
+        config: configWith({agent: undefined}),
+      }),
+    })
+    const r = renderScreen()
+    await r.findByText('What should I listen to first?', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
+    expect(getAgentGrant).not.toHaveBeenCalled()
+  })
+
+  it('shows no grant row when the grant read fails', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    getAgentGrant.mockResolvedValue({
+      ok: false,
+      error: {kind: 'http', status: 500},
+    } as Awaited<ReturnType<typeof communitiesClient.getAgentGrant>>)
+    const r = renderScreen()
+    await r.findByText('What should I listen to first?', {}, {timeout: 3000})
+    await waitFor(() => expect(getAgentGrant).toHaveBeenCalled())
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
   })
 })
 
@@ -621,6 +686,8 @@ describe('Community home - flag off', () => {
     expect(r.queryByTestId('communityHeader')).toBeNull()
     expect(getCommunity).not.toHaveBeenCalled()
     expect(getTimeline).not.toHaveBeenCalled()
+    expect(getAgentGrant).not.toHaveBeenCalled()
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
   })
 })
 
