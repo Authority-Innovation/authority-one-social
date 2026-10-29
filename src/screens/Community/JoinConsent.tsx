@@ -53,7 +53,7 @@ const createCommunityJoinConfigQueryKey = (args: {id: string}) =>
 function useCommunityJoinConfigQuery({id}: {id: string}) {
   return useQuery({
     queryKey: createCommunityJoinConfigQueryKey({id}),
-    queryFn: async () => {
+    queryFn: async (): Promise<JoinConsentConfig> => {
       const res = await getCommunity(id)
       if (!res.ok) throw new Error(res.error.kind)
       return res.data

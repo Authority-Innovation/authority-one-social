@@ -1,7 +1,9 @@
 import {type BskyAgent, RichText} from '@atproto/api'
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 
+import {DOOR} from '#/lib/communities/__fixtures__/door'
 import {type ComposerTarget} from '#/lib/communities/composerTarget'
+import {type DoorItem} from '#/lib/communities/doorContract'
 import {type ThreadDraft} from '#/view/com/composer/state/composer'
 
 // Same leaf stubs as src/lib/api/__tests__/post.videoEmbed.test.ts: apilib
@@ -60,16 +62,12 @@ const mockReply = communitiesClient.reply as jest.MockedFunction<
 
 const DID = 'did:plc:composerguardtest'
 
-function communityPost(id: string, body: string, parentId?: string) {
+/** The door's created item (door.json `post`/`reply`), re-keyed. */
+function communityPost(id: string, text: string, parentId?: string) {
+  const real = parentId ? DOOR.reply.item : DOOR.post.item
   return {
     ok: true as const,
-    data: {
-      id,
-      author: {displayName: 'Me', is_agent: false},
-      body,
-      parentId: parentId ?? null,
-      createdAt: '2026-10-28T00:00:00.000Z',
-    },
+    data: {...real, id, text, parentId: parentId ?? null} satisfies DoorItem,
   }
 }
 
@@ -181,11 +179,11 @@ const queryClient = {} as never
 describe('submitComposerThread', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockPost.mockImplementation((_id, body) =>
-      Promise.resolve(communityPost('cpost_new', body)),
+    mockPost.mockImplementation((_id, text) =>
+      Promise.resolve(communityPost('cpost_new', text)),
     )
-    mockReply.mockImplementation((_id, parent, body) =>
-      Promise.resolve(communityPost(`reply_to_${parent}`, body, parent)),
+    mockReply.mockImplementation((_id, parent, text) =>
+      Promise.resolve(communityPost(`reply_to_${parent}`, text, parent)),
     )
   })
 
@@ -282,7 +280,7 @@ describe('submitComposerThread', () => {
         expect(res).toMatchObject({
           ok: true,
           route: 'communities',
-          posts: [{id: 'cpost_new', body: 'members only'}],
+          posts: [{id: 'cpost_new', text: 'members only'}],
         })
       })
 
@@ -556,25 +554,28 @@ describe('submitComposerThread', () => {
           },
         },
       ],
-    ])('a reply to a profile post (%s) stays a profile reply', async (_n, ctx) => {
-      const mocks = makeAgent()
-      const parentUri = 'at://did:plc:parent/app.bsky.feed.post/3kabc'
-      const resolved = resolveTarget(ctx)
-      expect(resolved).toMatchObject({ok: true, target: {kind: 'profile'}})
-      if (!resolved.ok) return
-      const res = await submitComposerThread(mocks.agent, queryClient, {
-        target: resolved.target,
-        thread: makeThread('a public reply'),
-        replyTo: parentUri,
-      })
-      expect(res).toMatchObject({ok: true, route: 'pds'})
-      expect(mocks.repo.applyWrites).toHaveBeenCalledTimes(1)
-      const arg = mocks.repo.applyWrites.mock.calls[0][0] as {
-        writes: {value: {reply?: {parent: {uri: string}}}}[]
-      }
-      expect(arg.writes[0].value.reply?.parent.uri).toBe(parentUri)
-      expect(mockReply).not.toHaveBeenCalled()
-    })
+    ])(
+      'a reply to a profile post (%s) stays a profile reply',
+      async (_n, ctx) => {
+        const mocks = makeAgent()
+        const parentUri = 'at://did:plc:parent/app.bsky.feed.post/3kabc'
+        const resolved = resolveTarget(ctx)
+        expect(resolved).toMatchObject({ok: true, target: {kind: 'profile'}})
+        if (!resolved.ok) return
+        const res = await submitComposerThread(mocks.agent, queryClient, {
+          target: resolved.target,
+          thread: makeThread('a public reply'),
+          replyTo: parentUri,
+        })
+        expect(res).toMatchObject({ok: true, route: 'pds'})
+        expect(mocks.repo.applyWrites).toHaveBeenCalledTimes(1)
+        const arg = mocks.repo.applyWrites.mock.calls[0][0] as {
+          writes: {value: {reply?: {parent: {uri: string}}}}[]
+        }
+        expect(arg.writes[0].value.reply?.parent.uri).toBe(parentUri)
+        expect(mockReply).not.toHaveBeenCalled()
+      },
+    )
 
     it('an unknown parent is refused before submit is ever reached', () => {
       expect(

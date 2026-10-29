@@ -83,6 +83,7 @@ jest.mock('#/env', () => ({
 }))
 
 import {setAgentGrant} from '#/lib/agent-runtime/communitiesClient'
+import {doorItem} from '#/lib/communities/__fixtures__/door'
 import {logger} from '#/logger'
 import {AgentGrantRow} from '../AgentGrantRow'
 import {CommunityThreadPost} from '../CommunityThreadPost'
@@ -120,20 +121,21 @@ const HUMAN_DID = 'did:plc:humansample0000000000000'
 const community: CommunityAgentConfig = {
   id: 'btb-listeners',
   name: 'Between Two Beers Listeners',
-  role: 'member',
+  viewerIsAdmin: false,
   agentDid: AGENT_DID,
   agentSponsor: SPONSOR_DID,
   agentSponsorName: 'Between Two Beers',
   agentDisclosureUrl: 'https://example.com/btb/agent',
 }
 
+/** door.json's agent item, pointed at this test's agent DID. */
 function agentReply(overrides: Partial<Post> = {}): Post {
   return {
-    id: 'p2',
-    author: {displayName: 'Steve', is_agent: true, did: AGENT_DID},
-    body: 'Welcome, Sam. A good first listen is Episode 12 (sample).',
-    createdAt: '2026-10-28T09:40:00.000Z',
+    ...doorItem('agent'),
+    author: {did: AGENT_DID, is_agent: true},
+    text: 'Welcome, Sam. A good first listen is Episode 12 (sample).',
     sources: [],
+    no_source: true,
     ...overrides,
   }
 }
@@ -160,16 +162,11 @@ describe('community agent label rule (N1)', () => {
 
   it('human whose handle ends in pds.authority-one.com renders as a human', () => {
     const post: Post = {
-      id: 'p1',
-      author: {
-        displayName: 'Sam R.',
-        is_agent: false,
-        did: HUMAN_DID,
-        // Shares the agent's host. The rule must never look at this.
-        ...({handle: 'sam.pds.authority-one.com'} as object),
-      },
-      body: 'New here. Where should I start?',
-      createdAt: '2026-10-28T09:29:00.000Z',
+      ...doorItem('post'),
+      // Shares the agent's host. The rule must never look at the member id.
+      authorId: 'sam.pds.authority-one.com',
+      author: {did: HUMAN_DID, is_agent: false},
+      text: 'New here. Where should I start?',
     }
     const r = render(<CommunityThreadPost post={post} community={community} />)
     expect(r.getByTestId('communityPostMember')).toBeTruthy()
@@ -182,11 +179,7 @@ describe('community agent label rule (N1)', () => {
     const r = render(
       <CommunityThreadPost
         post={agentReply({
-          author: {
-            displayName: 'Other bot',
-            is_agent: true,
-            did: HUMAN_DID,
-          },
+          author: {did: HUMAN_DID, is_agent: true},
         })}
         community={community}
       />,
@@ -197,17 +190,14 @@ describe('community agent label rule (N1)', () => {
 
   it('the config agent DID without is_agent renders as a human', () => {
     expect(
-      resolveAuthorLabel(
-        {displayName: 'Steve', is_agent: false, did: AGENT_DID},
-        community,
-      ),
+      resolveAuthorLabel({is_agent: false, did: AGENT_DID}, community),
     ).toEqual({kind: 'member'})
   })
 
   it('agent with no sponsor renders as a human with an operator warning', () => {
     const noSponsor = {
       ...community,
-      role: 'owner' as const,
+      viewerIsAdmin: true,
       agentSponsor: null,
     }
     const r = render(
@@ -264,14 +254,14 @@ describe('community agent sources', () => {
             {
               title: 'Between Two Beers, Episode 12 (sample)',
               kind: 'episode transcript',
-              position: '14:32',
-              timestamp: '2026-03-01T00:00:00.000Z',
-              url: 'https://example.com/btb/ep12',
+              ref: 'https://example.com/btb/ep12',
+              at: '2026-03-01T00:00:00.000Z',
             },
             {
               title: 'Between Two Beers, Episode 7 (sample)',
               kind: 'show notes',
-              url: 'https://example.com/btb/ep7',
+              ref: 'https://example.com/btb/ep7',
+              at: null,
             },
           ],
         })}
@@ -308,7 +298,10 @@ describe('community agent sources', () => {
 
 describe('agent grant row', () => {
   it('is off by default and toggling calls setAgentGrant once with true', async () => {
-    mockSetAgentGrant.mockResolvedValue({ok: true, data: {communityId: 'btb-listeners', on: true}})
+    mockSetAgentGrant.mockResolvedValue({
+      ok: true,
+      data: {communityId: 'btb-listeners', on: true},
+    })
     const r = render(<AgentGrantRow communityId="btb-listeners" />)
     const toggle = r.getByTestId('agentGrantToggle')
     expect(isChecked(toggle)).toBe(false)
@@ -323,7 +316,10 @@ describe('agent grant row', () => {
   })
 
   it('turning it off calls setAgentGrant once with false', async () => {
-    mockSetAgentGrant.mockResolvedValue({ok: true, data: {communityId: 'btb-listeners', on: false}})
+    mockSetAgentGrant.mockResolvedValue({
+      ok: true,
+      data: {communityId: 'btb-listeners', on: false},
+    })
     const r = render(<AgentGrantRow communityId="btb-listeners" initialValue />)
     await press(r.getByTestId('agentGrantToggle'))
     expect(mockSetAgentGrant).toHaveBeenCalledTimes(1)
@@ -360,7 +356,14 @@ describe('flag off (EXPO_PUBLIC_COMMUNITIES_ENABLED)', () => {
     const r = render(
       <CommunityThreadPost
         post={agentReply({
-          sources: [{title: 'Episode 12 (sample)', url: 'https://example.com'}],
+          sources: [
+            {
+              title: 'Episode 12 (sample)',
+              kind: null,
+              ref: 'https://example.com',
+              at: null,
+            },
+          ],
         })}
         community={community}
       />,

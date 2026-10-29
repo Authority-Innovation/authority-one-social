@@ -1,17 +1,18 @@
 import {describe, expect, it} from '@jest/globals'
 
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
+import {clientCommunity} from '#/lib/communities/__fixtures__/door'
 import {parseAccent, parseTier, postsSource, toDescriptor} from '../descriptor'
 
 function community(extra: Record<string, unknown> = {}): Community {
-  return {id: 'c1', name: 'BTB Listeners', ...extra}
+  return clientCommunity({id: 'c1', name: 'BTB Listeners', ...extra})
 }
 
 describe('toDescriptor', () => {
   it('carries viewerIsAdmin only when the client says true', () => {
-    expect(toDescriptor('c1', community({viewerIsAdmin: true})).viewerIsAdmin).toBe(
-      true,
-    )
+    expect(
+      toDescriptor('c1', community({viewerIsAdmin: true})).viewerIsAdmin,
+    ).toBe(true)
     expect(
       toDescriptor('c1', community({viewerIsAdmin: false})).viewerIsAdmin,
     ).toBe(false)
@@ -131,8 +132,12 @@ describe('toDescriptor', () => {
   })
 
   it('treats a door response carrying viewer_is_admin as a member (the door sends no role)', () => {
-    expect(toDescriptor('c1', community({viewerIsAdmin: true})).isMember).toBe(true)
-    expect(toDescriptor('c1', community({viewerIsAdmin: false})).isMember).toBe(true)
+    expect(toDescriptor('c1', community({viewerIsAdmin: true})).isMember).toBe(
+      true,
+    )
+    expect(toDescriptor('c1', community({viewerIsAdmin: false})).isMember).toBe(
+      true,
+    )
   })
 
   it('falls back to the id for a missing name', () => {

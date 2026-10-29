@@ -280,7 +280,7 @@ describe('CommunityJoinScreen', () => {
     fireEvent.press(await r.findByTestId(CONSENT_BOX))
     fireEvent.press(r.getByTestId('communityJoinAgreeButton'))
     await waitFor(() => expect(mockJoin).toHaveBeenCalled())
-    expect(mockJoin).toHaveBeenCalledWith('btb', '1')
+    expect(mockJoin).toHaveBeenCalledWith('btb', 1)
     await r.findByText('You’re in.')
     r.getByText('Welcome to Between Two Beers Listeners.')
     fireEvent.press(r.getByTestId('communityJoinGoButton'))

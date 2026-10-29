@@ -10,6 +10,7 @@ import {
   isPublicCommunityTarget,
   refusePublicCommunityTarget,
 } from '#/lib/communities/composerTarget'
+import {type DoorItem} from '#/lib/communities/doorContract'
 import {isWalledTarget} from '#/lib/communities/resolveTarget'
 import {type ThreadDraft} from '#/view/com/composer/state/composer'
 
@@ -32,7 +33,8 @@ export type SubmitComposerThreadResult =
   | {
       ok: true
       route: 'communities'
-      posts: communitiesClient.CommunityPost[]
+      /** The door's created items, `{item}` from each post/reply call. */
+      posts: DoorItem[]
     }
   | {ok: false; refusal: ComposerWriteRefusal}
   | {ok: false; communityError: CommunitySubmitError}
@@ -115,7 +117,7 @@ async function submitToCommunity(
   ) {
     return {ok: false, communityError: {kind: 'unsupported-content'}}
   }
-  const posts: communitiesClient.CommunityPost[] = []
+  const posts: DoorItem[] = []
   let parent = replyTo
   for (const draft of thread.posts) {
     const body = draft.richtext.text

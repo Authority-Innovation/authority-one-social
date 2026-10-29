@@ -1,5 +1,6 @@
 import {describe, expect, it} from '@jest/globals'
 
+import {clientCommunity} from '#/lib/communities/__fixtures__/door'
 import {resolveSelection, safeAccent, toSwitcherCommunities} from '../util'
 
 describe('switcher util', () => {
@@ -29,7 +30,7 @@ describe('switcher util', () => {
   })
 
   it('falls back to "All" for a community no longer listed', () => {
-    const list = [{id: 'a', name: 'A'}]
+    const list = [clientCommunity({id: 'a', name: 'A'})]
     expect(resolveSelection('communities', list)).toBe('communities')
     expect(resolveSelection('community|a', list)).toBe('community|a')
     expect(resolveSelection('community|gone', list)).toBe('communities')

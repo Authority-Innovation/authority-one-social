@@ -11,6 +11,7 @@
  * that stops matching the contract fails tsc. Every getter returns a fresh
  * copy, so a test can change what it gets without touching other tests.
  */
+import {type Community} from '#/lib/agent-runtime/communitiesClient'
 import {
   type DoorAgentGrant,
   type DoorCommunity,
@@ -75,7 +76,9 @@ export function doorCommunity(): DoorCommunity {
  *   agent  - the configured agent's reply to `post`, with sources
  *   legacy - an older member post with no stored author DID (did: null)
  */
-export function doorItem(kind: 'post' | 'reply' | 'agent' | 'legacy'): DoorItem {
+export function doorItem(
+  kind: 'post' | 'reply' | 'agent' | 'legacy',
+): DoorItem {
   const items = doorTimeline().items
   const find = (pred: (i: DoorItem) => boolean) => {
     const found = items.find(pred)
@@ -100,4 +103,29 @@ export function doorPage(
   cursor: string | null = null,
 ): DoorTimelinePage {
   return {items: copy(items), cursor}
+}
+
+/**
+ * A community as communitiesClient returns it (`viewer_is_admin` read into
+ * `viewerIsAdmin`), built from door.json's community. By default it is what
+ * the door answers for a config with only a name and every agent/admin flag
+ * off: no description, accent or wording version, and no `agent` or
+ * `viewer_is_admin` key. `overrides` sets fields on top.
+ */
+export function clientCommunity(
+  overrides: Partial<Community> & Record<string, unknown> = {},
+): Community {
+  const {
+    agent: _agent,
+    agent_error: _agentError,
+    viewer_is_admin: _admin,
+    ...base
+  } = doorCommunity()
+  return {
+    ...base,
+    description: null,
+    accent: null,
+    wording_version: null,
+    ...overrides,
+  }
 }

@@ -1,8 +1,9 @@
 import {AppBskyFeedPost, moderatePost, type ModerationOpts} from '@atproto/api'
 import {describe, expect, it} from '@jest/globals'
 
-import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
 import {FeedTuner} from '#/lib/api/feed-manip'
+import {doorItem} from '#/lib/communities/__fixtures__/door'
+import {type DoorItem} from '#/lib/communities/doorContract'
 import {
   getMembersPostRef,
   isMembersPostUri,
@@ -23,11 +24,11 @@ const BADGE: ReasonCommunity = {
 const AGENT_DID = 'did:plc:communityagent'
 const OTHER_DID = 'did:plc:someonelse'
 
-const POST: CommunityPost = {
+/** door.json's agent item, re-keyed to this test's id and agent DID. */
+const POST: DoorItem = {
+  ...doorItem('agent'),
   id: 'p1',
-  author: {displayName: 'Steve', avatar: null, is_agent: true, did: AGENT_DID},
-  body: 'Episode 12 is a good start.',
-  createdAt: '2026-10-28T10:00:00.000Z',
+  author: {did: AGENT_DID, is_agent: true},
 }
 
 /** Wraps an object so every property read (at any depth) is recorded. */
@@ -47,7 +48,7 @@ describe('membersPostToFeedViewPost', () => {
     const reads: string[] = []
     const view = membersPostToFeedViewPost(
       'community-a',
-      tracked({...POST, author: {...POST.author}}, reads),
+      tracked({...POST, author: {...POST.author!}}, reads),
       BADGE,
     )
 
@@ -55,18 +56,18 @@ describe('membersPostToFeedViewPost', () => {
     expect(isMembersPostUri(view.post.uri)).toBe(true)
     expect((view as {__source?: unknown}).__source).toEqual(BADGE)
     expect(view.post.indexedAt).toBe(POST.createdAt)
-    expect((view.post.record as AppBskyFeedPost.Record).text).toBe(POST.body)
+    expect((view.post.record as AppBskyFeedPost.Record).text).toBe(POST.text)
+    expect(view.post.author.displayName).toBe(POST.authorId)
 
-    // Only the runtime's CommunityPost fields were read.
+    // Only the door item's fields were read.
     const allowed = new Set([
       'id',
       'createdAt',
-      'body',
+      'text',
+      'authorId',
       'author',
       'author.is_agent',
       'author.did',
-      'author.displayName',
-      'author.avatar',
     ])
     expect(reads.filter(r => !allowed.has(r))).toEqual([])
     expect(reads).not.toContain('uri')
@@ -91,10 +92,7 @@ describe('membersPostToFeedViewPost', () => {
     })
     const human = membersPostToFeedViewPost(
       'community-a',
-      {
-        ...POST,
-        author: {displayName: 'Steve Agent', is_agent: false, did: AGENT_DID},
-      },
+      {...POST, author: {is_agent: false, did: AGENT_DID}},
       BADGE,
       AGENT_DID,
     )
@@ -104,7 +102,7 @@ describe('membersPostToFeedViewPost', () => {
   it('is_agent true with a non-matching DID is not the agent', () => {
     const view = membersPostToFeedViewPost(
       'community-a',
-      {...POST, author: {...POST.author, is_agent: true, did: OTHER_DID}},
+      {...POST, author: {is_agent: true, did: OTHER_DID}},
       BADGE,
       AGENT_DID,
     )
@@ -114,7 +112,7 @@ describe('membersPostToFeedViewPost', () => {
   it('is_agent true with did null, or no config agent DID, is not the agent', () => {
     const nullDid = membersPostToFeedViewPost(
       'community-a',
-      {...POST, author: {...POST.author, did: null}},
+      {...POST, author: {is_agent: true, did: null}},
       BADGE,
       AGENT_DID,
     )

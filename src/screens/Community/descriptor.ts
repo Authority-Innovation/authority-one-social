@@ -84,7 +84,7 @@ export function toDescriptor(
   id: string,
   community: Community,
 ): CommunityDescriptor {
-  const raw = community as Community & Record<string, unknown>
+  const raw: Record<string, unknown> = community
   const config = obj(raw.config)
   const theme = obj(config?.theme)
   const brand = obj(config?.brand)
@@ -129,7 +129,10 @@ export function toDescriptor(
     // The runtime door sends no `role`; it answers GET /:id to current members
     // only and, with admins on, always carries `viewer_is_admin` there
     // (`viewerIsAdmin` is set only when that key is present). Either marks a member.
-    isMember: !!community.role || typeof community.viewerIsAdmin === 'boolean',
+    // `role` is not in the door contract; it is still read off the raw
+    // response, as before, so this stays a type-only change (open item in the
+    // e31e0aa7 report).
+    isMember: !!raw.role || typeof community.viewerIsAdmin === 'boolean',
     consentVersion,
     rules: str(raw.rules),
     rulesUrl: str(moderation?.rulesUrl) ?? str(raw.rulesUrl),

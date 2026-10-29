@@ -21,7 +21,7 @@
 import {
   type CommunitiesError,
   type Community,
-  type CommunityMembership,
+  type CommunityJoinResult,
   join,
   setAgentGrant,
 } from '#/lib/agent-runtime/communitiesClient'
@@ -43,6 +43,14 @@ export const SUPPORTED_CONSENT_VERSIONS: readonly string[] = [
  * them.
  */
 export type JoinConsentConfig = Community & {
+  /**
+   * NOT sent by the door (it sends `wording_version`); read here as before.
+   * Kept as an optional app-side field so this change stays type-only - see
+   * the e31e0aa7 report (join screen drift, open item).
+   */
+  consentVersion?: string | number | null
+  /** NOT sent by the door (it sends `agent.did`). Same open item. */
+  agentDid?: string | null
   /** Who runs the community and sponsors its agent, e.g. a show. */
   sponsorName?: string | null
   /** The community agent's display name. */
@@ -58,7 +66,7 @@ export type JoinConsentConfig = Community & {
  * names none. There is no fallback: a missing version is not version 1.
  */
 export function consentVersionFor(
-  config: Pick<Community, 'consentVersion'> | undefined,
+  config: Pick<JoinConsentConfig, 'consentVersion'> | undefined,
 ): string | null {
   const v = config?.consentVersion as unknown
   if (typeof v === 'string' && v.trim()) return v.trim()
@@ -80,7 +88,7 @@ export type ConsentGate =
  * the consent box and the Agree button.
  */
 export function consentGateFor(
-  config: Pick<Community, 'consentVersion'> | undefined,
+  config: Pick<JoinConsentConfig, 'consentVersion'> | undefined,
 ): ConsentGate {
   const version = consentVersionFor(config)
   if (version === null) return {kind: 'missing'}
@@ -91,7 +99,7 @@ export function consentGateFor(
 }
 
 export type JoinOutcome =
-  | {ok: true; membership: CommunityMembership; agentGrantFailed: boolean}
+  | {ok: true; membership: CommunityJoinResult; agentGrantFailed: boolean}
   | {ok: false; reason: 'no_consent'}
   | {ok: false; reason: 'unsupported_version'}
   | {ok: false; reason: 'join_failed'; error: CommunitiesError}
@@ -129,7 +137,9 @@ export async function agreeAndJoin(
   if (!isSupportedConsentVersion(consentVersion)) {
     return {ok: false, reason: 'unsupported_version'}
   }
-  const joined = await client.join(id, consentVersion)
+  // The door's join takes the version as a number (communitiesClient.join
+  // refuses anything else); supported versions are numeric strings.
+  const joined = await client.join(id, Number(consentVersion))
   if (!joined.ok) {
     return {ok: false, reason: 'join_failed', error: joined.error}
   }

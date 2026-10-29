@@ -41,7 +41,7 @@ jest.mock('#/components/Typography', () => {
   return {Text}
 })
 
-jest.mock('#/lib/haptics',() => ({useHaptics: () => () => {}}))
+jest.mock('#/lib/haptics', () => ({useHaptics: () => () => {}}))
 
 // Any read of the agent is recorded; a members post must cause none.
 const mockAgentTouches: string[] = []
@@ -122,6 +122,7 @@ jest.mock('#/lib/custom-animations/CountWheel', () => {
   return {CountWheel: () => <View />}
 })
 
+import {doorItem} from '#/lib/communities/__fixtures__/door'
 import {PostControls} from '#/components/PostControls'
 import {membersPostToFeedViewPost} from '#/features/communities/membersPost'
 
@@ -137,12 +138,7 @@ const COMMUNITY_ID = 'community-a'
 function membersFeedPost() {
   const item = membersPostToFeedViewPost(
     COMMUNITY_ID,
-    {
-      id: 'p1',
-      author: {displayName: 'Author', is_agent: false},
-      body: 'members only',
-      createdAt: '2026-10-28T10:00:00.000Z',
-    },
+    {...doorItem('post'), id: 'p1', text: 'members only'},
     {$type: 'reasonCommunity', communityId: COMMUNITY_ID, tier: 'members'},
   )
   const post = item.post
