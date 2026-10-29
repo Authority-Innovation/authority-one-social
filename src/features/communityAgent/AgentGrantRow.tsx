@@ -37,9 +37,6 @@ export function AgentGrantRow({
 
   if (!COMMUNITIES_ENABLED) return null
 
-  // TODO(Elliott): final grant copy needs Elliott's sign-off. Until then it
-  // uses only the runtime contract's words and makes no claim about which
-  // posts the agent can read.
   const label = l`Give this community’s agent access to my content here`
 
   const onChange = async (next: boolean) => {
