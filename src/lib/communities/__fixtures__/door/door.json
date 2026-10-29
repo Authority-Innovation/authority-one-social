@@ -1,0 +1,190 @@
+{
+  "$source": {
+    "repo": "authority-one-runtime",
+    "ref": "origin/deploy/dev-communities",
+    "commit": "7f436b820e5e1b4d4bfc89a8dabb3e27e79bbaf0",
+    "module": "src/communities/door.js",
+    "harness": "test/communities-agent-slot-fb477fb1.test.js (fakeWorld/setup), flags: communities.enabled, communityAgent, agentGrant, admins all on",
+    "generator": "src/lib/communities/__fixtures__/door/generate.mjs"
+  },
+  "list": {
+    "communities": [
+      {
+        "id": "garden",
+        "name": "Garden club",
+        "description": "A members-only garden club",
+        "accent": "#2f7d4f",
+        "wording_version": 3,
+        "agent": {
+          "did": "did:plc:gardenagentfixture",
+          "is_agent": true
+        },
+        "viewer_is_admin": true
+      }
+    ]
+  },
+  "listAsMember": {
+    "communities": [
+      {
+        "id": "garden",
+        "name": "Garden club",
+        "description": "A members-only garden club",
+        "accent": "#2f7d4f",
+        "wording_version": 3,
+        "agent": {
+          "did": "did:plc:gardenagentfixture",
+          "is_agent": true
+        },
+        "viewer_is_admin": false
+      }
+    ]
+  },
+  "community": {
+    "community": {
+      "id": "garden",
+      "name": "Garden club",
+      "description": "A members-only garden club",
+      "accent": "#2f7d4f",
+      "wording_version": 3,
+      "agent": {
+        "did": "did:plc:gardenagentfixture",
+        "is_agent": true
+      },
+      "viewer_is_admin": true
+    }
+  },
+  "joinInfo": {
+    "wording_version": null
+  },
+  "post": {
+    "item": {
+      "id": "0mvtum47k-000102030405",
+      "parentId": null,
+      "authorId": "alice-agent",
+      "text": "First post in the garden",
+      "createdAt": "2026-10-29T18:00:03.000Z",
+      "is_agent": false,
+      "author": {
+        "did": "did:plc:memberaliceagent",
+        "is_agent": false
+      }
+    }
+  },
+  "reply": {
+    "item": {
+      "id": "0mvtum6iw-060708090a0b",
+      "parentId": "0mvtum47k-000102030405",
+      "authorId": "bob-agent",
+      "text": "A reply from Bob",
+      "createdAt": "2026-10-29T18:00:06.000Z",
+      "is_agent": false,
+      "author": {
+        "did": "did:plc:memberbobagent",
+        "is_agent": false
+      }
+    }
+  },
+  "timeline": {
+    "items": [
+      {
+        "id": "0mvtum8u8-121314151617",
+        "parentId": null,
+        "authorId": "bob-agent",
+        "text": "An older post with no stored author DID",
+        "createdAt": "2026-10-29T18:00:08.000Z",
+        "is_agent": false,
+        "author": {
+          "did": null,
+          "is_agent": false
+        }
+      },
+      {
+        "id": "0mvtum82g-0c0d0e0f1011",
+        "parentId": "0mvtum47k-000102030405",
+        "authorId": "community-agent",
+        "text": "From the garden notes: plant garlic before the first frost.",
+        "createdAt": "2026-10-29T18:00:07.000Z",
+        "is_agent": true,
+        "author": {
+          "did": "did:plc:gardenagentfixture",
+          "is_agent": true
+        },
+        "sources": [
+          {
+            "title": "Garden notes",
+            "kind": "episode transcript",
+            "ref": "https://example.test/notes/1",
+            "at": "2026-10-01T00:00:00.000Z"
+          }
+        ],
+        "no_source": false
+      },
+      {
+        "id": "0mvtum6iw-060708090a0b",
+        "parentId": "0mvtum47k-000102030405",
+        "authorId": "bob-agent",
+        "text": "A reply from Bob",
+        "createdAt": "2026-10-29T18:00:06.000Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:memberbobagent",
+          "is_agent": false
+        }
+      },
+      {
+        "id": "0mvtum47k-000102030405",
+        "parentId": null,
+        "authorId": "alice-agent",
+        "text": "First post in the garden",
+        "createdAt": "2026-10-29T18:00:03.000Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:memberaliceagent",
+          "is_agent": false
+        }
+      }
+    ],
+    "cursor": null
+  },
+  "export": {
+    "communityId": "garden",
+    "items": [
+      {
+        "id": "0mvtum47k-000102030405",
+        "parentId": null,
+        "authorId": "alice-agent",
+        "text": "First post in the garden",
+        "createdAt": "2026-10-29T18:00:03.000Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:memberaliceagent",
+          "is_agent": false
+        }
+      }
+    ]
+  },
+  "roster": {
+    "postId": "0mvtum47k-000102030405",
+    "roster": [
+      {
+        "id": "alice-agent",
+        "did": null,
+        "is_agent": false
+      },
+      {
+        "id": "bob-agent",
+        "did": null,
+        "is_agent": false
+      },
+      {
+        "id": "community-agent",
+        "did": "did:plc:gardenagentfixture",
+        "is_agent": true
+      }
+    ]
+  },
+  "grant": {
+    "communityId": "garden",
+    "on": false
+  }
+}
