@@ -11,9 +11,10 @@
  *            NOT the bare PDS and NOT bsky's AppView. Routed through a dedicated
  *            group-AppView service DID (see `callGroupAppView`).
  *
- * STATUS: interfaces + flow are real; every network call is TODO-marked. The
- * record/response types are generated from /lexicons by `pnpm lexgen`
- * (src/lib/lexicon/generated).
+ * STATUS: reads go to the group AppView only when it is configured (see
+ * `resolveGroupAppViewProxy`); otherwise they throw GroupAppViewUnavailableError
+ * and nothing is sent. The record/response types are generated from /lexicons
+ * by `pnpm lexgen` (src/lib/lexicon/generated).
  */
 import {
   type AppBskyFeedDefs,
@@ -144,18 +145,84 @@ async function callGroupAppView<T>(
 }
 
 /**
+ * Thrown when the group AppView answers getTimeline with a body that does not
+ * match the lexicon output (`{cursor?, feed: feedViewPost[]}`).
+ */
+export class GroupTimelineResponseError extends Error {
+  constructor(reason: string) {
+    super(`group AppView getTimeline response malformed: ${reason}`)
+    this.name = 'GroupTimelineResponseError'
+  }
+}
+
+const GROUP_TIMELINE_MAX_LIMIT = 100 // lexicon getTimeline.limit maximum
+
+function clampTimelineLimit(limit: number) {
+  if (!Number.isFinite(limit)) return 50
+  return Math.min(GROUP_TIMELINE_MAX_LIMIT, Math.max(1, Math.floor(limit)))
+}
+
+function isUsableFeedViewPost(
+  item: unknown,
+): item is AppBskyFeedDefs.FeedViewPost {
+  if (!item || typeof item !== 'object') return false
+  const post = (item as {post?: unknown}).post
+  if (!post || typeof post !== 'object') return false
+  const {uri, cid} = post as {uri?: unknown; cid?: unknown}
+  return (
+    typeof uri === 'string' &&
+    uri.startsWith('at://') &&
+    typeof cid === 'string'
+  )
+}
+
+/**
+ * Maps a raw getTimeline body onto the lexicon output. A body without a
+ * `feed` array is an error; individual items that are not post views are
+ * dropped so one bad row cannot break the page.
+ */
+export function mapGroupTimelineResponse(
+  data: unknown,
+): ComAuthorityoneGroupGetTimeline.OutputSchema {
+  if (!data || typeof data !== 'object') {
+    throw new GroupTimelineResponseError('body is not an object')
+  }
+  const {feed, cursor} = data as {feed?: unknown; cursor?: unknown}
+  if (!Array.isArray(feed)) {
+    throw new GroupTimelineResponseError('feed is not an array')
+  }
+  return {
+    feed: feed.filter(isUsableFeedViewPost),
+    ...(typeof cursor === 'string' && cursor ? {cursor} : {}),
+  }
+}
+
+/**
  * One page of a group's public-tier timeline from our AppView. Plain function
  * so feed APIs (see lib/api/feed/communities.ts) can share the transport.
+ *
+ * Public tier only: `group` must be an at:// group URI. Members-only
+ * communities are addressed by runtime ids and are read through
+ * communitiesClient, never through the group AppView, so any other id is
+ * refused here before anything is sent.
  */
-export function fetchGroupTimeline(
+export async function fetchGroupTimeline(
   agent: ReturnType<typeof useAgent>,
   {group, cursor, limit = 50}: {group: string; cursor?: string; limit?: number},
 ) {
-  return callGroupAppView<ComAuthorityoneGroupGetTimeline.OutputSchema>(
+  const proxy = resolveGroupAppViewProxy()
+  if (!proxy.ok) throw new GroupAppViewUnavailableError(proxy.reason)
+  if (!group.startsWith('at://')) {
+    throw new GroupAppViewUnavailableError(
+      'getTimeline is public tier only; group must be an at:// URI',
+    )
+  }
+  const data = await callGroupAppView<unknown>(
     agent,
     'com.authorityone.group.getTimeline',
-    {group, limit, cursor},
+    {group, limit: clampTimelineLimit(limit), cursor},
   )
+  return mapGroupTimelineResponse(data)
 }
 
 /** The groups an actor is an effective member of (public tier). */
