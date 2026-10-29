@@ -350,7 +350,7 @@ describe('Community home - member', () => {
     })
     const r = renderScreen({id: 'ao-dev-test'})
     await r.findAllByText(REAL.timeline.items[1].text, {}, {timeout: 3000})
-    expect(r.getAllByText('member.example.test').length).toBe(
+    expect(r.getAllByText('@member.example.test').length).toBe(
       REAL.timeline.items.length,
     )
   })

@@ -3,6 +3,14 @@ import {i18n} from '@lingui/core'
 import {I18nProvider} from '@lingui/react'
 import {render} from '@testing-library/react-native'
 
+// The bottom-sheet module reads Platform.Version at load, which is undefined
+// under jest-expo/ios.
+jest.mock('../../../../../modules/bottom-sheet', () => ({
+  BottomSheet: () => null,
+  BottomSheetNativeComponent: () => null,
+  BottomSheetSnapPoint: {Hidden: 0, Partial: 1, Full: 2},
+}))
+
 // A stub of the app's profile cache: what useProfileQuery would return for
 // each actor (DID or handle) already in the cache.
 const mockProfileCache = new Map<
