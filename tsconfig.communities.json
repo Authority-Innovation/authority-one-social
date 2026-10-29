@@ -1,4 +1,8 @@
 {
+  // Run by `pnpm test` (tsc --noEmit) so community type drift - an app type or
+  // a jest fake that no longer matches the door contract - fails CI. Covers
+  // src/screens/Community, src/features/communit*, the contract and its
+  // fixtures, and every module that reads a door item or timeline page.
   "extends": "./tsconfig.json",
   "include": [
     "src/**/*.d.ts",

@@ -138,6 +138,7 @@ import {
   type Community,
   listMyCommunities,
 } from '#/lib/agent-runtime/communitiesClient'
+import {clientCommunity} from '#/lib/communities/__fixtures__/door'
 import {
   Provider as SelectedCommunityFeedProvider,
   useSelectedCommunityFeed,
@@ -154,13 +155,15 @@ const mockList = listMyCommunities as jest.MockedFunction<
 i18n.load('en', {})
 i18n.activate('en')
 
-const BTB = {
+// Real door community shapes (door.json), re-keyed. `memberCount` is not in
+// the door contract; the sheet shows it only if a runtime ever sends one.
+const BTB = clientCommunity({
   id: 'btb',
   name: 'Between Two Beers Listeners',
   accent: '#C8102E',
   memberCount: 1240,
-}
-const AP = {id: 'ap', name: 'After Pride'}
+})
+const AP = clientCommunity({id: 'ap', name: 'After Pride'})
 
 let selectedSeen: string[] = []
 function SelectionProbe() {

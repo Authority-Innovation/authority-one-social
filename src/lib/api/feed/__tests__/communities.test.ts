@@ -26,6 +26,13 @@ import {
   resolveMyCommunitySources,
 } from '#/lib/api/feed/communities'
 import {
+  DOOR_AGENT_DID,
+  doorCommunity,
+  doorItem,
+  doorPage,
+} from '#/lib/communities/__fixtures__/door'
+import {type DoorItem} from '#/lib/communities/doorContract'
+import {
   fetchGroupMemberships,
   fetchGroupTimeline,
   GroupAppViewUnavailableError,
@@ -55,13 +62,9 @@ function feedPost(uri: string, indexedAt: string) {
   }
 }
 
-function membersPost(id: string, createdAt: string) {
-  return {
-    id,
-    author: {displayName: `Author ${id}`, is_agent: false},
-    body: `body ${id}`,
-    createdAt,
-  }
+/** A real door item (door.json), re-keyed. Never a hand-made shape. */
+function membersPost(id: string, createdAt: string): DoorItem {
+  return {...doorItem('post'), id, createdAt, text: `text ${id}`}
 }
 
 /**
@@ -106,12 +109,11 @@ describe('CommunitiesMergeFeedAPI', () => {
     mockGetTimeline.mockImplementation(id =>
       Promise.resolve({
         ok: true,
-        data: {
-          posts:
-            id === MEMBERS_A
-              ? [membersPost('a1', t(8)), membersPost('a2', t(2))]
-              : [membersPost('b1', t(5))],
-        },
+        data: doorPage(
+          id === MEMBERS_A
+            ? [membersPost('a1', t(8)), membersPost('a2', t(2))]
+            : [membersPost('b1', t(5))],
+        ),
       }),
     )
     mockGroupTimeline.mockResolvedValue({
@@ -171,7 +173,7 @@ describe('CommunitiesMergeFeedAPI', () => {
 
   it('fetches each community with only its own id', async () => {
     const {agent} = makeAgent()
-    mockGetTimeline.mockResolvedValue({ok: true, data: {posts: []}})
+    mockGetTimeline.mockResolvedValue({ok: true, data: doorPage([])})
     mockGroupTimeline.mockResolvedValue({feed: []})
 
     const api = new CommunitiesMergeFeedAPI({
@@ -213,19 +215,19 @@ describe('CommunitiesMergeFeedAPI', () => {
       if (id === MEMBERS_A) {
         return Promise.resolve(
           cursor
-            ? {ok: true, data: {posts: [membersPost('a3', t(1))]}}
+            ? {ok: true, data: doorPage([membersPost('a3', t(1))])}
             : {
                 ok: true,
-                data: {
-                  posts: [membersPost('a1', t(9)), membersPost('a2', t(7))],
-                  cursor: 'a-next',
-                },
+                data: doorPage(
+                  [membersPost('a1', t(9)), membersPost('a2', t(7))],
+                  'a-next',
+                ),
               },
         )
       }
       return Promise.resolve({
         ok: true,
-        data: {posts: [membersPost('b1', t(4))]},
+        data: doorPage([membersPost('b1', t(4))]),
       })
     })
 
@@ -281,7 +283,7 @@ describe('CommunitiesMergeFeedAPI', () => {
     ;(agent as {session?: {did: string}}).session = {did: 'did:example:viewer'}
     mockListMine.mockResolvedValue({
       ok: true,
-      data: [{id: MEMBERS_A, name: 'A'}],
+      data: [{...doorCommunity(), id: MEMBERS_A, name: 'A'}],
     })
     mockGroupMemberships.mockResolvedValue({
       memberships: [
@@ -304,7 +306,12 @@ describe('CommunitiesMergeFeedAPI', () => {
     })
     await expect(resolveMyCommunitySources(agent)).resolves.toEqual({
       sources: [
-        {id: MEMBERS_A, name: 'A', tier: 'members'},
+        {
+          id: MEMBERS_A,
+          name: 'A',
+          tier: 'members',
+          agentDid: DOOR_AGENT_DID,
+        },
         {id: PUBLIC_G, name: 'G', tier: 'public'},
       ],
       publicTier: {kind: 'ok'},
@@ -325,13 +332,15 @@ describe('public tier failures are visible, not silent (M1)', () => {
     const {agent} = viewerAgent()
     mockListMine.mockResolvedValue({
       ok: true,
-      data: [{id: MEMBERS_A, name: 'A'}],
+      data: [{...doorCommunity(), id: MEMBERS_A, name: 'A'}],
     })
     mockGroupMemberships.mockRejectedValue(
       new GroupAppViewUnavailableError('not configured'),
     )
     const res = await resolveMyCommunitySources(agent)
-    expect(res.sources).toEqual([{id: MEMBERS_A, name: 'A', tier: 'members'}])
+    expect(res.sources).toEqual([
+      {id: MEMBERS_A, name: 'A', tier: 'members', agentDid: DOOR_AGENT_DID},
+    ])
     expect(res.publicTier).toEqual({
       kind: 'unavailable',
       reason: 'not configured',
@@ -413,7 +422,7 @@ describe('members-tier items never reach the agent', () => {
     const {agent, touched, getTimeline} = makeAgent()
     mockGetTimeline.mockResolvedValue({
       ok: true,
-      data: {posts: [membersPost('a1', t(9))], cursor: 'next'},
+      data: doorPage([membersPost('a1', t(9))], 'next'),
     })
     const api = createCommunityFeedAPI({agent, communityId: MEMBERS_A})
     const res = await api.fetch({cursor: undefined, limit: 30})
@@ -430,7 +439,7 @@ describe('members-tier items never reach the agent', () => {
     const {agent, touched} = makeAgent()
     mockGetTimeline.mockResolvedValue({
       ok: true,
-      data: {posts: [membersPost('a1', t(9))]},
+      data: doorPage([membersPost('a1', t(9))]),
     })
     const api = new CommunitiesMergeFeedAPI({
       agent,
@@ -446,17 +455,18 @@ describe('members-tier feed marks the config agent (N1, R3)', () => {
   const AGENT_DID = 'did:example:communityagent'
   const OTHER_DID = 'did:example:someoneelse'
 
-  function agentPost(id: string, did: string | null) {
+  /** door.json's agent item, re-keyed, with the given author DID. */
+  function agentPost(id: string, did: string | null): DoorItem {
     return {
+      ...doorItem('agent'),
       id,
-      author: {displayName: 'Steve', is_agent: true, did},
-      body: `body ${id}`,
       createdAt: t(9),
+      author: {did, is_agent: true},
     }
   }
 
-  function serve(posts: ReturnType<typeof agentPost>[]) {
-    mockGetTimeline.mockResolvedValue({ok: true, data: {posts}})
+  function serve(posts: DoorItem[]) {
+    mockGetTimeline.mockResolvedValue({ok: true, data: doorPage(posts)})
   }
 
   async function isAgentFlags(api: CommunitiesMergeFeedAPI) {
@@ -531,7 +541,7 @@ describe('members-tier feed marks the config agent (N1, R3)', () => {
     const {agent, touched} = makeAgent()
     mockGetTimeline.mockResolvedValue({
       ok: true,
-      data: {posts: [agentPost('a1', AGENT_DID)], cursor: 'next'},
+      data: doorPage([agentPost('a1', AGENT_DID)], 'next'),
     })
     mockGetCommunity.mockResolvedValue({
       ok: true,

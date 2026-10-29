@@ -15,6 +15,7 @@ import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
+import {isCommunityAdmin} from './isCommunityAdmin'
 import {type AuthorLabel, resolveAuthorLabel} from './labelRule'
 import {
   type CommunityAgentConfig,
@@ -38,8 +39,7 @@ export function CommunityThreadPost({
     ? resolveAuthorLabel(post.author, community)
     : {kind: 'member'}
   const isAgent = label.kind === 'agent'
-  const isOperator =
-    community?.role === 'owner' || community?.role === 'moderator'
+  const isOperator = isCommunityAdmin(community)
 
   if (label.kind === 'member' && label.warning) {
     // No DIDs in logs, only the community id the operator already knows.
@@ -61,13 +61,12 @@ export function CommunityThreadPost({
           type="user"
           shape={isAgent ? 'square' : 'circle'}
           size={AVATAR_SIZE}
-          avatar={post.author.avatar}
         />
       </View>
       <View style={[a.flex_1, a.gap_xs]}>
         <View style={[a.flex_row, a.flex_wrap, a.align_center, a.gap_xs]}>
           <Text emoji style={[a.text_sm, a.font_bold]}>
-            {post.author.displayName}
+            {post.authorId}
           </Text>
           {isAgent ? <AgentPill /> : null}
           {when ? (
@@ -83,9 +82,9 @@ export function CommunityThreadPost({
           <OperatorWarning />
         ) : null}
 
-        {post.body ? (
+        {post.text ? (
           <Text emoji style={[a.text_md, a.leading_snug]}>
-            {post.body}
+            {post.text}
           </Text>
         ) : null}
 
@@ -161,7 +160,7 @@ function OperatorWarning() {
 
 export function SourcesBlock({sources}: {sources: CommunitySource[]}) {
   const t = useTheme()
-  const valid = sources.filter(s => s && typeof s.title === 'string')
+  const valid = sources.filter(s => !!sourceLabel(s))
 
   if (valid.length === 0) {
     return (
@@ -191,7 +190,7 @@ export function SourcesBlock({sources}: {sources: CommunitySource[]}) {
         )}
       </Text>
       {valid.map((s, i) => (
-        <SourceRow key={`${s.url ?? s.title}-${i}`} source={s} />
+        <SourceRow key={`${s.ref ?? s.title}-${i}`} source={s} />
       ))}
     </View>
   )
@@ -200,10 +199,10 @@ export function SourcesBlock({sources}: {sources: CommunitySource[]}) {
 function SourceRow({source}: {source: CommunitySource}) {
   const t = useTheme()
   const {t: l, i18n} = useLingui()
-  const url = isPublicUrl(source.url) ? source.url : null
-  const date = source.timestamp ? new Date(source.timestamp) : null
+  const url = isPublicUrl(source.ref) ? source.ref : null
+  const title = sourceLabel(source)
+  const date = source.at ? new Date(source.at) : null
   const meta = [
-    source.position ? l`From ${source.position}` : null,
     source.kind || null,
     date && !isNaN(date.getTime())
       ? i18n.date(date, {dateStyle: 'medium'})
@@ -219,11 +218,11 @@ function SourceRow({source}: {source: CommunitySource}) {
           onPress={() => void Linking.openURL(url)}
           emoji
           style={[a.text_sm, a.underline, {color: t.palette.primary_500}]}>
-          {source.title}
+          {title}
         </Text>
       ) : (
         <Text emoji style={[a.text_sm]}>
-          {source.title}
+          {title}
         </Text>
       )}
       {meta.length > 0 ? (
@@ -291,6 +290,12 @@ function WhyAgentDisclosure({
       ) : null}
     </View>
   )
+}
+
+// The door keeps a source when it has a title or a ref; show whichever it has.
+function sourceLabel(source: CommunitySource | null | undefined): string {
+  if (!source) return ''
+  return source.title?.trim() || source.ref?.trim() || ''
 }
 
 // Sources and disclosures must be public links; anything else is not opened.

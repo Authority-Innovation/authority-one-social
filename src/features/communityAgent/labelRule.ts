@@ -25,7 +25,7 @@ function clean(v: string | null | undefined): string {
 }
 
 export function resolveAuthorLabel(
-  author: CommunityThreadAuthor,
+  author: CommunityThreadAuthor | undefined,
   community: CommunityAgentConfig | null | undefined,
 ): AuthorLabel {
   // Rules 1 and 2 are the one DID-match rule shared with the feed and the

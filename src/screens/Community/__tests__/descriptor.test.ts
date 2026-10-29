@@ -1,10 +1,11 @@
 import {describe, expect, it} from '@jest/globals'
 
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
+import {clientCommunity} from '#/lib/communities/__fixtures__/door'
 import {parseAccent, parseTier, postsSource, toDescriptor} from '../descriptor'
 
 function community(extra: Record<string, unknown> = {}): Community {
-  return {id: 'c1', name: 'BTB Listeners', ...extra}
+  return clientCommunity({id: 'c1', name: 'BTB Listeners', ...extra})
 }
 
 describe('toDescriptor', () => {

@@ -10,20 +10,14 @@ const OTHER_DID = 'did:plc:othersample0000000000000'
 const SPONSOR_DID = 'did:plc:sponsorsample00000000000'
 
 const AUTHORS: [string, CommunityThreadAuthor][] = [
-  ['agent', {displayName: 'Steve', is_agent: true, did: AGENT_DID}],
-  [
-    'agent, padded DID',
-    {displayName: 'S', is_agent: true, did: ` ${AGENT_DID} `},
-  ],
-  ['other DID', {displayName: 'Steve', is_agent: true, did: OTHER_DID}],
-  ['null DID', {displayName: 'Steve', is_agent: true, did: null}],
-  ['empty DID', {displayName: 'Steve', is_agent: true, did: ''}],
-  ['no DID', {displayName: 'Steve', is_agent: true}],
-  ['is_agent false', {displayName: 'Steve', is_agent: false, did: AGENT_DID}],
-  [
-    'is_agent string',
-    {displayName: 'Steve', is_agent: 'true' as never, did: AGENT_DID},
-  ],
+  ['agent', {is_agent: true, did: AGENT_DID}],
+  ['agent, padded DID', {is_agent: true, did: ` ${AGENT_DID} `}],
+  ['other DID', {is_agent: true, did: OTHER_DID}],
+  ['null DID', {is_agent: true, did: null}],
+  ['empty DID', {is_agent: true, did: ''}],
+  ['no DID', {is_agent: true}],
+  ['is_agent false', {is_agent: false, did: AGENT_DID}],
+  ['is_agent string', {is_agent: 'true' as never, did: AGENT_DID}],
 ]
 
 const CONFIG_DIDS: [string, string | null | undefined][] = [
@@ -40,7 +34,7 @@ function config(agentDid: string | null | undefined): CommunityAgentConfig {
   return {
     id: 'c1',
     name: 'C',
-    role: 'member',
+    viewerIsAdmin: false,
     agentDid,
     agentSponsor: SPONSOR_DID,
     agentSponsorName: 'Sponsor',

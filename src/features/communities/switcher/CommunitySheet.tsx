@@ -57,6 +57,10 @@ function CommunitySheetInner({
     })
   }
 
+  // Not in the door contract (the door sends no member count); read off the
+  // raw response as before, so it shows only if a runtime ever sends it.
+  const memberCount = (community as {memberCount?: unknown}).memberCount
+
   const onPressOpen = () => {
     control.close(() => {
       navigation.navigate('Community', {id: community.id})
@@ -72,9 +76,9 @@ function CommunitySheetInner({
           <Text emoji style={[a.text_2xl, a.font_semi_bold]} numberOfLines={2}>
             {community.name}
           </Text>
-          {typeof community.memberCount === 'number' ? (
+          {typeof memberCount === 'number' ? (
             <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-              {plural(community.memberCount, {
+              {plural(memberCount, {
                 one: '# member',
                 other: '# members',
               })}

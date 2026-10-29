@@ -1,16 +1,27 @@
 /**
- * Thread-side shapes for the community agent slot. They extend the W1-T8
- * `communitiesClient` types additively: the runtime is expected to add the
- * author DID, the sources list and the sponsor fields. Everything new is
- * optional so an older runtime payload still renders (as a member).
+ * Thread-side shapes for the community agent slot. Posts, authors and sources
+ * are the door contract's (doorContract.ts): an item is `{id, parentId,
+ * authorId, text, createdAt}` plus, while the runtime's agent flag is on,
+ * `is_agent`, `author: {did, is_agent}`, `sources` and `no_source`. Items
+ * carry no role, no sponsor, no display name and no avatar.
  */
+import {type Community} from '#/lib/agent-runtime/communitiesClient'
 import {
-  type Community,
-  type CommunityPost,
-  type CommunityPostAuthor,
-} from '#/lib/agent-runtime/communitiesClient'
+  type DoorItem,
+  type DoorItemAuthor,
+  type DoorItemSource,
+} from '#/lib/communities/doorContract'
 
-export type CommunityAgentConfig = Pick<Community, 'id' | 'name' | 'role'> & {
+/**
+ * What the agent slot needs to know about the community. Assembled by the
+ * caller: `agentDid` is the door's `agent.did`; the sponsor fields come from
+ * the community config, which the door (as of the contract's source commit)
+ * does not send to members, so without them no agent label is shown.
+ */
+export type CommunityAgentConfig = Pick<
+  Community,
+  'id' | 'name' | 'viewerIsAdmin'
+> & {
   /** The config's `agent` DID (N1). */
   agentDid?: string | null
   /** The config's `agentSponsor` DID. No sponsor means no agent label. */
@@ -21,23 +32,12 @@ export type CommunityAgentConfig = Pick<Community, 'id' | 'name' | 'role'> & {
   agentDisclosureUrl?: string | null
 }
 
-export type CommunitySource = {
-  title: string
-  /** e.g. "episode transcript". Free text from the runtime. */
-  kind?: string | null
-  /** ISO date of the cited item. */
-  timestamp?: string | null
-  /** Offset into the item, e.g. "14:32". */
-  position?: string | null
-  /** Public link to the cited item. */
-  url?: string | null
-}
+export type CommunitySource = DoorItemSource
 
-export type CommunityThreadAuthor = CommunityPostAuthor & {
-  did?: string | null
-}
+/**
+ * An item's author. Absent fields (an older item, or the agent flag off)
+ * read as a member.
+ */
+export type CommunityThreadAuthor = Partial<DoorItemAuthor>
 
-export type CommunityThreadPostData = Omit<CommunityPost, 'author'> & {
-  author: CommunityThreadAuthor
-  sources?: CommunitySource[] | null
-}
+export type CommunityThreadPostData = DoorItem

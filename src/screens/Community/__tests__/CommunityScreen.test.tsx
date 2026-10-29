@@ -170,7 +170,9 @@ import {CommunityMembersScreen, CommunityScreen} from '../index'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
+import {doorItem, doorPage} from '#/lib/communities/__fixtures__/door'
 import REAL from '#/lib/communities/__fixtures__/door/dev-runtime-2026-10-30.json'
+import {type DoorItem} from '#/lib/communities/doorContract'
 
 const getCommunity = communitiesClient.getCommunity as jest.Mock<
   typeof communitiesClient.getCommunity
@@ -212,7 +214,20 @@ function communityResponse(extra: Record<string, unknown> = {}) {
       consentVersion: 1,
     },
     ...extra,
-  } as communitiesClient.Community
+    // The community-level fields above (config, memberCount, rules, ...) are
+    // not in the door contract; the descriptor reads them off the raw
+    // response. Open item in the e31e0aa7 report.
+  } as unknown as communitiesClient.Community
+}
+
+/** door.json's member post, re-keyed. Never a hand-made item shape. */
+function item(
+  id: string,
+  text: string,
+  author: DoorItem['author'],
+  extra: Partial<DoorItem> = {},
+): DoorItem {
+  return {...doorItem('post'), id, text, author, ...extra}
 }
 
 function configWith(overrides: Record<string, unknown>) {
@@ -298,35 +313,26 @@ beforeEach(() => {
   })
   getTimeline.mockResolvedValue({
     ok: true,
-    data: {
-      posts: [
-        {
-          id: 'p1',
-          author: {
-            displayName: 'Sam R.',
-            is_agent: false,
-            did: 'did:example:sam',
-          },
-          body: 'What should I listen to first?',
-          createdAt: '2026-10-28T09:29:00.000Z',
-        },
-        {
-          id: 'p2',
-          // R3: the runtime sends the author DID with the is_agent flag.
-          author: {displayName: 'Steve', is_agent: true, did: AGENT_DID},
-          body: 'Episode 12 is a good start.',
-          parentId: 'p1',
-          createdAt: '2026-10-28T09:40:00.000Z',
-        },
-        {
-          // A human whose author object carries a stray agent-like name.
-          id: 'p3',
-          author: {displayName: 'Steve Agent', is_agent: false},
-          body: 'I am not an agent.',
-          createdAt: '2026-10-28T09:41:00.000Z',
-        },
-      ],
-    },
+    data: doorPage([
+      item('p1', 'What should I listen to first?', {
+        did: 'did:example:sam',
+        is_agent: false,
+      }),
+      // R3: the runtime sends the author DID with the is_agent flag.
+      item(
+        'p2',
+        'Episode 12 is a good start.',
+        {did: AGENT_DID, is_agent: true},
+        {parentId: 'p1', authorId: 'community-agent'},
+      ),
+      // A member whose member id is the agent's: still a member.
+      item(
+        'p3',
+        'I am not an agent.',
+        {did: 'did:example:steve', is_agent: false},
+        {authorId: 'community-agent'},
+      ),
+    ]),
   })
 })
 
@@ -392,7 +398,7 @@ describe('Community home - member', () => {
     })
     getTimeline.mockResolvedValue({
       ok: true,
-      data: REAL.timeline as unknown as communitiesClient.CommunityTimelinePage,
+      data: REAL.timeline,
     })
     const r = renderScreen({id: 'ao-dev-test'})
     await r.findAllByText(REAL.timeline.items[1].text, {}, {timeout: 3000})
@@ -435,21 +441,16 @@ describe('Community home - member', () => {
     }
   })
 
-  function timelineOf(posts: Record<string, unknown>[]) {
-    getTimeline.mockResolvedValue({
-      ok: true,
-      data: {posts} as unknown as communitiesClient.CommunityTimelinePage,
-    })
+  function timelineOf(items: DoorItem[]) {
+    getTimeline.mockResolvedValue({ok: true, data: doorPage(items)})
   }
 
   it('gives no label to a spoofed agent name with a different did', async () => {
     timelineOf([
-      {
-        id: 's1',
-        author: {displayName: 'Steve', is_agent: true, did: 'did:example:eve'},
-        body: 'I am Steve, honest.',
-        createdAt: '2026-10-28T09:40:00.000Z',
-      },
+      item('s1', 'I am Steve, honest.', {
+        did: 'did:example:eve',
+        is_agent: true,
+      }),
     ])
     const r = renderScreen()
     await r.findByText('I am Steve, honest.', {}, {timeout: 3000})
@@ -458,19 +459,10 @@ describe('Community home - member', () => {
 
   it('gives no label to an old item whose author did is null', async () => {
     timelineOf([
-      {
-        id: 'o1',
-        author: {displayName: 'Steve', is_agent: false, did: null},
-        body: 'Old agent reply.',
-        createdAt: '2026-10-28T09:40:00.000Z',
-      },
-      {
-        // Even a stray is_agent true does not label an item with no did.
-        id: 'o2',
-        author: {displayName: 'Steve', is_agent: true, did: null},
-        body: 'Old flagged reply.',
-        createdAt: '2026-10-28T09:41:00.000Z',
-      },
+      // door.json's legacy item: written before the author DID was stored.
+      {...doorItem('legacy'), id: 'o1', text: 'Old agent reply.'},
+      // Even a stray is_agent true does not label an item with no did.
+      item('o2', 'Old flagged reply.', {did: null, is_agent: true}),
     ])
     const r = renderScreen()
     await r.findByText('Old agent reply.', {}, {timeout: 3000})
@@ -479,13 +471,9 @@ describe('Community home - member', () => {
   })
 
   it('renders an item with no author as a member row with no label', async () => {
-    timelineOf([
-      {
-        id: 'n1',
-        body: 'No author here.',
-        createdAt: '2026-10-28T09:40:00.000Z',
-      },
-    ])
+    // The door with the agent flag off: no is_agent and no author.
+    const {author: _author, is_agent: _isAgent, ...flagOff} = doorItem('post')
+    timelineOf([{...flagOff, id: 'n1', text: 'No author here.'}])
     const r = renderScreen()
     await r.findByText('No author here.', {}, {timeout: 3000})
     expect(r.getByTestId('communityPost-n1')).toBeTruthy()
@@ -501,12 +489,10 @@ describe('Community home - member', () => {
       }),
     })
     timelineOf([
-      {
-        id: 'a1',
-        author: {displayName: 'Bot', is_agent: true, did: AGENT_DID},
-        body: 'Agent with no config agent.',
-        createdAt: '2026-10-28T09:40:00.000Z',
-      },
+      item('a1', 'Agent with no config agent.', {
+        did: AGENT_DID,
+        is_agent: true,
+      }),
     ])
     const r = renderScreen()
     await r.findByText('Agent with no config agent.', {}, {timeout: 3000})
@@ -697,16 +683,12 @@ describe('Community home - account-scoped cache', () => {
     getTimeline.mockImplementation(() =>
       Promise.resolve({
         ok: true,
-        data: {
-          posts: [
-            {
-              id: `p-${mockViewerDid}`,
-              author: {displayName: 'Someone', is_agent: false},
-              body: `Seen by ${mockViewerDid}`,
-              createdAt: '2026-10-28T09:29:00.000Z',
-            },
-          ],
-        },
+        data: doorPage([
+          item(`p-${mockViewerDid}`, `Seen by ${mockViewerDid}`, {
+            did: null,
+            is_agent: false,
+          }),
+        ]),
       }),
     )
 

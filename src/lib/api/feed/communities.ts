@@ -16,6 +16,7 @@
 import {AppBskyFeedDefs, type BskyAgent} from '@atproto/api'
 
 import * as communitiesClient from '#/lib/agent-runtime/communitiesClient'
+import {isDoorItem} from '#/lib/communities/doorContract'
 import {logger} from '#/logger'
 import {
   fetchGroupMemberships,
@@ -80,17 +81,6 @@ function badgeFor(source: CommunityFeedSource): ReasonCommunity {
   }
 }
 
-function isUsableMembersPost(p: unknown): p is communitiesClient.CommunityPost {
-  if (!p || typeof p !== 'object') return false
-  const post = p as Record<string, unknown>
-  return (
-    typeof post.id === 'string' &&
-    post.id.length > 0 &&
-    typeof post.createdAt === 'string' &&
-    typeof post.body === 'string'
-  )
-}
-
 function publicTierFetcher(agent: BskyAgent, source: CommunityFeedSource) {
   const badge = badgeFor(source)
   return async (cursor: string | undefined, limit: number): Promise<Page> => {
@@ -139,10 +129,11 @@ function membersTierFetcher(source: CommunityFeedSource) {
     }
     const did = await agentDid
     return {
-      feed: res.data.posts
-        .filter(isUsableMembersPost)
+      // The door's page is {items, cursor}; a malformed item is skipped.
+      feed: res.data.items
+        .filter(isDoorItem)
         .map(p => membersPostToFeedViewPost(source.id, p, badge, did)),
-      cursor: res.data.cursor,
+      cursor: res.data.cursor ?? undefined,
     }
   }
 }
