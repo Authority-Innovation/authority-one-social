@@ -15,6 +15,18 @@
  * typed results, NEVER throws. Signed-out, non-2xx, network and malformed
  * responses all come back as a typed `CommunitiesError`.
  */
+import {
+  type DoorAgentGrant,
+  type DoorCommunity,
+  type DoorCommunityAgent,
+  type DoorExport,
+  type DoorItem,
+  type DoorItemSource,
+  type DoorJoinInfo,
+  type DoorRoster,
+  type DoorRosterEntry,
+  type DoorTimelinePage,
+} from '#/lib/communities/doorContract'
 import {logger} from '#/logger'
 import {getAgentRuntimeAccessToken} from './authToken'
 import {AGENT_RUNTIME_BASE_URL} from './config'
@@ -30,31 +42,13 @@ export type CommunitiesResult<T> =
   | {ok: true; data: T}
   | {ok: false; error: CommunitiesError}
 
-/**
- * The agent label on a community (N1): the config's agent DID. Only present
- * while the runtime's community agent flag is on.
- */
-export type CommunityAgent = {
-  did: string
-  is_agent: true
-}
+// The response shapes are the door contract, declared once in doorContract.
+// The client re-exports them under its own names; only `Community` differs,
+// by reading `viewer_is_admin` into `viewerIsAdmin` (see readCommunity).
+export type CommunityAgent = DoorCommunityAgent
 
 /** A community as the door returns it (`publicConfig` in door.js). */
-export type Community = {
-  id: string
-  name: string
-  description: string | null
-  /** Header-only accent (N3: never a whole-app reskin). */
-  accent: string | null
-  /** The consent wording version this community requires to join. */
-  wording_version: number | null
-  /**
-   * Absent while the community agent flag is off; null when on but there is
-   * no valid agent slot.
-   */
-  agent?: CommunityAgent | null
-  /** The runtime's refusal code for a misconfigured agent slot. */
-  agent_error?: string
+export type Community = Omit<DoorCommunity, 'viewer_is_admin'> & {
   /**
    * True only when the runtime says the signed-in caller is a current admin
    * of this community (`viewer_is_admin`). Absent means not an admin.
@@ -62,71 +56,20 @@ export type Community = {
   viewerIsAdmin?: boolean
 }
 
-/** What a non-member is told before joining (GET /:id/join-info). */
-export type CommunityJoinInfo = {
-  wording_version: number | null
-}
+export type CommunityJoinInfo = DoorJoinInfo
 
 export type CommunityJoinResult = {
   community: Community
   joined: boolean
 }
 
-/** A source an agent item cites (`normaliseSources` in agent-slot.js). */
-export type CommunityItemSource = {
-  title: string | null
-  kind: string | null
-  ref: string | null
-  at: string | null
-}
-
-/**
- * One post or reply (`publicItem` in door.js). `is_agent` is runtime-supplied
- * and never inferred from the author; it, `sources` and `no_source` are only
- * present while the community agent flag is on.
- */
-export type CommunityItem = {
-  id: string
-  parentId: string | null
-  authorId: string
-  text: string
-  createdAt: string
-  is_agent?: boolean
-  sources?: CommunityItemSource[]
-  no_source?: boolean
-}
-
-export type CommunityTimelinePage = {
-  items: CommunityItem[]
-  cursor: string | null
-}
-
-export type CommunityExport = {
-  communityId: string
-  items: CommunityItem[]
-}
-
-/**
- * One thread-roster entry (`memberRosterEntry` / `agentRosterEntry` in the
- * runtime's agent-slot.js). A member is `{id: memberId, did: null, is_agent:
- * false}`, where the member id is the account handle; the agent is `{id:
- * 'community-agent', did: <config agent DID>, is_agent: true}`.
- */
-export type CommunityRosterEntry = {
-  id: string
-  did: string | null
-  is_agent: boolean
-}
-
-export type CommunityThreadRoster = {
-  postId: string
-  roster: CommunityRosterEntry[]
-}
-
-export type AgentGrantState = {
-  communityId: string
-  on: boolean
-}
+export type CommunityItemSource = DoorItemSource
+export type CommunityItem = DoorItem
+export type CommunityTimelinePage = DoorTimelinePage
+export type CommunityExport = DoorExport
+export type CommunityRosterEntry = DoorRosterEntry
+export type CommunityThreadRoster = DoorRoster
+export type AgentGrantState = DoorAgentGrant
 
 const COMMUNITIES_PATH = '/app/communities'
 

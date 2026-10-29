@@ -10,7 +10,7 @@
  */
 import {type AppBskyFeedDefs} from '@atproto/api'
 
-import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
+import {type DoorItem} from '#/lib/communities/doorContract'
 import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 
 export const MEMBERS_POST_URI_SCHEME = 'ao-community://'
@@ -78,15 +78,16 @@ export function parseMembersPostUri(
 }
 
 /**
- * Maps one members-tier post to a FeedViewPost-shaped view. Reads only the
- * runtime's CommunityPost fields; nothing in the result points at a PDS.
+ * Maps one members-tier door item to a FeedViewPost-shaped view. Reads only
+ * the door's item fields (`id`, `text`, `createdAt`, `authorId`, `author`);
+ * nothing in the result points at a PDS.
  *
  * `agentDid` is the community config's agent DID. Without it no post is
  * marked as the agent, whatever `is_agent` says.
  */
 export function membersPostToFeedViewPost(
   communityId: string,
-  post: CommunityPost,
+  post: DoorItem,
   badge: ReasonCommunity,
   agentDid?: string | null,
 ): AppBskyFeedDefs.FeedViewPost {
@@ -100,16 +101,17 @@ export function membersPostToFeedViewPost(
       // Not a content hash. Present only because PostView requires a cid.
       cid: uri,
       author: {
-        // Not a DID. The runtime does not expose member identities here.
+        // Not a DID. The door's author DID is only used for the agent rule
+        // above; nothing here may point a renderer at a PDS profile.
         did: `${uri}#author`,
         handle: '',
-        displayName: post.author?.displayName ?? '',
-        avatar: post.author?.avatar ?? undefined,
+        // The door sends no display name or avatar, only the member id.
+        displayName: typeof post.authorId === 'string' ? post.authorId : '',
         labels: [],
       },
       record: {
         $type: 'app.bsky.feed.post',
-        text: typeof post.body === 'string' ? post.body : '',
+        text: typeof post.text === 'string' ? post.text : '',
         createdAt,
       },
       indexedAt: createdAt,

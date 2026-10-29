@@ -170,7 +170,7 @@ import {CommunityMembersScreen, CommunityScreen} from '../index'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
-import REAL from './fixtures/dev-runtime-2026-10-30.json'
+import REAL from '#/lib/communities/__fixtures__/door/dev-runtime-2026-10-30.json'
 
 const getCommunity = communitiesClient.getCommunity as jest.Mock<
   typeof communitiesClient.getCommunity
