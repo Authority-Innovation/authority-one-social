@@ -83,7 +83,14 @@ jest.mock('#/env', () => ({
 }))
 
 import {setAgentGrant} from '#/lib/agent-runtime/communitiesClient'
-import {doorItem} from '#/lib/communities/__fixtures__/door'
+import {
+  asClientCommunity,
+  DOOR_AGENT_DID,
+  DOOR_SPONSOR_DID,
+  doorCommunity,
+  doorCommunityWithSponsorMember,
+  doorItem,
+} from '#/lib/communities/__fixtures__/door'
 import {logger} from '#/logger'
 import {AgentGrantRow} from '../AgentGrantRow'
 import {CommunityThreadPost} from '../CommunityThreadPost'
@@ -114,30 +121,27 @@ function render(ui: React.ReactElement) {
 
 const mockSetAgentGrant = setAgentGrant as jest.Mock<typeof setAgentGrant>
 
-const AGENT_DID = 'did:plc:agentsample000000000000'
-const SPONSOR_DID = 'did:plc:sponsorsample00000000000'
-const HUMAN_DID = 'did:plc:humansample0000000000000'
+const HUMAN_DID = doorItem('post').author!.did!
+const DISCLOSURE_URL = 'https://example.com/garden/agent'
 
-const community: CommunityAgentConfig = {
-  id: 'btb-listeners',
-  name: 'Between Two Beers Listeners',
-  viewerIsAdmin: false,
-  agentDid: AGENT_DID,
-  agentSponsor: SPONSOR_DID,
-  agentSponsorName: 'Between Two Beers',
-  agentDisclosureUrl: 'https://example.com/btb/agent',
+/**
+ * door.json's community after its sponsor joined, as a member sees it:
+ * `agent.did` and `agentSponsor: {did, handle: 'carol-sponsor'}`.
+ */
+const community: CommunityAgentConfig = asClientCommunity(
+  doorCommunityWithSponsorMember(),
+)
+const SPONSOR_HANDLE = community.agentSponsor!.handle!
+
+/** The same community without the sponsor view (a runtime before bfd5a63c). */
+function withoutSponsor(c: CommunityAgentConfig): CommunityAgentConfig {
+  const {agentSponsor: _sponsor, ...rest} = c
+  return rest
 }
 
-/** door.json's agent item, pointed at this test's agent DID. */
+/** door.json's agent item; by default with no sources, as the door sends them. */
 function agentReply(overrides: Partial<Post> = {}): Post {
-  return {
-    ...doorItem('agent'),
-    author: {did: AGENT_DID, is_agent: true},
-    text: 'Welcome, Sam. A good first listen is Episode 12 (sample).',
-    sources: [],
-    no_source: true,
-    ...overrides,
-  }
+  return {...doorItem('agent'), sources: [], no_source: true, ...overrides}
 }
 
 beforeEach(() => {
@@ -153,8 +157,9 @@ describe('community agent label rule (N1)', () => {
     expect(r.getByTestId('communityPostAgent')).toBeTruthy()
     expect(r.getByTestId('communityAgentPill')).toBeTruthy()
     expect(r.getByText('◆ Agent')).toBeTruthy()
+    expect(community.agent?.did).toBe(DOOR_AGENT_DID)
     expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
-      'AI agent · run by Between Two Beers',
+      `AI agent · run by @${SPONSOR_HANDLE}`,
     )
     expect(r.getByTestId('avatarShape-square')).toBeTruthy()
     expect(r.queryByTestId('avatarShape-circle')).toBeNull()
@@ -190,16 +195,12 @@ describe('community agent label rule (N1)', () => {
 
   it('the config agent DID without is_agent renders as a human', () => {
     expect(
-      resolveAuthorLabel({is_agent: false, did: AGENT_DID}, community),
+      resolveAuthorLabel({is_agent: false, did: DOOR_AGENT_DID}, community),
     ).toEqual({kind: 'member'})
   })
 
   it('agent with no sponsor renders as a human with an operator warning', () => {
-    const noSponsor = {
-      ...community,
-      viewerIsAdmin: true,
-      agentSponsor: null,
-    }
+    const noSponsor = {...withoutSponsor(community), viewerIsAdmin: true}
     const r = render(
       <CommunityThreadPost post={agentReply()} community={noSponsor} />,
     )
@@ -213,11 +214,13 @@ describe('community agent label rule (N1)', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1)
   })
 
-  it('sponsor with no resolved name shows the agent label and never the community name', () => {
-    const unnamed = {...community, agentSponsorName: null}
+  it('sponsor with no handle (door answers null) shows the agent label, never the community name or DID', () => {
+    // door.json's community before the sponsor joined: handle null.
+    const unnamed = asClientCommunity(doorCommunity())
+    expect(unnamed.agentSponsor).toEqual({did: DOOR_SPONSOR_DID, handle: null})
     expect(resolveAuthorLabel(agentReply().author, unnamed)).toEqual({
       kind: 'agent',
-      sponsorName: '',
+      sponsorHandle: '',
     })
     const r = render(
       <CommunityThreadPost post={agentReply()} community={unnamed} />,
@@ -230,6 +233,7 @@ describe('community agent label rule (N1)', () => {
     fireEvent.press(r.getByTestId('communityAgentWhy'))
     const text = JSON.stringify(r.toJSON())
     expect(text).not.toContain(community.name)
+    expect(text).not.toContain(DOOR_SPONSOR_DID)
     expect(text).not.toContain('run by')
   })
 
@@ -237,7 +241,7 @@ describe('community agent label rule (N1)', () => {
     const r = render(
       <CommunityThreadPost
         post={agentReply()}
-        community={{...community, agentSponsor: ''}}
+        community={withoutSponsor(community)}
       />,
     )
     expect(r.getByTestId('communityPostMember')).toBeTruthy()
@@ -247,32 +251,38 @@ describe('community agent label rule (N1)', () => {
 
 describe('community agent sources', () => {
   it('reply with sources lists each item', () => {
+    // door.json's agent item as the door sent it, plus a second source with
+    // no date (`at: null`).
+    const real = doorItem('agent')
+    const [cited] = real.sources!
     const r = render(
       <CommunityThreadPost
-        post={agentReply({
+        post={{
+          ...real,
           sources: [
+            cited,
             {
-              title: 'Between Two Beers, Episode 12 (sample)',
-              kind: 'episode transcript',
-              ref: 'https://example.com/btb/ep12',
-              at: '2026-03-01T00:00:00.000Z',
-            },
-            {
-              title: 'Between Two Beers, Episode 7 (sample)',
+              title: 'Garden notes, winter (sample)',
               kind: 'show notes',
-              ref: 'https://example.com/btb/ep7',
+              ref: 'https://example.test/notes/2',
               at: null,
             },
           ],
-        })}
+        }}
         community={community}
       />,
     )
     expect(r.getByTestId('communityAgentSources')).toBeTruthy()
     expect(r.getAllByTestId('communityAgentSource')).toHaveLength(2)
-    expect(r.getByText('Between Two Beers, Episode 12 (sample)')).toBeTruthy()
-    expect(r.getByText('Between Two Beers, Episode 7 (sample)')).toBeTruthy()
-    expect(r.getByText(/^episode transcript · /)).toBeTruthy()
+    expect(r.getByText(cited.title!)).toBeTruthy()
+    expect(r.getByText('Garden notes, winter (sample)')).toBeTruthy()
+    // kind, then the cited item's own date (`at`), in that order.
+    expect(
+      r.getByText(
+        `${cited.kind} · ${i18n.date(new Date(cited.at!), {dateStyle: 'medium'})}`,
+      ),
+    ).toBeTruthy()
+    expect(r.getByText('show notes')).toBeTruthy()
     expect(r.getByText('Sources')).toBeTruthy()
     expect(r.queryByTestId('communityAgentNoSource')).toBeNull()
   })
@@ -287,7 +297,11 @@ describe('community agent sources', () => {
 
   it('"Why am I seeing an agent?" opens the disclosure with its link', () => {
     const r = render(
-      <CommunityThreadPost post={agentReply()} community={community} />,
+      <CommunityThreadPost
+        post={agentReply()}
+        community={community}
+        agentDisclosureUrl={DISCLOSURE_URL}
+      />,
     )
     expect(r.queryByTestId('communityAgentWhyBody')).toBeNull()
     fireEvent.press(r.getByTestId('communityAgentWhy'))

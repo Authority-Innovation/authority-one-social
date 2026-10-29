@@ -11,8 +11,9 @@
  * (__fixtures__/door/door.json, source commit noted in its `$source`).
  *
  * What the door does NOT send, and so is not here: no `role` (on items or on
- * a community), no `agentSponsor`, no `body`, no `displayName`/`avatar` on an
- * author, no `posts` key on a timeline page.
+ * a community), no `agentSponsor` on an item, no sponsor display name, no
+ * `body`, no `displayName`/`avatar` on an author, no `posts` key on a
+ * timeline page.
  *
  * Flag-dependent fields are optional: `is_agent`, `author`, `sources` and
  * `no_source` are present only while the runtime's community agent flag is
@@ -30,6 +31,17 @@ export type DoorCommunityAgent = {
   is_agent: boolean
 }
 
+/**
+ * The agent's sponsor as a member sees it (`sponsorView`, runtime bfd5a63c):
+ * the config's stored `agentSponsor` DID, and the member id (account handle)
+ * of the sponsor's current membership of this community. `handle` is null
+ * when the sponsor holds no current membership; it is never the DID.
+ */
+export type DoorAgentSponsor = {
+  did: string
+  handle: string | null
+}
+
 /** A community as the door returns it (`publicConfig`). */
 export type DoorCommunity = {
   id: string
@@ -43,6 +55,12 @@ export type DoorCommunity = {
   agent?: DoorCommunityAgent | null
   /** The runtime's refusal code for a misconfigured agent slot. */
   agent_error?: string
+  /**
+   * Member responses only (list, GET /:id, join), with the agent flag on and
+   * a valid slot. Absent otherwise, and absent from runtimes before bfd5a63c
+   * (the Dev capture of 2026-10-30 has none).
+   */
+  agentSponsor?: DoorAgentSponsor
   /** The caller is a current admin. Absent while the admin role is off. */
   viewer_is_admin?: boolean
 }

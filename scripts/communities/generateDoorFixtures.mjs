@@ -12,8 +12,10 @@
 import {pathToFileURL} from 'node:url'
 import path from 'node:path'
 
-const SOURCE_COMMIT = '7f436b820e5e1b4d4bfc89a8dabb3e27e79bbaf0'
-const SOURCE_REF = 'origin/deploy/dev-communities'
+// The member agentSponsor view (bfd5a63c, door.js 348cd54d) on top of
+// deploy/dev-communities 7f436b82.
+const SOURCE_COMMIT = 'eabfbcdd5f091a1b15b8bf04beb6810b31cbac0b'
+const SOURCE_REF = 'origin/coord/member-community-response-carrie-bfd5a63c'
 
 // Item ids end in random bytes; fix them so the output is stable.
 let byte = 0
@@ -35,6 +37,7 @@ const AGENT_DID = 'did:plc:gardenagentfixture'
 const SPONSOR_DID = 'did:plc:gardensponsorfixture'
 const ALICE = 'alice-agent'
 const BOB = 'bob-agent'
+const CAROL = 'carol-sponsor'
 
 // Every flag the app reads on: the agent slot, the grant and the admin role.
 const CFG = {
@@ -201,4 +204,14 @@ const out = {
   roster: await call('GET', `${base}/posts/${post.item.id}/roster`),
   grant: await call('GET', `${base}/agent-grant`),
 }
+// The sponsor joins: their current membership record's memberId becomes
+// agentSponsor.handle (above, with no sponsor member, it is null).
+seed(K.member(C, CAROL), {
+  tenantId: TENANT,
+  communityId: C,
+  memberId: CAROL,
+  did: SPONSOR_DID,
+  consentVersion: 3,
+})
+out.communityWithSponsorMember = await call('GET', base, {as: BOB})
 process.stdout.write(JSON.stringify(out, null, 2) + '\n')
