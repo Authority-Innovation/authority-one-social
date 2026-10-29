@@ -30,10 +30,10 @@ describe('isCommunityAgentAuthor', () => {
     ).toBe(false)
   })
 
-  it('is a member for a spoofed name with a different did', () => {
+  it('is a member for an is_agent author with a different did', () => {
     expect(
       isCommunityAgentAuthor(
-        {displayName: 'Steve', is_agent: true, did: 'did:example:eve'},
+        {is_agent: true, did: 'did:example:eve'},
         AGENT_DID,
       ),
     ).toBe(false)

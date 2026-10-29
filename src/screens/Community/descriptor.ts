@@ -14,15 +14,16 @@ import {communityConfigAgentDid} from '#/features/communities/agentLabel'
 
 export type CommunityTier = 'public' | 'members' | 'paid'
 
+/**
+ * The community agent card's data, from the door's member response only:
+ * `agent.did` and the `agentSponsor` view `{did, handle}`. The door sends no
+ * agent name, sponsor display name or scope.
+ */
 export type CommunityAgent = {
   did: string
   sponsorDid: string
-  /** Display name, e.g. "Steve". Never derived from a handle. */
-  name?: string
-  /** Who runs the agent, e.g. "Between Two Beers". */
-  sponsorName?: string
-  /** What the agent can see, as the community describes it. */
-  scope?: string
+  /** The sponsor's member id (account handle); absent when the door says null. */
+  sponsorHandle?: string
 }
 
 export type CommunityDescriptor = {
@@ -34,7 +35,7 @@ export type CommunityDescriptor = {
   tier: CommunityTier
   /** Header-only accent (N3). A validated CSS hex colour, or undefined. */
   accent?: string
-  /** Set only when the config has both `agent` and `agentSponsor` (N1). */
+  /** Set only when the door sends both `agent` and `agentSponsor` (N1). */
   agent?: CommunityAgent
   /**
    * The config's agent DID, with or without a sponsor. The posts list matches
@@ -91,20 +92,15 @@ export function toDescriptor(
   const moderation = obj(config?.moderation)
 
   const agentDid = communityConfigAgentDid(raw)
-  const sponsorDid = str(config?.agentSponsor) ?? str(raw.agentSponsor)
-  // Only the resolved sponsor name. Never the community's own brand name: an
-  // unnamed sponsor is shown as absent, not as the community.
-  const sponsorName = str(raw.agentSponsorName)
+  // The door's sponsor view (member responses, runtime bfd5a63c on). Only the
+  // sponsor's own handle is shown; never the DID and never the community's
+  // brand name, so a sponsor with no handle is shown as absent.
+  const sponsorDid = str(community.agentSponsor?.did)
+  const sponsorHandle = str(community.agentSponsor?.handle)
 
   const agent: CommunityAgent | undefined =
     agentDid && sponsorDid
-      ? {
-          did: agentDid,
-          sponsorDid,
-          name: str(raw.agentName),
-          sponsorName,
-          scope: str(raw.agentScope),
-        }
+      ? {did: agentDid, sponsorDid, sponsorHandle}
       : undefined
 
   const consentVersion =

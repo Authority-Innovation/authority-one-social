@@ -1,16 +1,18 @@
 /**
  * Join and consent for a community (`/c/:id/join`), mockup (d).
  *
- * Shown before any membership exists. The person sees what joining shares,
- * who runs the community agent, and the community rules, then ticks the
- * consent box. Only "Agree and join" calls `join`, and only once the box is
+ * Shown before any membership exists. A non-member reaches only the door's
+ * join-info route (`getJoinInfo`: `{wording_version}`, the same body for every
+ * id), so the screen knows the community id and the wording version and
+ * nothing else: no name, agent or rules until the join answers. The person
+ * sees what joining shares, then ticks the consent box. Only "Agree and join" calls `join`, and only once the box is
  * ticked. Opening this screen from an invite link (`?invite=...`) changes
  * nothing: an invite never counts as consent.
  *
  * The agent toggle is a separate grant, off by default, for this community
  * only. It is sent after the join succeeds and only when turned on.
  *
- * Join is offered only when the config names a consent version this build has
+ * Join is offered only when join-info names a wording version this build has
  * copy for (see `./consent.ts`). A missing version shows the load-error state;
  * an unknown one asks for a newer app. Neither shows the consent box.
  *
@@ -23,7 +25,10 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 import {useQuery} from '@tanstack/react-query'
 
-import {getCommunity} from '#/lib/agent-runtime/communitiesClient'
+import {
+  type CommunityJoinInfo,
+  getJoinInfo,
+} from '#/lib/agent-runtime/communitiesClient'
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
@@ -39,22 +44,21 @@ import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Che
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {TimesLarge_Stroke2_Corner0_Rounded as TimesIcon} from '#/components/icons/Times'
 import * as Layout from '#/components/Layout'
-import {InlineLinkText} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
-import {agreeAndJoin, consentGateFor, type JoinConsentConfig} from './consent'
+import {agreeAndJoin, consentGateFor} from './consent'
 import {useCommunitiesDisabledFallback} from './useCommunitiesDisabledFallback'
 
-const communityJoinConfigQueryKeyRoot = 'communityJoinConfig'
-const createCommunityJoinConfigQueryKey = (args: {id: string}) =>
-  createQueryKey(communityJoinConfigQueryKeyRoot, args)
+const communityJoinInfoQueryKeyRoot = 'communityJoinInfo'
+const createCommunityJoinInfoQueryKey = (args: {id: string}) =>
+  createQueryKey(communityJoinInfoQueryKeyRoot, args)
 
-function useCommunityJoinConfigQuery({id}: {id: string}) {
+function useCommunityJoinInfoQuery({id}: {id: string}) {
   return useQuery({
-    queryKey: createCommunityJoinConfigQueryKey({id}),
-    queryFn: async (): Promise<JoinConsentConfig> => {
-      const res = await getCommunity(id)
+    queryKey: createCommunityJoinInfoQueryKey({id}),
+    queryFn: async (): Promise<CommunityJoinInfo> => {
+      const res = await getJoinInfo(id)
       if (!res.ok) throw new Error(res.error.kind)
       return res.data
     },
@@ -80,11 +84,11 @@ function JoinConsent({id}: {id: string}) {
   const t = useTheme()
   const navigation = useNavigation<NavigationProp>()
   const {
-    data: config,
+    data: joinInfo,
     isLoading,
     isError,
     refetch,
-  } = useCommunityJoinConfigQuery({id})
+  } = useCommunityJoinInfoQuery({id})
   const {data: ownerAgents} = useOwnerAgentsQuery()
   const myAgent = ownerAgents?.agents[0]
   const myAgentName = myAgent?.displayName || myAgent?.handle
@@ -93,9 +97,12 @@ function JoinConsent({id}: {id: string}) {
   const [agentGrant, setAgentGrant] = useState(false)
   const [pending, setPending] = useState(false)
   const [joinFailed, setJoinFailed] = useState(false)
-  const [joined, setJoined] = useState<{agentGrantFailed: boolean} | null>(null)
+  const [joined, setJoined] = useState<{
+    name: string
+    agentGrantFailed: boolean
+  } | null>(null)
 
-  const gate = consentGateFor(config)
+  const gate = consentGateFor(joinInfo)
 
   const onAgreeAndJoin = async () => {
     if (!consented || pending || gate.kind !== 'ok') return
@@ -110,7 +117,11 @@ function JoinConsent({id}: {id: string}) {
     })
     setPending(false)
     if (outcome.ok) {
-      setJoined({agentGrantFailed: outcome.agentGrantFailed})
+      // The join answers with the community, the first time its name is known.
+      setJoined({
+        name: outcome.membership.community.name,
+        agentGrantFailed: outcome.agentGrantFailed,
+      })
     } else {
       setJoinFailed(true)
     }
@@ -144,7 +155,7 @@ function JoinConsent({id}: {id: string}) {
           <View style={[a.align_center, a.p_2xl]}>
             <Loader size="xl" />
           </View>
-        ) : isError || !config || gate.kind === 'missing' ? (
+        ) : isError || !joinInfo || gate.kind === 'missing' ? (
           <View
             testID="communityJoinLoadError"
             style={[a.gap_md, a.p_xl, a.align_center]}>
@@ -183,14 +194,14 @@ function JoinConsent({id}: {id: string}) {
           </View>
         ) : joined ? (
           <JoinedState
-            name={config.name}
+            name={joined.name}
             agentName={myAgentName}
             agentGrantFailed={joined.agentGrantFailed}
             onGoToCommunity={onGoToCommunity}
           />
         ) : (
           <View style={[a.gap_xl, a.p_lg]}>
-            <CommunityCard config={config} />
+            <CommunityCard id={id} />
 
             <View style={[a.gap_sm]}>
               <Text style={[a.text_md, a.font_semi_bold, t.atoms.text]}>
@@ -220,8 +231,6 @@ function JoinConsent({id}: {id: string}) {
                 detail={l`Your membership is not written to the open network.`}
               />
             </View>
-
-            {config.agentDid ? <CommunityAgentBlock config={config} /> : null}
 
             {myAgentName ? (
               <View style={[a.gap_sm]}>
@@ -261,7 +270,7 @@ function JoinConsent({id}: {id: string}) {
               </View>
             ) : null}
 
-            <RulesAndLinks config={config} />
+            <RulesAndLinks />
 
             <View style={[a.gap_md]}>
               <Toggle.Item
@@ -328,10 +337,10 @@ function SectionTitleText({children}: {children: React.ReactNode}) {
   )
 }
 
-function CommunityCard({config}: {config: JoinConsentConfig}) {
+// Before joining, the id from the link is all the door tells a non-member;
+// every community behind the door is members-only.
+function CommunityCard({id}: {id: string}) {
   const t = useTheme()
-  const sponsor = config.sponsorName
-  const membersOnly = config.membersOnly !== false
   return (
     <View
       style={[
@@ -343,22 +352,12 @@ function CommunityCard({config}: {config: JoinConsentConfig}) {
         t.atoms.bg_contrast_25,
       ]}>
       <Text emoji style={[a.text_lg, a.font_bold, t.atoms.text]}>
-        {config.name}
+        {id}
       </Text>
       <View style={[a.flex_row, a.align_center, a.gap_xs]}>
-        {membersOnly ? (
-          <LockIcon size="xs" style={[t.atoms.text_contrast_medium]} />
-        ) : null}
-        <Text emoji style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          {sponsor ? (
-            membersOnly ? (
-              <Trans>Run by {sponsor} · Members only</Trans>
-            ) : (
-              <Trans>Run by {sponsor}</Trans>
-            )
-          ) : membersOnly ? (
-            <Trans>Members only</Trans>
-          ) : null}
+        <LockIcon size="xs" style={[t.atoms.text_contrast_medium]} />
+        <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
+          <Trans>Members only</Trans>
         </Text>
       </View>
     </View>
@@ -394,88 +393,13 @@ function ShareRow({
   )
 }
 
-function CommunityAgentBlock({config}: {config: JoinConsentConfig}) {
-  const {t: l} = useLingui()
+function RulesAndLinks() {
   const t = useTheme()
-  const sponsor = config.sponsorName
-  const agentName = config.agentName || l`The community agent`
-  return (
-    <View style={[a.gap_sm]}>
-      <SectionTitleText>
-        <Trans>The community agent</Trans>
-      </SectionTitleText>
-      <View
-        style={[
-          a.gap_xs,
-          a.p_md,
-          a.rounded_md,
-          a.border,
-          t.atoms.border_contrast_low,
-        ]}>
-        <View style={[a.flex_row, a.align_center, a.gap_xs]}>
-          <Text emoji style={[a.text_md, a.font_semi_bold, t.atoms.text]}>
-            <Trans>{agentName} is here</Trans>
-          </Text>
-          <Text
-            style={[a.text_xs, a.font_semi_bold, t.atoms.text_contrast_medium]}>
-            <Trans context="agent label">◆ Agent</Trans>
-          </Text>
-        </View>
-        <Text emoji style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          {sponsor ? (
-            <Trans>
-              {agentName} is an AI agent run by {sponsor}. It answers questions
-              in threads, always labelled as an agent, and cites the source it
-              used. For the community’s numbers it sees totals only, never your
-              profile.
-            </Trans>
-          ) : (
-            <Trans>
-              {agentName} is an AI agent. It answers questions in threads,
-              always labelled as an agent, and cites the source it used. For the
-              community’s numbers it sees totals only, never your profile.
-            </Trans>
-          )}
-        </Text>
-      </View>
-    </View>
-  )
-}
-
-function RulesAndLinks({config}: {config: JoinConsentConfig}) {
-  const {t: l} = useLingui()
-  const t = useTheme()
-  const sponsor = config.sponsorName
-  const termsUrl = config.termsUrl || config.privacyUrl
   return (
     <View style={[a.gap_sm]}>
       <SectionTitleText>
         <Trans>Rules and links</Trans>
       </SectionTitleText>
-      <View style={[a.gap_2xs]}>
-        <Text style={[a.text_sm, a.font_medium, t.atoms.text]}>
-          <Trans>Community rules</Trans>
-        </Text>
-        {config.rulesText ? (
-          <Text emoji style={[a.text_sm, t.atoms.text_contrast_medium]}>
-            {config.rulesText}
-          </Text>
-        ) : null}
-      </View>
-      {termsUrl ? (
-        <InlineLinkText
-          to={termsUrl}
-          label={
-            sponsor ? l`${sponsor} terms and privacy` : l`Terms and privacy`
-          }
-          style={[a.text_sm]}>
-          {sponsor ? (
-            <Trans>{sponsor} terms and privacy</Trans>
-          ) : (
-            <Trans>Terms and privacy</Trans>
-          )}
-        </InlineLinkText>
-      ) : null}
       <View style={[a.gap_2xs]}>
         <Text style={[a.text_sm, a.font_medium, t.atoms.text]}>
           <Trans>Leaving</Trans>

@@ -23,10 +23,13 @@ jest.mock('@react-navigation/native', () => ({
 
 const mockJoin = jest.fn<(...args: unknown[]) => Promise<unknown>>()
 const mockSetAgentGrant = jest.fn<(...args: unknown[]) => Promise<unknown>>()
+const mockGetJoinInfo = jest.fn<(...args: unknown[]) => Promise<unknown>>()
 const mockGetCommunity = jest.fn<(...args: unknown[]) => Promise<unknown>>()
 jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   join: (...args: unknown[]) => mockJoin(...args),
   setAgentGrant: (...args: unknown[]) => mockSetAgentGrant(...args),
+  getJoinInfo: (...args: unknown[]) => mockGetJoinInfo(...args),
+  // The door answers GET /:id not_found to a non-member: never called here.
   getCommunity: (...args: unknown[]) => mockGetCommunity(...args),
 }))
 
@@ -159,6 +162,12 @@ jest.mock('#/components/icons/Lock', () => ({
   Lock_Stroke2_Corner0_Rounded: () => null,
 }))
 
+import {
+  asClientCommunity,
+  DEV_RUNTIME,
+  DOOR,
+  doorCommunity,
+} from '#/lib/communities/__fixtures__/door'
 import {applyCommunitiesFlag} from '#/screens/Community/linking'
 import {router} from '#/routes'
 import {agreeAndJoin, consentGateFor, consentVersionFor} from '../consent'
@@ -169,17 +178,11 @@ const AGENT_TOGGLE = 'toggle-community_agent_grant'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
-const CONFIG = {
-  id: 'btb',
-  name: 'Between Two Beers Listeners',
-  sponsorName: 'Between Two Beers',
-  agentName: 'Steve',
-  agentDid: 'did:example:agent',
-  // The only version this build has copy for.
-  consentVersion: '1',
-  rulesText: 'Be kind. No spoilers before release day.',
-  termsUrl: 'https://example.com/terms',
-}
+// The Dev runtime's real join-info: wording version 1, the only version this
+// build has copy for.
+const JOIN_INFO = DEV_RUNTIME.joininfo
+// door.json's community, as the join answers it (`{community, joined}`).
+const JOINED = {community: asClientCommunity(doorCommunity()), joined: true}
 
 function renderScreen(params: {id: string; invite?: string} = {id: 'btb'}) {
   const queryClient = new QueryClient({
@@ -213,22 +216,30 @@ beforeEach(() => {
   mockGoBack.mockReset()
   mockJoin.mockReset()
   mockSetAgentGrant.mockReset()
+  mockGetJoinInfo.mockReset()
   mockGetCommunity.mockReset()
-  mockGetCommunity.mockResolvedValue({ok: true, data: CONFIG})
-  mockJoin.mockResolvedValue({
+  mockGetJoinInfo.mockResolvedValue({ok: true, data: JOIN_INFO})
+  mockJoin.mockResolvedValue({ok: true, data: JOINED})
+  mockSetAgentGrant.mockResolvedValue({
     ok: true,
-    data: {communityId: 'btb', role: 'member', consentVersion: '1'},
+    data: {communityId: 'btb', on: true},
   })
-  mockSetAgentGrant.mockResolvedValue({ok: true, data: {agentGrant: true}})
 })
 
 describe('CommunityJoinScreen', () => {
-  it('shows the mockup (d) copy, with the agent and sponsor before joining', async () => {
+  it('reads only join-info, never the member-only community route', async () => {
+    const r = renderScreen()
+    await r.findByTestId('communityJoinAgreeButton')
+    expect(mockGetJoinInfo).toHaveBeenCalledWith('btb')
+    expect(mockGetCommunity).not.toHaveBeenCalled()
+  })
+
+  it('shows the mockup (d) copy from what join-info gives: the id and the wording version', async () => {
     const r = renderScreen()
     await r.findByText('Join community')
     r.getByTestId('communityJoinScreen')
-    await r.findByText('Between Two Beers Listeners')
-    r.getByText('Run by Between Two Beers · Members only')
+    await r.findByText('btb')
+    r.getByText('Members only')
     r.getByText(
       'Before you join: here is what membership shares, and with whom.',
     )
@@ -236,11 +247,10 @@ describe('CommunityJoinScreen', () => {
     r.getByText('Posts and replies you make here')
     r.getByText('Your posts in other communities')
     r.getByText('A public record that you joined')
-    r.getByText('Steve is here')
-    r.getByText(/Steve is an AI agent run by Between Two Beers/)
     r.getByText('Let Bob read this community for me')
-    r.getByText('Be kind. No spoilers before release day.')
-    r.getByText('Between Two Beers terms and privacy')
+    // join-info names no agent, sponsor or rules, so none is shown.
+    expect(r.queryByText('The community agent')).toBeNull()
+    expect(r.queryByText(/terms and privacy/i)).toBeNull()
     r.getByText(
       'I’ve read what joining shares and I agree to the community rules.',
     )
@@ -275,23 +285,21 @@ describe('CommunityJoinScreen', () => {
     expect(mockJoin).toHaveBeenCalledTimes(1)
   })
 
-  it('joins with the consent version from the community config', async () => {
+  it('joins with the wording version from join-info', async () => {
     const r = renderScreen()
     fireEvent.press(await r.findByTestId(CONSENT_BOX))
     fireEvent.press(r.getByTestId('communityJoinAgreeButton'))
     await waitFor(() => expect(mockJoin).toHaveBeenCalled())
     expect(mockJoin).toHaveBeenCalledWith('btb', 1)
     await r.findByText('You’re in.')
-    r.getByText('Welcome to Between Two Beers Listeners.')
+    // The join's own answer names the community.
+    r.getByText(`Welcome to ${JOINED.community.name}.`)
     fireEvent.press(r.getByTestId('communityJoinGoButton'))
     expect(mockNavigate).toHaveBeenCalledWith('Community', {id: 'btb'})
   })
 
   it('fails closed on a consent version this build has no copy for', async () => {
-    mockGetCommunity.mockResolvedValue({
-      ok: true,
-      data: {...CONFIG, consentVersion: '3'},
-    })
+    mockGetJoinInfo.mockResolvedValue({ok: true, data: {wording_version: 3}})
     const r = renderScreen()
     await r.findByText('This community needs a newer version of the app.')
     expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
@@ -305,24 +313,18 @@ describe('CommunityJoinScreen', () => {
   })
 
   it.each([
-    ['null', null],
-    ['blank', '  '],
-    ['undefined', undefined],
-  ])(
-    'does not offer join when the config consent version is %s',
-    async (_label, consentVersion) => {
-      mockGetCommunity.mockResolvedValue({
-        ok: true,
-        data: {...CONFIG, consentVersion},
-      })
-      const r = renderScreen()
-      await r.findByText('We couldn’t load this community. Please try again.')
-      r.getByTestId('communityJoinLoadError')
-      expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
-      expect(r.queryByTestId('communityJoinAgreeButton')).toBeNull()
-      expect(mockJoin).not.toHaveBeenCalled()
-    },
-  )
+    // door.json's join-info: the platform names no wording version.
+    ['null (door.json)', {ok: true, data: DOOR.joinInfo}],
+    ['a failed join-info read', {ok: false, error: {kind: 'network'}}],
+  ])('does not offer join for %s', async (_label, result) => {
+    mockGetJoinInfo.mockResolvedValue(result)
+    const r = renderScreen()
+    await r.findByText('We couldn’t load this community. Please try again.')
+    r.getByTestId('communityJoinLoadError')
+    expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
+    expect(r.queryByTestId('communityJoinAgreeButton')).toBeNull()
+    expect(mockJoin).not.toHaveBeenCalled()
+  })
 
   it('does not set the agent grant when the toggle is left off', async () => {
     const r = renderScreen()
@@ -371,7 +373,7 @@ describe('CommunityJoinScreen', () => {
     const r = renderScreen({id: 'btb', invite: 'abc123'})
     const button = await r.findByTestId('communityJoinAgreeButton')
     expect(isDisabled(button)).toBe(true)
-    await waitFor(() => expect(mockGetCommunity).toHaveBeenCalled())
+    await waitFor(() => expect(mockGetJoinInfo).toHaveBeenCalled())
     expect(mockJoin).not.toHaveBeenCalled()
     expect(mockSetAgentGrant).not.toHaveBeenCalled()
     expect(isChecked(r.getByTestId(CONSENT_BOX))).toBe(false)
@@ -382,7 +384,7 @@ describe('CommunityJoinScreen', () => {
     const r = renderScreen()
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('Home'))
     expect(r.queryByTestId('communityJoinScreen')).toBeNull()
-    expect(mockGetCommunity).not.toHaveBeenCalled()
+    expect(mockGetJoinInfo).not.toHaveBeenCalled()
     expect(mockJoin).not.toHaveBeenCalled()
   })
 
@@ -462,35 +464,29 @@ describe('agreeAndJoin', () => {
 })
 
 describe('consentVersionFor', () => {
-  it('uses the config version and never falls back to 1', () => {
-    expect(consentVersionFor({consentVersion: '2'})).toBe('2')
-    expect(consentVersionFor({consentVersion: 2 as unknown as string})).toBe(
-      '2',
-    )
-    expect(consentVersionFor({consentVersion: null})).toBeNull()
-    expect(consentVersionFor({consentVersion: '  '})).toBeNull()
+  it('uses join-info’s wording_version and never falls back to 1', () => {
+    expect(consentVersionFor(DEV_RUNTIME.joininfo)).toBe('1')
+    expect(consentVersionFor({wording_version: 2})).toBe('2')
+    expect(consentVersionFor(DOOR.joinInfo)).toBeNull()
+    expect(consentVersionFor({wording_version: NaN})).toBeNull()
     expect(consentVersionFor(undefined)).toBeNull()
   })
 })
 
 describe('consentGateFor', () => {
   it('is joinable only for a version this build has copy for', () => {
-    expect(consentGateFor({consentVersion: '1'})).toEqual({
+    expect(consentGateFor({wording_version: 1})).toEqual({
       kind: 'ok',
       version: '1',
     })
-    expect(consentGateFor({consentVersion: '3'})).toEqual({
+    expect(consentGateFor({wording_version: 3})).toEqual({
       kind: 'unsupported',
       version: '3',
     })
   })
 
-  it('is not joinable for a null, blank or undefined version', () => {
-    expect(consentGateFor({consentVersion: null})).toEqual({kind: 'missing'})
-    expect(consentGateFor({consentVersion: '  '})).toEqual({kind: 'missing'})
-    expect(consentGateFor({consentVersion: undefined})).toEqual({
-      kind: 'missing',
-    })
+  it('is not joinable for a null or absent version', () => {
+    expect(consentGateFor({wording_version: null})).toEqual({kind: 'missing'})
     expect(consentGateFor(undefined)).toEqual({kind: 'missing'})
   })
 })

@@ -7,10 +7,10 @@ import {Text} from '#/components/Typography'
 import {type CommunityDescriptor} from '../descriptor'
 
 /**
- * The community agent: who it is, who is accountable for it, and what it can
- * see. Rendered only when the community config names both an agent and its
- * sponsor (N1) - the descriptor drops `agent` otherwise. The label comes from
- * the config, never from a handle.
+ * The community agent: who is accountable for it, and what it can see.
+ * Rendered only when the door sends both `agent` and `agentSponsor` (N1) - the
+ * descriptor drops `agent` otherwise. The label comes from the door's agent
+ * DID, never from a handle; the door sends no agent name or scope.
  */
 export function AgentCard({community}: {community: CommunityDescriptor}) {
   const t = useTheme()
@@ -18,10 +18,10 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
   const agent = community.agent
   if (!agent) return null
 
-  const name = agent.name ?? l`Community agent`
-  // No fallback to the community name: with no resolved sponsor name the
-  // line is just "AI agent".
-  const sponsor = agent.sponsorName
+  const name = l`Community agent`
+  // No fallback to the community name or the sponsor DID: with no sponsor
+  // handle the line is just "AI agent".
+  const sponsor = agent.sponsorHandle
 
   return (
     <View
@@ -55,18 +55,18 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
           emoji
           style={[a.text_sm, t.atoms.text_contrast_medium]}>
           {sponsor ? (
-            <Trans>AI agent · sponsor: {sponsor}</Trans>
+            <Trans comment="sponsor is the handle of the account accountable for the agent">
+              AI agent · sponsor: @{sponsor}
+            </Trans>
           ) : (
             <Trans>AI agent</Trans>
           )}
         </Text>
         <Text testID="communityAgentScope" style={[a.text_sm]}>
-          {agent.scope ?? (
-            <Trans>
-              Sees posts in this community only. It can’t see your profile or
-              your other communities.
-            </Trans>
-          )}
+          <Trans>
+            Sees posts in this community only. It can’t see your profile or your
+            other communities.
+          </Trans>
         </Text>
       </View>
     </View>
