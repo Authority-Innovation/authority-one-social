@@ -126,7 +126,10 @@ export function toDescriptor(
     runBy: str(raw.runBy) ?? str(brand?.displayName),
     memberCount:
       typeof raw.memberCount === 'number' ? raw.memberCount : undefined,
-    isMember: !!community.role,
+    // The runtime door sends no `role`; it answers GET /:id to current members
+    // only and, with admins on, always carries `viewer_is_admin` there
+    // (`viewerIsAdmin` is set only when that key is present). Either marks a member.
+    isMember: !!community.role || typeof community.viewerIsAdmin === 'boolean',
     consentVersion,
     rules: str(raw.rules),
     rulesUrl: str(moderation?.rulesUrl) ?? str(raw.rulesUrl),

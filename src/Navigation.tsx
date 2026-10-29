@@ -951,6 +951,9 @@ const LINKING = {
   // note: `bluesky://` is what is used in app.config.js
   // `https://bsky.app` kept so pre-rebrand share links still deep-link.
   prefixes: [
+    // `one://` is the scheme iOS actually registers (app.config.js BRAND.scheme);
+    // without it a one://… link opens the app but routes nowhere.
+    'one://',
     'bsky://',
     'bluesky://',
     'https://app.authority-one.com',

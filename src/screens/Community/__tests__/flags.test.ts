@@ -71,7 +71,8 @@ describe('eas.json', () => {
   }
 
   // The one profile allowed to turn Communities on (Elliott ruling
-  // 2026-10-29). Switcher and locked community stay off even here.
+  // 2026-10-29), and the switcher with it (Elliott 2026-10-30: the Dev build
+  // needs a visible way in). Locked community stays off even here.
   const COMMUNITIES_PROFILE = 'development-communities'
 
   it('has the development-communities profile with Communities on', () => {
@@ -89,7 +90,8 @@ describe('eas.json', () => {
         expect.objectContaining({
           EXPO_PUBLIC_COMMUNITIES_ENABLED:
             profile === COMMUNITIES_PROFILE ? 'true' : 'false',
-          EXPO_PUBLIC_COMMUNITY_SWITCHER: 'false',
+          EXPO_PUBLIC_COMMUNITY_SWITCHER:
+            profile === COMMUNITIES_PROFILE ? 'true' : 'false',
           EXPO_PUBLIC_LOCKED_COMMUNITY: '',
           EXPO_PUBLIC_BRAND: 'authority-one',
           EXPO_PUBLIC_BRAND_SKIN: '',

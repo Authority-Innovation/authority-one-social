@@ -4,8 +4,10 @@
 import {useEffect, useState} from 'react'
 import {Pressable, ScrollView, View} from 'react-native'
 import {useLingui} from '@lingui/react/macro'
+import {useNavigation} from '@react-navigation/native'
 
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
+import {type NavigationProp} from '#/lib/routes/types'
 import {
   ALL_COMMUNITIES_FEED,
   type CommunityFeedDescriptor,
@@ -31,6 +33,7 @@ function CommunitySwitcherInner() {
   const selected = useSelectedCommunityFeed()
   const setSelected = useSetSelectedCommunityFeed()
   const sheetControl = Dialog.useDialogControl()
+  const navigation = useNavigation<NavigationProp>()
   const [sheetCommunity, setSheetCommunity] = useState<Community | null>(null)
 
   const effective = resolveSelection(selected, communities)
@@ -84,10 +87,15 @@ function CommunitySwitcherInner() {
               testID={`communityChip-${community.id}`}
               label={community.name}
               accessibilityLabel={community.name}
-              accessibilityHint={l`Long press for more options`}
+              accessibilityHint={l`Opens the community. Long press for more options`}
               accent={safeAccent(community.accent)}
               selected={effective === descriptor}
-              onPress={() => setSelected(descriptor)}
+              onPress={() => {
+                // The Home feed does not read the selection yet (T10), so a tap
+                // also opens the community home: the one visible way in.
+                setSelected(descriptor)
+                navigation.navigate('Community', {id: community.id})
+              }}
               onLongPress={() => onLongPressCommunity(community)}
             />
           )

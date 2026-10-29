@@ -46,6 +46,7 @@ import {
 import {Bookmark, BookmarkFilled} from '#/components/icons/Bookmark'
 import {BulletList_Stroke2_Corner0_Rounded as List} from '#/components/icons/BulletList'
 import {GameController_Stroke2_Corner0_Rounded as GameController} from '#/components/icons/GameController'
+import {Group3_Stroke2_Corner0_Rounded as Group} from '#/components/icons/Group'
 import {
   Hashtag_Filled_Corner0_Rounded as HashtagFilled,
   Hashtag_Stroke2_Corner0_Rounded as Hashtag,
@@ -75,6 +76,8 @@ import {useAnalytics} from '#/analytics'
 import {IS_NATIVE, IS_WEB} from '#/env'
 import {AgentGrid} from '#/features/agentGrid/AgentGrid'
 import {useAgentDirectory} from '#/features/agentGrid/useAgentDirectory'
+import {useMyCommunitiesQuery} from '#/features/communities/switcher/useMyCommunitiesQuery'
+import {isCommunitySwitcherEnabled} from '#/features/communities/switcher/util'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
 
@@ -386,6 +389,7 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
               onPress={onPressNotifications}
             />
             <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
+            <CommunitiesMenuItems />
             <ListsMenuItem onPress={onPressLists} />
             <BookmarksMenuItem
               isActive={isAtBookmarks}
@@ -629,6 +633,38 @@ let FeedsMenuItem = ({
   )
 }
 FeedsMenuItem = memo(FeedsMenuItem)
+
+/**
+ * One drawer item per community the person belongs to, opening its home
+ * (`/c/:id`). Shown only with the communities switcher flags on (the same gate
+ * as the Home chips, so the membership list is never requested otherwise).
+ */
+function CommunitiesMenuItems(): React.ReactNode {
+  if (!isCommunitySwitcherEnabled()) return null
+  return <CommunitiesMenuItemsInner />
+}
+
+function CommunitiesMenuItemsInner(): React.ReactNode {
+  const t = useTheme()
+  const navigation = useNavigation<NavigationProp>()
+  const setDrawerOpen = useSetDrawerOpen()
+  const {data: communities = []} = useMyCommunitiesQuery()
+  return (
+    <>
+      {communities.map(community => (
+        <MenuItem
+          key={community.id}
+          icon={<Group style={[t.atoms.text]} width={iconWidth} />}
+          label={community.name}
+          onPress={() => {
+            navigation.navigate('Community', {id: community.id})
+            setDrawerOpen(false)
+          }}
+        />
+      ))}
+    </>
+  )
+}
 
 let ListsMenuItem = ({onPress}: {onPress: () => void}): React.ReactNode => {
   const {_} = useLingui()

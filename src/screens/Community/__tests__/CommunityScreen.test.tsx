@@ -445,7 +445,7 @@ describe('Community home - member', () => {
     await r.findByText('What should I listen to first?', {}, {timeout: 3000})
     expect(mockComposerEntry).toHaveBeenCalled()
     for (const call of mockComposerEntry.mock.calls) {
-      expect(call[0]).toEqual({communityId: 'btb'})
+      expect(call[0]).toEqual({communityId: 'btb', tier: 'members'})
     }
   })
 

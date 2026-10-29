@@ -65,7 +65,7 @@
         "EXPO_PUBLIC_PUBLIC_CHAT_ENABLED": "true",
         "EXPO_PUBLIC_VIDEO_POSTS_ENABLED": "true",
         "EXPO_PUBLIC_COMMUNITIES_ENABLED": "true",
-        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "false",
+        "EXPO_PUBLIC_COMMUNITY_SWITCHER": "true",
         "EXPO_PUBLIC_LOCKED_COMMUNITY": "",
         "EXPO_PUBLIC_BRAND": "authority-one",
         "EXPO_PUBLIC_BRAND_SKIN": ""

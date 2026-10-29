@@ -130,6 +130,11 @@ describe('toDescriptor', () => {
     expect(toDescriptor('c1', community({role: null})).isMember).toBe(false)
   })
 
+  it('treats a door response carrying viewer_is_admin as a member (the door sends no role)', () => {
+    expect(toDescriptor('c1', community({viewerIsAdmin: true})).isMember).toBe(true)
+    expect(toDescriptor('c1', community({viewerIsAdmin: false})).isMember).toBe(true)
+  })
+
   it('falls back to the id for a missing name', () => {
     expect(toDescriptor('c1', community({name: ''})).name).toBe('c1')
   })

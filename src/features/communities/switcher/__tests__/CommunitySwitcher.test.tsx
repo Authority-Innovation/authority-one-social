@@ -338,6 +338,17 @@ describe('CommunitySwitcher chips', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
+  it('tapping a community chip opens its community home; "All" does not navigate', async () => {
+    mockList.mockResolvedValue({ok: true, data: [BTB, AP]})
+    const r = renderSwitcher()
+    await r.findByTestId('communityChip-btb')
+    fireEvent.press(r.getByTestId('communityChip-btb'))
+    expect(mockNavigate).toHaveBeenCalledWith('Community', {id: 'btb'})
+    mockNavigate.mockReset()
+    fireEvent.press(r.getByTestId('communityChip-all'))
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
   it('removes a community the client no longer lists and falls back to "All"', async () => {
     mockList.mockResolvedValue({ok: true, data: [BTB, AP]})
     const r = renderSwitcher()

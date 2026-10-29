@@ -143,7 +143,7 @@ function CommunityHomeLoaded({
         )}
       </Layout.Content>
       {community.isMember ? (
-        <CommunityComposerEntry communityId={community.id} />
+        <CommunityComposerEntry communityId={community.id} tier={community.tier} />
       ) : null}
       {!community.isMember ? (
         <JoinConsentEntry control={joinControl} community={community} />
