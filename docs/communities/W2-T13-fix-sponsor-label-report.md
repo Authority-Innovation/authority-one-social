@@ -81,3 +81,41 @@ files named in this task, so it is left for a follow-up decision.
 - eslint on `src/features/communityAgent` and `src/screens/Community`: FAILS on
   pre-existing errors (unresolved `CommunityPost`/`CommunityPostAuthor` types in
   `communitiesClient`, an assertion in `consent.ts`). No errors in the new files.
+
+---
+
+# Fix pass 2 (task `bdd18e48`)
+
+Base: `coord/w2-t13-fix-sponsor-label-mount-r-40b3876c` at `a0f89b273`.
+Branch: `coord/w2-t13-fix-2-remove-community-na-bdd18e48`. No flag, default or
+grant-body change.
+
+1. **Blocker, descriptor.** `src/screens/Community/descriptor.ts`:
+   `agent.sponsorName` is now `agentSponsorName` only. The
+   `brand.displayName` fallback is gone. `descriptor.test.ts` was updated:
+   the base case now expects `sponsorName: undefined`. A new case checks that
+   the brand name is never used as the sponsor and that a real
+   `agentSponsorName` comes through.
+2. **Blocker, AgentCard.** `src/screens/Community/components/AgentCard.tsx`:
+   the `community.runBy` fallback is gone. With no sponsor name the line
+   reads exactly `AI agent`. The old "sponsored by this community" text is
+   removed too, because it also stood in for the community as sponsor. In
+   `CommunityScreen.test.tsx`, the sponsor test now sets `agentSponsorName`.
+   A new test checks that an agent with no `sponsorName` shows `AI agent`
+   with no sponsor, and that the card nowhere shows the community name.
+3. **Mount location.** No community settings surface exists. The only
+   community routes are `Community`, `CommunityMembers` and `CommunityJoin`
+   (`src/routes.ts`), and there is no settings or manage screen under
+   `src/screens/Community`. As instructed, I did not create one. The grant
+   row stays on the community home, behind `EXPO_PUBLIC_COMMUNITIES_ENABLED`.
+4. **Prettier: not run.** This worktree has no `node_modules`, and neither
+   `pnpm` nor `prettier` is installed on this machine. The test edits were
+   written by hand in the repo's style (no semicolons, single quotes, 80
+   columns). `communityAgent.test.tsx` was not touched in this pass.
+5. **This report file is kept.** It is the report that task `40b3876c` was
+   required to produce, so it is not an unrequested file. This pass appends
+   its own section here rather than adding a new file.
+
+**Tests: not run.** labelRule, communityAgent and CommunityScreen were all
+not run, because no `node_modules` and no `pnpm` are available to run
+`pnpm test`.
