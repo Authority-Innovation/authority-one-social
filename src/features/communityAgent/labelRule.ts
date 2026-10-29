@@ -9,6 +9,9 @@
  * The handle is never read. A human whose handle sits on the same host as the
  * agent (e.g. `*.pds.authority-one.com`) is a human. An agent with no sponsor
  * fails closed: it renders as a member, with a warning for the operator.
+ *
+ * `sponsorName` is empty when the runtime has not resolved the sponsor's
+ * display name. The UI then shows the agent label with no sponsor name.
  */
 import {type CommunityAgentConfig, type CommunityThreadAuthor} from './types'
 
@@ -36,7 +39,7 @@ export function resolveAuthorLabel(
     return {kind: 'member', warning: 'agent_without_sponsor'}
   }
 
-  const sponsorName =
-    clean(community?.agentSponsorName) || clean(community?.name)
-  return {kind: 'agent', sponsorName}
+  // Only a resolved human sponsor name is shown. The community name is never
+  // substituted: it would name the wrong party as accountable for the agent.
+  return {kind: 'agent', sponsorName: clean(community?.agentSponsorName)}
 }

@@ -35,6 +35,8 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getCommunity: jest.fn(),
   getTimeline: jest.fn(),
+  getAgentGrant: jest.fn(),
+  setAgentGrant: jest.fn(),
 }))
 
 // group.ts reads through the user's PDS agent (no group-AppView proxy yet), so
@@ -131,6 +133,9 @@ const getCommunity = communitiesClient.getCommunity as jest.Mock<
 >
 const getTimeline = communitiesClient.getTimeline as jest.Mock<
   typeof communitiesClient.getTimeline
+>
+const getAgentGrant = communitiesClient.getAgentGrant as jest.Mock<
+  typeof communitiesClient.getAgentGrant
 >
 const groupTimeline = useGroupTimelineQuery as unknown as jest.Mock
 const groupMembers = useGroupMembersQuery as unknown as jest.Mock
@@ -231,20 +236,28 @@ beforeEach(() => {
   mockCommunitiesEnabled = true
   mockViewerDid = 'did:example:alice'
   jest.clearAllMocks()
+  getAgentGrant.mockResolvedValue({
+    ok: true,
+    data: {communityId: 'btb', on: false},
+  })
   getTimeline.mockResolvedValue({
     ok: true,
     data: {
       posts: [
         {
           id: 'p1',
-          author: {displayName: 'Sam R.', is_agent: false},
+          author: {
+            displayName: 'Sam R.',
+            is_agent: false,
+            did: 'did:example:sam',
+          },
           body: 'What should I listen to first?',
           createdAt: '2026-10-28T09:29:00.000Z',
         },
         {
           id: 'p2',
-          // The runtime door sends no author DID, only the is_agent flag.
-          author: {displayName: 'Steve', is_agent: true},
+          // R3: the runtime sends the author DID with the is_agent flag.
+          author: {displayName: 'Steve', is_agent: true, did: AGENT_DID},
           body: 'Episode 12 is a good start.',
           parentId: 'p1',
           createdAt: '2026-10-28T09:40:00.000Z',
@@ -327,7 +340,7 @@ describe('Community home - member', () => {
     expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
   })
 
-  it('labels a post as the agent from is_agent alone, with no author DID', async () => {
+  it('labels only the item whose is_agent and author.did match the config agent', async () => {
     const r = renderScreen()
     await r.findByText('Episode 12 is a good start.', {}, {timeout: 3000})
     expect(r.getByText('I am not an agent.')).toBeTruthy()
@@ -337,14 +350,74 @@ describe('Community home - member', () => {
         'communityPostAgentLabel',
       ),
     ).toBeTruthy()
-    expect(
-      within(r.getByTestId('communityPost-p3')).queryByTestId(
-        'communityPostAgentLabel',
-      ),
-    ).toBeNull()
+    // A member item, and a member named like the agent.
+    for (const id of ['p1', 'p3']) {
+      expect(
+        within(r.getByTestId(`communityPost-${id}`)).queryByTestId(
+          'communityPostAgentLabel',
+        ),
+      ).toBeNull()
+    }
   })
 
-  it('labels an is_agent post even when the community config names no agent', async () => {
+  function timelineOf(posts: Record<string, unknown>[]) {
+    getTimeline.mockResolvedValue({
+      ok: true,
+      data: {posts} as unknown as communitiesClient.CommunityTimelinePage,
+    })
+  }
+
+  it('gives no label to a spoofed agent name with a different did', async () => {
+    timelineOf([
+      {
+        id: 's1',
+        author: {displayName: 'Steve', is_agent: true, did: 'did:example:eve'},
+        body: 'I am Steve, honest.',
+        createdAt: '2026-10-28T09:40:00.000Z',
+      },
+    ])
+    const r = renderScreen()
+    await r.findByText('I am Steve, honest.', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
+  })
+
+  it('gives no label to an old item whose author did is null', async () => {
+    timelineOf([
+      {
+        id: 'o1',
+        author: {displayName: 'Steve', is_agent: false, did: null},
+        body: 'Old agent reply.',
+        createdAt: '2026-10-28T09:40:00.000Z',
+      },
+      {
+        // Even a stray is_agent true does not label an item with no did.
+        id: 'o2',
+        author: {displayName: 'Steve', is_agent: true, did: null},
+        body: 'Old flagged reply.',
+        createdAt: '2026-10-28T09:41:00.000Z',
+      },
+    ])
+    const r = renderScreen()
+    await r.findByText('Old agent reply.', {}, {timeout: 3000})
+    expect(r.getByText('Old flagged reply.')).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
+  })
+
+  it('renders an item with no author as a member row with no label', async () => {
+    timelineOf([
+      {
+        id: 'n1',
+        body: 'No author here.',
+        createdAt: '2026-10-28T09:40:00.000Z',
+      },
+    ])
+    const r = renderScreen()
+    await r.findByText('No author here.', {}, {timeout: 3000})
+    expect(r.getByTestId('communityPost-n1')).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
+  })
+
+  it('gives no label when the community config names no agent', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
       data: communityResponse({
@@ -352,27 +425,18 @@ describe('Community home - member', () => {
         config: configWith({agent: undefined}),
       }),
     })
-    getTimeline.mockResolvedValue({
-      ok: true,
-      data: {
-        posts: [
-          {
-            id: 'a1',
-            author: {displayName: 'Bot', is_agent: true},
-            body: 'Agent with no did.',
-            createdAt: '2026-10-28T09:40:00.000Z',
-          },
-        ],
+    timelineOf([
+      {
+        id: 'a1',
+        author: {displayName: 'Bot', is_agent: true, did: AGENT_DID},
+        body: 'Agent with no config agent.',
+        createdAt: '2026-10-28T09:40:00.000Z',
       },
-    })
+    ])
     const r = renderScreen()
-    await r.findByText('Agent with no did.', {}, {timeout: 3000})
+    await r.findByText('Agent with no config agent.', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAgentCard')).toBeNull()
-    expect(
-      within(r.getByTestId('communityPost-a1')).getByTestId(
-        'communityPostAgentLabel',
-      ),
-    ).toBeTruthy()
+    expect(r.queryByTestId('communityPostAgentLabel')).toBeNull()
   })
 
   it('passes this community id to the composer entry', async () => {
@@ -390,6 +454,62 @@ describe('Community home - member', () => {
     expect(r.queryByTestId('communityPosts')).toBeNull()
     fireEvent.press(r.getByTestId('communityTab-posts'))
     expect(r.getByTestId('communityPosts')).toBeTruthy()
+  })
+})
+
+describe('Community home - agent grant row', () => {
+  it('a member sees the grant row with the runtime value', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    getAgentGrant.mockResolvedValue({
+      ok: true,
+      data: {communityId: 'btb', on: true},
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityAgentGrantRow', {}, {timeout: 3000})
+    expect(getAgentGrant).toHaveBeenCalledWith('btb')
+    expect(
+      r.getByText('Give this community’s agent access to my content here'),
+    ).toBeTruthy()
+  })
+
+  it('a non-member gets no grant row and no grant read', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    const r = renderScreen()
+    await r.findByTestId('communityJoinButton', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
+    expect(getAgentGrant).not.toHaveBeenCalled()
+  })
+
+  it('a community with no agent gets no grant row and no grant read', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({
+        role: 'member',
+        config: configWith({agent: undefined}),
+      }),
+    })
+    const r = renderScreen()
+    await r.findByText('What should I listen to first?', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
+    expect(getAgentGrant).not.toHaveBeenCalled()
+  })
+
+  it('shows no grant row when the grant read fails', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({role: 'member'}),
+    })
+    getAgentGrant.mockResolvedValue({
+      ok: false,
+      error: {kind: 'http', status: 500},
+    })
+    const r = renderScreen()
+    await r.findByText('What should I listen to first?', {}, {timeout: 3000})
+    await waitFor(() => expect(getAgentGrant).toHaveBeenCalled())
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
   })
 })
 
@@ -560,14 +680,30 @@ describe('Community home - agent card', () => {
   })
 
   it('shows the name, sponsor line and scope when both are set', async () => {
-    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({agentSponsorName: 'Sam R.'}),
+    })
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
     expect(r.getByText('Steve')).toBeTruthy()
     expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
-      'AI agent · sponsor: Between Two Beers',
+      'AI agent · sponsor: Sam R.',
     )
     expect(r.getByTestId('communityAgentScope')).toBeTruthy()
+  })
+
+  it('shows no sponsor name, and never the community name, when the sponsor has no name', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    const r = renderScreen()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    const line = r.getByTestId('communityAgentSponsor')
+    expect(line).toHaveTextContent(/^AI agent$/)
+    expect(line).not.toHaveTextContent(/sponsor/i)
+    expect(line).not.toHaveTextContent('Between Two Beers')
+    expect(r.getByTestId('communityAgentCard')).not.toHaveTextContent(
+      'Between Two Beers',
+    )
   })
 })
 
@@ -621,6 +757,8 @@ describe('Community home - flag off', () => {
     expect(r.queryByTestId('communityHeader')).toBeNull()
     expect(getCommunity).not.toHaveBeenCalled()
     expect(getTimeline).not.toHaveBeenCalled()
+    expect(getAgentGrant).not.toHaveBeenCalled()
+    expect(r.queryByTestId('communityAgentGrantRow')).toBeNull()
   })
 })
 

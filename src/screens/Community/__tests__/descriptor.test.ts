@@ -37,9 +37,24 @@ describe('toDescriptor', () => {
       did: 'did:example:agent',
       sponsorDid: 'did:example:sponsor',
       name: 'Steve',
-      sponsorName: 'Between Two Beers',
+      sponsorName: undefined,
       scope: undefined,
     })
+  })
+
+  it('never uses the community brand name as the sponsor name', () => {
+    const config = {
+      agent: 'did:example:agent',
+      agentSponsor: 'did:example:sponsor',
+      brand: {displayName: 'Between Two Beers'},
+    }
+    expect(
+      toDescriptor('c1', community({config})).agent?.sponsorName,
+    ).toBeUndefined()
+    expect(
+      toDescriptor('c1', community({config, agentSponsorName: 'Sam R.'})).agent
+        ?.sponsorName,
+    ).toBe('Sam R.')
   })
 
   it('has no agent unless both agent and agentSponsor are set (N1)', () => {
@@ -65,6 +80,35 @@ describe('toDescriptor', () => {
         }),
       ).agent?.did,
     ).toBe('did:example:agent')
+  })
+
+  it('carries the config agent DID without needing a sponsor', () => {
+    expect(
+      toDescriptor('c1', community({config: {agent: 'did:example:agent'}}))
+        .agentDid,
+    ).toBe('did:example:agent')
+    expect(
+      toDescriptor('c1', community({agentDid: 'did:example:agent'})).agentDid,
+    ).toBe('did:example:agent')
+    expect(
+      toDescriptor(
+        'c1',
+        community({agent: {did: 'did:example:door', is_agent: true}}),
+      ).agentDid,
+    ).toBe('did:example:door')
+    expect(
+      toDescriptor(
+        'c1',
+        community({
+          config: {agent: 'did:example:config'},
+          agent: {did: 'did:example:door', is_agent: true},
+        }),
+      ).agentDid,
+    ).toBe('did:example:config')
+    expect(toDescriptor('c1', community()).agentDid).toBeUndefined()
+    expect(
+      toDescriptor('c1', community({agent: null})).agentDid,
+    ).toBeUndefined()
   })
 
   it('is a non-member when the runtime returns no role', () => {
