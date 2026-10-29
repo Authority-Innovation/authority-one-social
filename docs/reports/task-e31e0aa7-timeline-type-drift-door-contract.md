@@ -79,8 +79,12 @@ Every fake that produced an item, a created item or a timeline page is now built
 - `src/lib/api/feed/__tests__/communities.test.ts`
 - `src/features/communities/__tests__/membersPost.test.ts`
 - `src/features/communityAgent/__tests__/communityAgent.test.tsx` and `labelRule.test.ts`
-- `src/screens/Community/__tests__/CommunityScreen.test.tsx` (the default timeline, `timelineOf`,
-  and the per-viewer timeline)
+- `src/screens/Community/__tests__/CommunityScreen.test.tsx`: the timeline fakes only (the
+  default timeline, `timelineOf`, and the per-viewer timeline). **Correction (task ccacde3b):**
+  this file was NOT fully converted here. Its `communityResponse` community fake still used the
+  invented shape (`memberCount`, `rules`, `agentName`, `config.*`, `consentVersion`) behind an
+  `as unknown as` cast. Task ccacde3b replaced it with door.json community shapes; see
+  `docs/reports/task-ccacde3b-agent-label-join-info-door-fakes.md`.
 - `src/view/com/composer/state/__tests__/submit.test.ts`
 - `src/components/PostControls/__tests__/MembersPostControls.test.tsx`
 
@@ -101,8 +105,8 @@ reach jest, because jest is the last command in the script.
 
 ## Results (all run in this worktree)
 
-- **Head commit:** see `report_result`. It is the commit that adds this report, one after
-  `704f51c0d`.
+- **Head commit:** `f57ed82e1` (`f57ed82e1749e4532e6a6d2814960b7230ba3e75`), the commit that
+  adds this report, one after `704f51c0d`.
 - **tsc:** `tsc --noEmit -p tsconfig.communities.json` exits 0 with no errors (TypeScript 6.0.3).
   The whole-project `tsgo --project tsconfig.check.json` (`pnpm typecheck`) also exits 0.
 - **jest** (`NODE_ENV=test jest --forceExit --testTimeout=20000 <path>`):
