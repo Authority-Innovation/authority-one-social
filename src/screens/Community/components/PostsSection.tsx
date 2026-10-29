@@ -1,7 +1,6 @@
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
-import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
@@ -9,6 +8,7 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
+import {type MemberPostRowData, toMemberPostRows} from '../memberRows'
 import {useCommunityTimelineQuery} from '../queries'
 
 export function PostsSection({community}: {community: CommunityDescriptor}) {
@@ -29,7 +29,7 @@ export function PostsSection({community}: {community: CommunityDescriptor}) {
 
 function MembersTimeline({community}: {community: CommunityDescriptor}) {
   const {data, isLoading, isError} = useCommunityTimelineQuery({community})
-  const posts: CommunityPost[] = data?.pages.flatMap(page => page.posts) ?? []
+  const posts = toMemberPostRows(data?.pages)
 
   if (isLoading) return <SectionLoader />
   if (isError) return <PostsError />
@@ -51,7 +51,7 @@ function MemberPostRow({
   post,
   agentDid,
 }: {
-  post: CommunityPost
+  post: MemberPostRowData
   agentDid?: string
 }) {
   const t = useTheme()
@@ -75,12 +75,12 @@ function MemberPostRow({
       <UserAvatar
         type={isAgent ? 'algo' : 'user'}
         size={40}
-        avatar={post.author?.avatar}
+        avatar={post.author.avatar}
       />
       <View style={[a.flex_1, a.gap_2xs]}>
         <View style={[a.flex_row, a.align_center, a.gap_xs]}>
           <Text emoji style={[a.text_md, a.font_bold]} numberOfLines={1}>
-            {post.author?.displayName}
+            {post.authorName}
           </Text>
           {isAgent ? (
             <Text
@@ -98,7 +98,7 @@ function MemberPostRow({
           ) : null}
         </View>
         <Text emoji style={[a.text_md, a.leading_snug]}>
-          {post.body}
+          {post.text}
         </Text>
       </View>
     </View>

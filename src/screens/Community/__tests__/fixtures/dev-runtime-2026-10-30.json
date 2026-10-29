@@ -1,0 +1,131 @@
+{
+  "list": {
+    "communities": [
+      {
+        "id": "ao-dev-test",
+        "name": "AO Dev Test",
+        "description": "Dev click-through community (2026-10-30)",
+        "accent": null,
+        "wording_version": 1,
+        "agent": {
+          "did": "did:plc:agentagentagentaaaaaaaaa",
+          "is_agent": true
+        },
+        "viewer_is_admin": true
+      }
+    ]
+  },
+  "home": {
+    "community": {
+      "id": "ao-dev-test",
+      "name": "AO Dev Test",
+      "description": "Dev click-through community (2026-10-30)",
+      "accent": null,
+      "wording_version": 1,
+      "agent": {
+        "did": "did:plc:agentagentagentaaaaaaaaa",
+        "is_agent": true
+      },
+      "viewer_is_admin": true
+    }
+  },
+  "timeline": {
+    "items": [
+      {
+        "id": "0mvtxf49k-892f41cc42ef",
+        "parentId": "0mvtxf42e-3b7d34126373",
+        "authorId": "member.example.test",
+        "text": "Build 37 smoke: reply",
+        "createdAt": "2026-10-29T19:18:34.328Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:membermemberaaaaaaaaaaaa",
+          "is_agent": false
+        }
+      },
+      {
+        "id": "0mvtxf42e-3b7d34126373",
+        "parentId": null,
+        "authorId": "member.example.test",
+        "text": "Build 37 smoke: post",
+        "createdAt": "2026-10-29T19:18:34.070Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:membermemberaaaaaaaaaaaa",
+          "is_agent": false
+        }
+      },
+      {
+        "id": "0mvtvsha2-f3f9f5474cca",
+        "parentId": "0mvtvsh3o-2e7b7597b231",
+        "authorId": "member.example.test",
+        "text": "Build 37 smoke: reply",
+        "createdAt": "2026-10-29T18:32:58.490Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:membermemberaaaaaaaaaaaa",
+          "is_agent": false
+        }
+      },
+      {
+        "id": "0mvtvsh3o-2e7b7597b231",
+        "parentId": null,
+        "authorId": "member.example.test",
+        "text": "Build 37 smoke: post",
+        "createdAt": "2026-10-29T18:32:58.260Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:membermemberaaaaaaaaaaaa",
+          "is_agent": false
+        }
+      },
+      {
+        "id": "0mvtv8m35-ce127cafe914",
+        "parentId": "0mvtv8lvw-6341f31d509f",
+        "authorId": "member.example.test",
+        "text": "a reply",
+        "createdAt": "2026-10-29T18:17:31.601Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:membermemberaaaaaaaaaaaa",
+          "is_agent": false
+        }
+      },
+      {
+        "id": "0mvtv8lvw-6341f31d509f",
+        "parentId": null,
+        "authorId": "member.example.test",
+        "text": "Dev click-through post from the Mac smoke test",
+        "createdAt": "2026-10-29T18:17:31.340Z",
+        "is_agent": false,
+        "author": {
+          "did": "did:plc:membermemberaaaaaaaaaaaa",
+          "is_agent": false
+        }
+      }
+    ],
+    "cursor": null
+  },
+  "joininfo": {
+    "wording_version": 1
+  },
+  "grant": {
+    "communityId": "ao-dev-test",
+    "on": false
+  },
+  "roster": {
+    "postId": "0mvtv8lvw-6341f31d509f",
+    "roster": [
+      {
+        "id": "member.example.test",
+        "did": null,
+        "is_agent": false
+      },
+      {
+        "id": "community-agent",
+        "did": "did:plc:agentagentagentaaaaaaaaa",
+        "is_agent": true
+      }
+    ]
+  }
+}

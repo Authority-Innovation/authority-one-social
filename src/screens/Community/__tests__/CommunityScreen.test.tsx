@@ -129,6 +129,8 @@ import {CommunityMembersScreen, CommunityScreen} from '../index'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
+import REAL from './fixtures/dev-runtime-2026-10-30.json'
+
 const getCommunity = communitiesClient.getCommunity as jest.Mock<
   typeof communitiesClient.getCommunity
 >
@@ -325,6 +327,25 @@ describe('Community home - member', () => {
       ok: true,
       data: communityResponse({role: 'member'}),
     })
+  })
+
+  it('renders the REAL Dev runtime timeline page ({items}, text, authorId) without crashing (One Dev 38)', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: {
+        ...REAL.home.community,
+        viewerIsAdmin: true,
+      } as unknown as communitiesClient.Community,
+    })
+    getTimeline.mockResolvedValue({
+      ok: true,
+      data: REAL.timeline as unknown as communitiesClient.CommunityTimelinePage,
+    })
+    const r = renderScreen({id: 'ao-dev-test'})
+    await r.findAllByText(REAL.timeline.items[1].text, {}, {timeout: 3000})
+    expect(r.getAllByText('member.example.test').length).toBe(
+      REAL.timeline.items.length,
+    )
   })
 
   it('reads the timeline with only this community id', async () => {
