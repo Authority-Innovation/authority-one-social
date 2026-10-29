@@ -48,6 +48,13 @@ jest.mock('#/state/queries/group', () => ({
   useGroupQuery: jest.fn(() => ({data: undefined})),
 }))
 
+// Post rows resolve authors through the profile cache; nothing is cached here,
+// so rows fall back to the item's own name or handle.
+jest.mock('#/state/queries/profile', () => ({
+  ...jest.requireActual<Record<string, unknown>>('#/state/queries/profile'),
+  useProfileQuery: () => ({data: undefined}),
+}))
+
 const mockAgentCall = jest.fn()
 let mockViewerDid: string | undefined = 'did:example:alice'
 jest.mock('#/state/session', () => ({

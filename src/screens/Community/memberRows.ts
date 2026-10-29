@@ -6,7 +6,12 @@ export type MemberPostRowData = {
   id: string
   text: string
   createdAt: string
+  /** The name the item itself carries; the row prefers the cached profile. */
   authorName: string
+  /** The author's handle, when the item names one (authorId is a handle). */
+  authorHandle?: string
+  /** What the row looks the profile up by: the author DID, else the handle. */
+  authorActor?: string
   author: {did?: string; is_agent?: boolean; avatar?: string}
 }
 
@@ -44,6 +49,11 @@ export function toMemberPostRows(pages: unknown): MemberPostRowData[] {
         typeof it.author === 'object' && it.author !== null
           ? (it.author as Record<string, unknown>)
           : {}
+      const did = str(rawAuthor.did)
+      const authorId = str(it.authorId)
+      const handle =
+        str(rawAuthor.handle) ??
+        (authorId && !authorId.startsWith('did:') ? authorId : undefined)
       rows.push({
         id,
         text: str(it.text) ?? str(it.body) ?? '',
@@ -51,10 +61,14 @@ export function toMemberPostRows(pages: unknown): MemberPostRowData[] {
         authorName:
           str(rawAuthor.displayName) ??
           str(rawAuthor.handle) ??
-          str(it.authorId) ??
+          authorId ??
+          did ??
           '',
+        authorHandle: handle,
+        authorActor:
+          did ?? handle ?? (authorId?.startsWith('did:') ? authorId : undefined),
         author: {
-          did: str(rawAuthor.did),
+          did,
           is_agent: rawAuthor.is_agent === true,
           avatar: str(rawAuthor.avatar),
         },

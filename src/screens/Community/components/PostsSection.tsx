@@ -1,15 +1,14 @@
 import {View} from 'react-native'
-import {Trans, useLingui} from '@lingui/react/macro'
+import {Trans} from '@lingui/react/macro'
 
-import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
-import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
-import {type MemberPostRowData, toMemberPostRows} from '../memberRows'
+import {toMemberPostRows} from '../memberRows'
 import {useCommunityTimelineQuery} from '../queries'
+import {MemberPostRow} from './MemberPostRow'
 
 export function PostsSection({community}: {community: CommunityDescriptor}) {
   const source = postsSource(community)
@@ -43,64 +42,6 @@ function MembersTimeline({community}: {community: CommunityDescriptor}) {
           agentDid={community.agentDid}
         />
       ))}
-    </View>
-  )
-}
-
-function MemberPostRow({
-  post,
-  agentDid,
-}: {
-  post: MemberPostRowData
-  agentDid?: string
-}) {
-  const t = useTheme()
-  const {i18n} = useLingui()
-  // N1/R3: is_agent AND author.did matching the config's agent DID. An old
-  // item (did null) or a community with no agent DID gets no label.
-  const isAgent = isCommunityAgentAuthor(post.author, agentDid)
-  const created = new Date(post.createdAt)
-
-  return (
-    <View
-      testID={`communityPost-${post.id}`}
-      style={[
-        a.flex_row,
-        a.gap_sm,
-        a.px_lg,
-        a.py_md,
-        a.border_b,
-        t.atoms.border_contrast_low,
-      ]}>
-      <UserAvatar
-        type={isAgent ? 'algo' : 'user'}
-        size={40}
-        avatar={post.author.avatar}
-      />
-      <View style={[a.flex_1, a.gap_2xs]}>
-        <View style={[a.flex_row, a.align_center, a.gap_xs]}>
-          <Text emoji style={[a.text_md, a.font_bold]} numberOfLines={1}>
-            {post.authorName}
-          </Text>
-          {isAgent ? (
-            <Text
-              testID="communityPostAgentLabel"
-              style={[a.text_xs, a.font_bold, {color: t.palette.primary_500}]}>
-              <Trans context="label shown next to an AI agent's name">
-                ◆ Agent
-              </Trans>
-            </Text>
-          ) : null}
-          {!Number.isNaN(created.getTime()) ? (
-            <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-              {i18n.date(created, {dateStyle: 'medium', timeStyle: 'short'})}
-            </Text>
-          ) : null}
-        </View>
-        <Text emoji style={[a.text_md, a.leading_snug]}>
-          {post.text}
-        </Text>
-      </View>
     </View>
   )
 }
