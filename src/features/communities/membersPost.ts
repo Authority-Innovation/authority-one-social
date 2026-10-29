@@ -11,6 +11,7 @@
 import {type AppBskyFeedDefs} from '@atproto/api'
 
 import {type CommunityPost} from '#/lib/agent-runtime/communitiesClient'
+import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 
 export const MEMBERS_POST_URI_SCHEME = 'ao-community://'
 
@@ -41,7 +42,11 @@ export function isReasonCommunity(v: unknown): v is ReasonCommunity {
 export interface MembersPostRef {
   communityId: string
   postId: string
-  /** From the runtime's `is_agent` flag (N1), never the handle. */
+  /**
+   * The isCommunityAgentAuthor rule (N1, R3): `is_agent` is true AND
+   * `author.did` equals the community config's agent DID. Never the handle.
+   * False when the mapper was given no agent DID.
+   */
   isAgent: boolean
 }
 
@@ -75,15 +80,19 @@ export function parseMembersPostUri(
 /**
  * Maps one members-tier post to a FeedViewPost-shaped view. Reads only the
  * runtime's CommunityPost fields; nothing in the result points at a PDS.
+ *
+ * `agentDid` is the community config's agent DID. Without it no post is
+ * marked as the agent, whatever `is_agent` says.
  */
 export function membersPostToFeedViewPost(
   communityId: string,
   post: CommunityPost,
   badge: ReasonCommunity,
+  agentDid?: string | null,
 ): AppBskyFeedDefs.FeedViewPost {
   const uri = membersPostUri(communityId, post.id)
   const createdAt = post.createdAt
-  const isAgent = post.author?.is_agent === true
+  const isAgent = isCommunityAgentAuthor(post.author, agentDid)
   const ref: MembersPostRef = {communityId, postId: post.id, isAgent}
   const view = {
     post: {

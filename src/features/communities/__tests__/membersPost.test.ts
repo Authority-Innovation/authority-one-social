@@ -19,9 +19,13 @@ const BADGE: ReasonCommunity = {
   tier: 'members',
 }
 
+// Placeholder DIDs only.
+const AGENT_DID = 'did:plc:communityagent'
+const OTHER_DID = 'did:plc:someonelse'
+
 const POST: CommunityPost = {
   id: 'p1',
-  author: {displayName: 'Steve', avatar: null, is_agent: true},
+  author: {displayName: 'Steve', avatar: null, is_agent: true, did: AGENT_DID},
   body: 'Episode 12 is a good start.',
   createdAt: '2026-10-28T10:00:00.000Z',
 }
@@ -60,6 +64,7 @@ describe('membersPostToFeedViewPost', () => {
       'body',
       'author',
       'author.is_agent',
+      'author.did',
       'author.displayName',
       'author.avatar',
     ])
@@ -72,8 +77,13 @@ describe('membersPostToFeedViewPost', () => {
     expect(view.post.author.did.startsWith('did:')).toBe(false)
   })
 
-  it('carries the agent flag from is_agent, not the name', () => {
-    const view = membersPostToFeedViewPost('community-a', POST, BADGE)
+  it('marks the agent only when is_agent and the DID match the config', () => {
+    const view = membersPostToFeedViewPost(
+      'community-a',
+      POST,
+      BADGE,
+      AGENT_DID,
+    )
     expect(getMembersPostRef(view.post)).toEqual({
       communityId: 'community-a',
       postId: 'p1',
@@ -81,10 +91,36 @@ describe('membersPostToFeedViewPost', () => {
     })
     const human = membersPostToFeedViewPost(
       'community-a',
-      {...POST, author: {displayName: 'Steve Agent', is_agent: false}},
+      {
+        ...POST,
+        author: {displayName: 'Steve Agent', is_agent: false, did: AGENT_DID},
+      },
       BADGE,
+      AGENT_DID,
     )
     expect(getMembersPostRef(human.post)?.isAgent).toBe(false)
+  })
+
+  it('is_agent true with a non-matching DID is not the agent', () => {
+    const view = membersPostToFeedViewPost(
+      'community-a',
+      {...POST, author: {...POST.author, is_agent: true, did: OTHER_DID}},
+      BADGE,
+      AGENT_DID,
+    )
+    expect(getMembersPostRef(view.post)?.isAgent).toBe(false)
+  })
+
+  it('is_agent true with did null, or no config agent DID, is not the agent', () => {
+    const nullDid = membersPostToFeedViewPost(
+      'community-a',
+      {...POST, author: {...POST.author, did: null}},
+      BADGE,
+      AGENT_DID,
+    )
+    expect(getMembersPostRef(nullDid.post)?.isAgent).toBe(false)
+    const noConfig = membersPostToFeedViewPost('community-a', POST, BADGE)
+    expect(getMembersPostRef(noConfig.post)?.isAgent).toBe(false)
   })
 
   it('renders through the feed pipeline (valid record, moderation, tuner)', () => {

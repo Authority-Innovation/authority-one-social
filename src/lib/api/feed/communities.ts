@@ -108,6 +108,8 @@ function membersTierFetcher(source: CommunityFeedSource) {
     if (!res.ok) {
       throw new Error(`members timeline: ${res.error.kind}`)
     }
+    // CommunityFeedSource carries no config agent DID, so no post here is
+    // marked as the agent (isAgent false). Pass the DID once the source has it.
     return {
       feed: res.data.posts
         .filter(isUsableMembersPost)
