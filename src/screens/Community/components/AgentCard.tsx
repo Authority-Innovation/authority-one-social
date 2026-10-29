@@ -1,6 +1,8 @@
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
+import {sanitizeDisplayName} from '#/lib/strings/display-names'
+import {useProfileQuery} from '#/state/queries/profile'
 import {atoms as a, useTheme} from '#/alf'
 import {Sparkle_Stroke2_Corner0_Rounded as SparkleIcon} from '#/components/icons/Sparkle'
 import {Text} from '#/components/Typography'
@@ -12,15 +14,21 @@ import {type CommunityDescriptor} from '../descriptor'
  * reads "run by <handle>" only when the runtime sends the sponsor's handle
  * (`agentSponsor.handle`); otherwise it is just "AI agent". The sponsor's DID
  * and the community's name are never shown in its place. The agent's label
- * comes from the config, never from a handle.
+ * comes from the config, never from a handle. Its name is the config's, else
+ * the display name in the profile cache for the config's agent DID.
  */
 export function AgentCard({community}: {community: CommunityDescriptor}) {
   const t = useTheme()
   const {t: l} = useLingui()
   const agent = community.agent
+  const {data: profile} = useProfileQuery({did: agent?.did})
   if (!agent) return null
 
-  const name = agent.name ?? l`Community agent`
+  const name =
+    agent.name ??
+    (profile?.displayName?.trim()
+      ? sanitizeDisplayName(profile.displayName)
+      : l`Community agent`)
   // No fallback to the sponsor DID or the community name: with no handle the
   // line is just "AI agent".
   const sponsorName = agent.sponsorName
