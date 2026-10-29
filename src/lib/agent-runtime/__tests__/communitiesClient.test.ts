@@ -11,7 +11,9 @@ import {
   type CommunitiesResult,
   deleteMine,
   exportMine,
+  getAgentGrant,
   getCommunity,
+  getJoinInfo,
   getTimeline,
   join,
   leave,
@@ -26,10 +28,18 @@ const realFetch = globalThis.fetch
 const mockFetch = jest.fn<typeof fetch>()
 
 const RUNTIME_HOST = 'runtime.test'
-const POST = {
+const COMMUNITY = {
+  id: 'c1',
+  name: 'Club',
+  description: null,
+  accent: null,
+  wording_version: 2,
+}
+const ITEM = {
   id: 'p1',
-  author: {displayName: 'Ada', is_agent: false},
-  body: 'hi',
+  parentId: null,
+  authorId: 'ada',
+  text: 'hi',
   createdAt: '2026-10-28T00:00:00.000Z',
 }
 
@@ -94,34 +104,40 @@ const CASES: Case[] = [
     run: () => listMyCommunities(),
     method: 'GET',
     path: '/app/communities',
-    response: {communities: [{id: 'c1', name: 'Club'}]},
-    data: [{id: 'c1', name: 'Club'}],
+    response: {communities: [COMMUNITY]},
+    data: [COMMUNITY],
   },
   {
     name: 'getCommunity',
     run: () => getCommunity('c1'),
     method: 'GET',
     path: '/app/communities/c1',
-    response: {community: {id: 'c1', name: 'Club'}},
-    data: {id: 'c1', name: 'Club'},
+    response: {community: COMMUNITY},
+    data: COMMUNITY,
+  },
+  {
+    name: 'getJoinInfo',
+    run: () => getJoinInfo('c1'),
+    method: 'GET',
+    path: '/app/communities/c1/join-info',
+    response: {wording_version: 2},
+    data: {wording_version: 2},
   },
   {
     name: 'join',
-    run: () => join('c1', 'v2'),
+    run: () => join('c1', 2),
     method: 'POST',
     path: '/app/communities/c1/join',
-    body: {consentVersion: 'v2'},
-    response: {
-      membership: {communityId: 'c1', role: 'member', consentVersion: 'v2'},
-    },
-    data: {communityId: 'c1', role: 'member', consentVersion: 'v2'},
+    body: {consentVersion: 2},
+    response: {community: COMMUNITY, joined: true},
+    data: {community: COMMUNITY, joined: true},
   },
   {
     name: 'leave',
     run: () => leave('c1'),
     method: 'POST',
     path: '/app/communities/c1/leave',
-    response: {ok: true},
+    response: {left: true},
     data: null,
   },
   {
@@ -129,41 +145,41 @@ const CASES: Case[] = [
     run: () => getTimeline('c1'),
     method: 'GET',
     path: '/app/communities/c1/timeline',
-    response: {posts: [POST], cursor: 'next'},
-    data: {posts: [POST], cursor: 'next'},
+    response: {items: [ITEM], cursor: 'next'},
+    data: {items: [ITEM], cursor: 'next'},
   },
   {
     name: 'getTimeline (with cursor)',
     run: () => getTimeline('c1', 'a b'),
     method: 'GET',
     path: '/app/communities/c1/timeline?cursor=a%20b',
-    response: {posts: []},
-    data: {posts: []},
+    response: {items: [], cursor: null},
+    data: {items: [], cursor: null},
   },
   {
     name: 'post',
-    run: () => post('c1', 'hello', [{mediaId: 'm1', alt: 'a cat'}]),
+    run: () => post('c1', 'hello'),
     method: 'POST',
     path: '/app/communities/c1/posts',
-    body: {body: 'hello', media: [{mediaId: 'm1', alt: 'a cat'}]},
-    response: {post: POST},
-    data: POST,
+    body: {text: 'hello'},
+    response: {item: ITEM},
+    data: ITEM,
   },
   {
     name: 'reply',
     run: () => reply('c1', 'p1', 'agreed'),
     method: 'POST',
     path: '/app/communities/c1/posts/p1/replies',
-    body: {body: 'agreed'},
-    response: {post: {...POST, id: 'p2', parentId: 'p1'}},
-    data: {...POST, id: 'p2', parentId: 'p1'},
+    body: {text: 'agreed'},
+    response: {item: {...ITEM, id: 'p2', parentId: 'p1'}},
+    data: {...ITEM, id: 'p2', parentId: 'p1'},
   },
   {
     name: 'deleteMine',
     run: () => deleteMine('c1', 'p1'),
     method: 'DELETE',
     path: '/app/communities/c1/posts/p1',
-    response: {ok: true},
+    response: {deleted: true},
     data: null,
   },
   {
@@ -171,17 +187,25 @@ const CASES: Case[] = [
     run: () => exportMine('c1'),
     method: 'GET',
     path: '/app/communities/c1/export',
-    response: {communityId: 'c1', posts: [POST]},
-    data: {communityId: 'c1', posts: [POST]},
+    response: {communityId: 'c1', items: [ITEM]},
+    data: {communityId: 'c1', items: [ITEM]},
+  },
+  {
+    name: 'getAgentGrant',
+    run: () => getAgentGrant('c1'),
+    method: 'GET',
+    path: '/app/communities/c1/agent-grant',
+    response: {communityId: 'c1', on: false},
+    data: {communityId: 'c1', on: false},
   },
   {
     name: 'setAgentGrant',
     run: () => setAgentGrant('c1', true),
-    method: 'PUT',
+    method: 'POST',
     path: '/app/communities/c1/agent-grant',
     body: {on: true},
-    response: {agentGrant: true},
-    data: {agentGrant: true},
+    response: {communityId: 'c1', on: true},
+    data: {communityId: 'c1', on: true},
   },
 ]
 
@@ -202,11 +226,35 @@ describe('communitiesClient requests', () => {
   )
 
   it('encodes ids into the path so they cannot change the route', async () => {
-    mockFetch.mockResolvedValueOnce(json(200, {ok: true}))
+    mockFetch.mockResolvedValueOnce(json(200, {deleted: true}))
     await deleteMine('c/../x', 'p?x=1')
     expect(calls()[0].url).toBe(
       'https://runtime.test/app/communities/c%2F..%2Fx/posts/p%3Fx%3D1',
     )
+  })
+
+  it('an id that cannot be encoded returns invalid_argument, never throws', async () => {
+    // encodeURIComponent throws URIError on a lone surrogate.
+    const bad = 'c\uD800'
+    const results = await Promise.all([
+      getCommunity(bad),
+      getJoinInfo(bad),
+      join(bad, 1),
+      leave(bad),
+      getTimeline(bad),
+      getTimeline('c1', bad),
+      post(bad, 'hi'),
+      reply('c1', bad, 'hi'),
+      deleteMine('c1', bad),
+      exportMine(bad),
+      getAgentGrant(bad),
+      setAgentGrant(bad, true),
+    ])
+    for (const r of results) {
+      expect(r.ok === false && r.error.kind).toBe('invalid_argument')
+    }
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockToken).not.toHaveBeenCalled()
   })
 
   it('accepts an empty 2xx body for leave and delete', async () => {
@@ -216,13 +264,10 @@ describe('communitiesClient requests', () => {
 })
 
 describe('communitiesClient never sends a tenant id', () => {
-  it('drops unknown keys from media refs', async () => {
-    mockFetch.mockResolvedValueOnce(json(200, {post: POST}))
-    const smuggled = [
-      {mediaId: 'm1', tenantId: 't-1', tenant: 't-1'},
-    ] as unknown as Parameters<typeof post>[2]
-    await post('c1', 'hi', smuggled)
-    expect(calls()[0].body).toEqual({body: 'hi', media: [{mediaId: 'm1'}]})
+  it('post sends only {text}', async () => {
+    mockFetch.mockResolvedValueOnce(json(201, {item: ITEM}))
+    await post('c1', 'hi')
+    expect(calls()[0].body).toEqual({text: 'hi'})
   })
 
   it('every method, every request: no tenant field in body or headers', async () => {
@@ -322,14 +367,17 @@ describe('communitiesClient errors never throw', () => {
   it('invalid arguments are rejected locally without a request', async () => {
     const results = await Promise.all([
       getCommunity(''),
-      join('c1', ''),
+      join('c1', '2' as unknown as number),
+      join('c1', NaN),
       leave(' '),
       getTimeline(''),
-      post('c1', '   ', []),
+      post('c1', '   '),
       reply('c1', '', 'x'),
       reply('c1', 'p1', ''),
       deleteMine('c1', ''),
       exportMine(''),
+      getJoinInfo(''),
+      getAgentGrant(''),
       setAgentGrant('c1', 'yes' as unknown as boolean),
     ])
     for (const r of results) {
