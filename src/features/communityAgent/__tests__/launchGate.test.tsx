@@ -33,7 +33,12 @@ jest.mock('#/components/Button', () => {
       onPress: () => void
       children: React.ReactNode
     }) => (
-      <Pressable testID={testID} accessibilityLabel={label} onPress={onPress}>
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint=""
+        onPress={onPress}>
         {children}
       </Pressable>
     ),
@@ -47,7 +52,9 @@ jest.mock('#/components/forms/Toggle', () => {
   const {Pressable, Text} = require('react-native')
   return {
     Item: ({children}: {children: React.ReactNode}) => (
-      <Pressable testID="agentGrantToggle">{children}</Pressable>
+      <Pressable testID="agentGrantToggle" accessibilityRole="switch">
+        {children}
+      </Pressable>
     ),
     LabelText: ({children}: {children: React.ReactNode}) => (
       <Text>{children}</Text>
