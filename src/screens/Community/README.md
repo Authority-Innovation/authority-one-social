@@ -29,8 +29,14 @@ nothing is fetched.
 - The accent colour is applied inside `CommunityHeader` only (N3). It must be
   a CSS hex colour or it is dropped.
 - The agent card renders only when the config has both `agent` and
-  `agentSponsor` (N1). A post is labelled as the agent when the runtime's
-  `is_agent` is true. The runtime door sends no author DID, so there is no DID
-  match; the label fails toward showing.
+  `agentSponsor` (N1). A post is labelled as the agent only when the
+  runtime's `is_agent` is true AND `author.did` equals the community config's
+  agent DID (`isCommunityAgentAuthor` in `features/communities/agentLabel.ts`).
+  An item with `did: null`, a different DID, or a community with no agent DID
+  renders no label. Display name and handle are never read. The agent DID is
+  `config.agent`, falling back to the community's top-level `agentDid`, then
+  `agent.did` (`toDescriptor` in `descriptor.ts`); the match is still on DID
+  only. Members-tier feed views (`membersPost.ts`) use the same rule, and are
+  never marked as the agent when the mapper has no agent DID.
 - No composer opens from here until T17 wires one whose target is fixed to
   the community. The ordinary composer would publish to the PDS.
