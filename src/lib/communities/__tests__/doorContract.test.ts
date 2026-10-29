@@ -126,9 +126,9 @@ describe('door contract fixtures', () => {
       DEV_RUNTIME.home.community,
     ]
     for (const c of communities) {
-      expect(
-        Object.keys(c).filter(k => !COMMUNITY_KEYS.includes(k)),
-      ).toEqual([])
+      expect(Object.keys(c).filter(k => !COMMUNITY_KEYS.includes(k))).toEqual(
+        [],
+      )
     }
   })
 })

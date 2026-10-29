@@ -5,7 +5,7 @@
     "commit": "7f436b820e5e1b4d4bfc89a8dabb3e27e79bbaf0",
     "module": "src/communities/door.js",
     "harness": "test/communities-agent-slot-fb477fb1.test.js (fakeWorld/setup), flags: communities.enabled, communityAgent, agentGrant, admins all on",
-    "generator": "src/lib/communities/__fixtures__/door/generate.mjs"
+    "generator": "scripts/communities/generateDoorFixtures.mjs"
   },
   "list": {
     "communities": [
