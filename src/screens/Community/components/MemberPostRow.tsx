@@ -84,6 +84,7 @@ export function MemberPostRow({
                     dateStyle: 'long',
                     timeStyle: 'short',
                   })}
+                  accessibilityHint=""
                   style={[a.text_sm, t.atoms.text_contrast_medium]}
                   numberOfLines={1}>
                   {`· ${timeElapsed}`}

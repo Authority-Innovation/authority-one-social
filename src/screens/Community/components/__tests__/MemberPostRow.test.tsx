@@ -101,7 +101,8 @@ describe('MemberPostRow', () => {
       'Mia Member',
     )
     expect(r.queryByText('member.example.test')).toBeNull()
-    expect(r.getByTestId('communityPostAvatar').props.avatarUri).toBe(
+    expect(r.getByTestId('communityPostAvatar')).toHaveProp(
+      'avatarUri',
       'https://cdn.example.test/mia.jpg',
     )
   })
@@ -124,7 +125,7 @@ describe('MemberPostRow', () => {
     expect(r.getByTestId('communityPostAuthorName')).toHaveTextContent(
       '@member.example.test',
     )
-    expect(r.getByTestId('communityPostAvatar').props.avatarUri).toBeUndefined()
+    expect(r.getByTestId('communityPostAvatar')).not.toHaveProp('avatarUri')
   })
 
   it('falls back to the handle when the cached profile has no display name', () => {
@@ -204,7 +205,8 @@ describe('MemberPostRow', () => {
   it('keeps the full date for screen readers', () => {
     const createdAt = '2026-10-29T19:18:34.328Z'
     const r = renderRow(rowFrom(memberItem({createdAt})))
-    expect(r.getByTestId('communityPostTime').props.accessibilityLabel).toBe(
+    expect(r.getByTestId('communityPostTime')).toHaveProp(
+      'accessibilityLabel',
       i18n.date(new Date(createdAt), {dateStyle: 'long', timeStyle: 'short'}),
     )
   })
