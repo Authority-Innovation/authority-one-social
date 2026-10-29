@@ -27,3 +27,31 @@ export function isCommunityAgentAuthor(
   const configDid = clean(agentDid)
   return authorDid.length > 0 && configDid.length > 0 && authorDid === configDid
 }
+
+function obj(v: unknown): Record<string, unknown> | undefined {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : undefined
+}
+
+function nonEmpty(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim().length > 0 ? v : undefined
+}
+
+/**
+ * The community config's agent DID, from a runtime community response: the
+ * config record's `agent`, then the top-level `agentDid`, then `agent.did`.
+ * Undefined when none is set, so callers fail closed. The value is returned
+ * as sent; isCommunityAgentAuthor trims before comparing.
+ */
+export function communityConfigAgentDid(
+  community: unknown,
+): string | undefined {
+  const raw = obj(community)
+  if (!raw) return undefined
+  return (
+    nonEmpty(obj(raw.config)?.agent) ??
+    nonEmpty(raw.agentDid) ??
+    nonEmpty(obj(raw.agent)?.did)
+  )
+}

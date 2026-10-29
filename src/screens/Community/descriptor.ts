@@ -10,6 +10,7 @@
  * fails closed and never shows a wall as public.
  */
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
+import {communityConfigAgentDid} from '#/features/communities/agentLabel'
 
 export type CommunityTier = 'public' | 'members' | 'paid'
 
@@ -89,8 +90,7 @@ export function toDescriptor(
   const brand = obj(config?.brand)
   const moderation = obj(config?.moderation)
 
-  const agentDid =
-    str(config?.agent) ?? str(raw.agentDid) ?? str(obj(raw.agent)?.did)
+  const agentDid = communityConfigAgentDid(raw)
   const sponsorDid = str(config?.agentSponsor) ?? str(raw.agentSponsor)
   // Only the resolved sponsor name. Never the community's own brand name: an
   // unnamed sponsor is shown as absent, not as the community.
