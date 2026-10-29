@@ -13,6 +13,7 @@
  * `sponsorName` is empty when the runtime has not resolved the sponsor's
  * display name. The UI then shows the agent label with no sponsor name.
  */
+import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {type CommunityAgentConfig, type CommunityThreadAuthor} from './types'
 
 export type AuthorLabel =
@@ -27,11 +28,9 @@ export function resolveAuthorLabel(
   author: CommunityThreadAuthor,
   community: CommunityAgentConfig | null | undefined,
 ): AuthorLabel {
-  if (author.is_agent !== true) return {kind: 'member'}
-
-  const agentDid = clean(community?.agentDid)
-  const authorDid = clean(author.did)
-  if (!agentDid || !authorDid || authorDid !== agentDid) {
+  // Rules 1 and 2 are the one DID-match rule shared with the feed and the
+  // community home.
+  if (!isCommunityAgentAuthor(author, community?.agentDid)) {
     return {kind: 'member'}
   }
 

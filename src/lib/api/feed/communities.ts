@@ -22,6 +22,7 @@ import {
   fetchGroupTimeline,
   isGroupAppViewUnavailableError,
 } from '#/state/queries/group'
+import {communityConfigAgentDid} from '#/features/communities/agentLabel'
 import {
   membersPostToFeedViewPost,
   type ReasonCommunity,
@@ -34,6 +35,13 @@ export interface CommunityFeedSource {
   id: string
   name?: string
   tier: 'public' | 'members'
+  /**
+   * Members tier: the community config's agent DID, used to mark the agent's
+   * posts. Absent means no post is marked as the agent (fail closed). When the
+   * key is missing entirely, the members fetcher looks it up via
+   * getCommunity; an explicit `undefined` means it was looked up and not set.
+   */
+  agentDid?: string
 }
 
 interface Page {
@@ -100,20 +108,40 @@ function publicTierFetcher(agent: BskyAgent, source: CommunityFeedSource) {
   }
 }
 
+/**
+ * The config agent DID for a members source. A source that came from
+ * listMyCommunities already carries it (possibly undefined); a bare id (one
+ * community's feed) is looked up once via getCommunity. Any failure is
+ * undefined, so no post is marked as the agent.
+ */
+async function resolveMembersAgentDid(
+  source: CommunityFeedSource,
+): Promise<string | undefined> {
+  if ('agentDid' in source) return source.agentDid
+  try {
+    const res = await communitiesClient.getCommunity(source.id)
+    return res.ok ? communityConfigAgentDid(res.data) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function membersTierFetcher(source: CommunityFeedSource) {
   const badge = badgeFor(source)
+  let agentDid: Promise<string | undefined> | undefined
   return async (cursor: string | undefined): Promise<Page> => {
+    // Started alongside the timeline; it never rejects.
+    agentDid ??= resolveMembersAgentDid(source)
     // Only this community's id. The runtime decides tenancy and membership.
     const res = await communitiesClient.getTimeline(source.id, cursor)
     if (!res.ok) {
       throw new Error(`members timeline: ${res.error.kind}`)
     }
-    // CommunityFeedSource carries no config agent DID, so no post here is
-    // marked as the agent (isAgent false). Pass the DID once the source has it.
+    const did = await agentDid
     return {
       feed: res.data.posts
         .filter(isUsableMembersPost)
-        .map(p => membersPostToFeedViewPost(source.id, p, badge)),
+        .map(p => membersPostToFeedViewPost(source.id, p, badge, did)),
       cursor: res.data.cursor,
     }
   }
@@ -176,7 +204,12 @@ export async function resolveMyCommunitySources(
   if (members.ok) {
     for (const c of members.data) {
       if (c && typeof c.id === 'string') {
-        add({id: c.id, name: c.name, tier: 'members'})
+        add({
+          id: c.id,
+          name: c.name,
+          tier: 'members',
+          agentDid: communityConfigAgentDid(c),
+        })
       }
     }
   }
