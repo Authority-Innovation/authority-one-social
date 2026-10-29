@@ -549,6 +549,10 @@ function appConfigForBrand(BRAND) {
         // SceneDelegate). Required since builds moved to the iOS 27 SDK: without it UIKit
         // traps on background (Non-UI) launches. See plugins/uiSceneLifecycle.
         './plugins/uiSceneLifecycle/withUISceneLifecycle.js',
+        // Authority One: Xcode 27.1 rejects pod deployment targets below 15.0. Adds a
+        // Podfile post_install step that raises lower pod-target values to 15.0 (never
+        // lowers higher ones; the app target is untouched). See plugins/podDeploymentTarget.
+        './plugins/podDeploymentTarget/withPodDeploymentTarget.js',
         [
           'expo-font',
           {
