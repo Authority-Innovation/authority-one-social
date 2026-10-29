@@ -945,14 +945,28 @@ export const schemaDict = {
             },
             group: {
               type: 'ref',
-              ref: 'lex:com.atproto.repo.strongRef',
+              ref: 'lex:com.authorityone.group.post#groupRef',
               description:
-                'Strong reference to the target com.authorityone.group.profile record.',
+                'The target com.authorityone.group.profile record. OPEN (Q1): option (a), the default, names the group by AT-URI only (no cid), since a pinned cid dangles after every owner edit of the profile; option (b) also pins the profile cid at posting time. Bindings written as a strongRef ({uri, cid}) stay valid.',
             },
             createdAt: {
               type: 'string',
               format: 'datetime',
             },
+          },
+        },
+      },
+      groupRef: {
+        type: 'object',
+        required: ['uri'],
+        properties: {
+          uri: {
+            type: 'string',
+            format: 'at-uri',
+          },
+          cid: {
+            type: 'string',
+            format: 'cid',
           },
         },
       },

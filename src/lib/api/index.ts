@@ -7,6 +7,8 @@ import {
   type AppBskyEmbedRecordWithMedia,
   type AppBskyEmbedVideo,
   AppBskyFeedPost,
+  AppBskyFeedPostgate,
+  AppBskyFeedThreadgate,
   BlobRef,
   type BskyAgent,
   ChatBskyGroupDefs,
@@ -23,6 +25,16 @@ import {sha256} from 'js-sha256'
 import {CID} from 'multiformats/cid'
 import * as Hasher from 'multiformats/hashes/hasher'
 
+import {guardComposerPdsWrite} from '#/lib/communities/composerTarget'
+import {
+  assertGroupPostBinding,
+  buildGroupPostBindingWrite,
+  findCidMismatches,
+  type GroupPostBinding,
+  GroupPostBindingDisabledError,
+  GroupPostCidMismatchError,
+} from '#/lib/communities/groupPostBinding'
+import {validateGroupPostRecord} from '#/lib/communities/groupPostBindingLexicon'
 import {IMAGE_SIZE_CONFIG_POSTS} from '#/lib/constants'
 import {isNetworkError} from '#/lib/strings/errors'
 import {shortenLinks, stripInvalidMentions} from '#/lib/strings/rich-text-manip'
@@ -41,6 +53,7 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
+import {COMMUNITIES_ENABLED} from '#/env'
 import * as bsky from '#/types/bsky'
 import {createGIFDescription} from '../gif-alt-text'
 import {uploadBlob} from './upload-blob'
@@ -63,6 +76,14 @@ interface PostOpts {
    * Video posts are single, top-level (the composer enforces both).
    */
   videoEmbed?: $Typed<AppBskyEmbedVideo.Main> & {onePlayback?: unknown}
+  /**
+   * AUTHORITY ONE communities: a public-tier community post. Every post in the
+   * thread gets a `com.authorityone.group.post` binding in the same
+   * applyWrites (docs/design/group-post-binding.md). Not reachable from the
+   * composer yet: resolveTarget and submitComposerThread still refuse public.
+   * Anything but a well-formed public binding is refused before any write.
+   */
+  binding?: GroupPostBinding
 }
 
 export async function post(
@@ -71,6 +92,22 @@ export async function post(
   opts: PostOpts,
 ) {
   const thread = opts.thread
+  // Refuse before anything touches the network (reply lookup, link
+  // resolution, blob upload): members/paid or malformed bindings never
+  // reach a PDS write.
+  const binding = opts.binding
+  if (binding !== undefined) {
+    // The binding path is dark: with the communities flag off nothing may
+    // reach it, whatever the caller passes.
+    if (!COMMUNITIES_ENABLED) throw new GroupPostBindingDisabledError()
+    assertGroupPostBinding(binding)
+    // The bound path is not combined with the runtime video embed; nothing in
+    // the design covers it, so refuse rather than guess.
+    if (opts.videoEmbed)
+      throw new Error('Video posts cannot be bound to a group')
+    const decision = guardComposerPdsWrite(binding.target, {binding})
+    if (!decision.allowed) throw new Error(decision.reason)
+  }
   opts.onStateChange?.(t`Processing...`)
 
   let replyPromise:
@@ -91,6 +128,7 @@ export async function post(
   const did = agent.assertDid
   const writes: $Typed<ComAtprotoRepoApplyWrites.Create>[] = []
   const uris: string[] = []
+  const computedPostRefs: {uri: string; cid: string}[] = []
 
   let now = new Date()
   let tid: TID | undefined
@@ -179,23 +217,48 @@ export async function post(
       cid: await computeCid(record),
       uri,
     }
+    computedPostRefs.push(ref)
+
+    // D1: replies bind too (a reply to a bound post inherits its target in
+    // resolveTarget). OPEN (Q4): no non-member pre-check is built here.
+    if (binding) {
+      writes.push(
+        buildGroupPostBindingWrite({
+          did,
+          postRkey: rkey,
+          postCid: ref.cid,
+          group: binding.group,
+          createdAt: now.toISOString(),
+        }),
+      )
+    }
     replyPromise = {
       root: reply?.root ?? ref,
       parent: ref,
     }
   }
 
+  if (binding) {
+    // OPEN (Q7): option (a), the doc's recommended default. The PDS does not
+    // know com.authorityone.group.*, so the bound batch goes with
+    // validate:false and every record in it is validated here first.
+    validateBoundBatch(writes)
+  }
+
+  let results: unknown[] | undefined
   try {
-    await agent.com.atproto.repo.applyWrites({
+    const res = await agent.com.atproto.repo.applyWrites({
       repo: agent.assertDid,
       writes: writes,
       // The AuthorityOne video embed carries a custom `onePlayback` field that is
       // not in the app.bsky.embed.video lexicon, so strict validation would reject
       // it. The runtime's own agent-path createRecord doesn't validate either, so
-      // skipping it here keeps the two write paths byte-compatible. All other posts
-      // stay strictly validated.
-      validate: opts.videoEmbed ? false : true,
+      // skipping it here keeps the two write paths byte-compatible. A bound
+      // community batch is validated client-side above (OPEN Q7). All other
+      // posts stay strictly validated.
+      validate: opts.videoEmbed || binding ? false : true,
     })
+    results = res?.data?.results
   } catch (err) {
     const e = err as Error
     logger.error(`Failed to create post`, {
@@ -210,7 +273,64 @@ export async function post(
     }
   }
 
+  if (binding) {
+    // The binding pins each post's locally computed CID, so it must be the CID
+    // the PDS stored. OPEN (Q6 / D3): no compensating delete; the batch stays
+    // committed and the post is reported as failed.
+    const mismatches = findCidMismatches({
+      writes,
+      results,
+      computed: computedPostRefs,
+    })
+    if (mismatches.length) {
+      const e = new GroupPostCidMismatchError(mismatches)
+      logger.error(`Group post CID mismatch`, {safeMessage: e.message})
+      throw e
+    }
+  }
+
   return {uris}
+}
+
+/**
+ * Client-side lexicon validation for a bound community batch, which the PDS
+ * receives with validate:false (OPEN Q7). Every record in the batch is
+ * validated: posts, bindings, threadgates and postgates. A collection with no
+ * validator here is refused, so nothing unvalidated slips through. Throws
+ * before any write on failure.
+ */
+function validateBoundBatch(
+  writes: $Typed<ComAtprotoRepoApplyWrites.Create>[],
+) {
+  for (const w of writes) {
+    const result = validateBoundRecord(w.collection, w.value)
+    if (!result.success) {
+      throw new Error(
+        `Group post batch failed validation (${w.collection}): ${result.error.message}`,
+      )
+    }
+  }
+}
+
+function validateBoundRecord(
+  collection: string,
+  value: unknown,
+): {success: true} | {success: false; error: Error} {
+  switch (collection) {
+    case 'com.authorityone.group.post':
+      return validateGroupPostRecord(value)
+    case 'app.bsky.feed.post':
+      return AppBskyFeedPost.validateRecord(value)
+    case 'app.bsky.feed.threadgate':
+      return AppBskyFeedThreadgate.validateRecord(value)
+    case 'app.bsky.feed.postgate':
+      return AppBskyFeedPostgate.validateRecord(value)
+    default:
+      return {
+        success: false,
+        error: new Error('no client-side validator for this collection'),
+      }
+  }
 }
 
 async function resolveRT(agent: BskyAgent, richtext: RichText) {

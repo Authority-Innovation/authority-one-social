@@ -18,7 +18,7 @@ const id = 'com.authorityone.group.post'
 export interface Main {
   $type: 'com.authorityone.group.post'
   subject: ComAtprotoRepoStrongRef.Main
-  group: ComAtprotoRepoStrongRef.Main
+  group: GroupRef
   createdAt: string
   [k: string]: unknown
 }
@@ -37,4 +37,20 @@ export {
   type Main as Record,
   isMain as isRecord,
   validateMain as validateRecord,
+}
+
+export interface GroupRef {
+  $type?: 'com.authorityone.group.post#groupRef'
+  uri: string
+  cid?: string
+}
+
+const hashGroupRef = 'groupRef'
+
+export function isGroupRef<V>(v: V) {
+  return is$typed(v, id, hashGroupRef)
+}
+
+export function validateGroupRef<V>(v: V) {
+  return validate<GroupRef & V>(v, id, hashGroupRef)
 }

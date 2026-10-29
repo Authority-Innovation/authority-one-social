@@ -108,15 +108,16 @@ function render<T>(hook: () => T) {
   return renderHook(hook, {wrapper}).result
 }
 
+// A public target is refused too: the bound applyWrites is the only public
+// PDS write, and a draft carries no binding (design doc section 5 item 3 is
+// still open on whether public drafts should be allowed).
 const REFUSED: [string, ComposerTarget][] = [
   ['members', {kind: 'community', id: 'c1', tier: 'members'}],
   ['paid', {kind: 'community', id: 'c1', tier: 'paid'}],
-]
-
-const ALLOWED: [string, ComposerTarget][] = [
-  ['profile', {kind: 'profile'}],
   ['public community', {kind: 'community', id: 'c1', tier: 'public'}],
 ]
+
+const ALLOWED: [string, ComposerTarget][] = [['profile', {kind: 'profile'}]]
 
 beforeEach(() => {
   jest.clearAllMocks()

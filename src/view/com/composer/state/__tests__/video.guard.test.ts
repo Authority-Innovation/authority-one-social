@@ -61,6 +61,9 @@ describe('processVideo guard', () => {
   it.each<[string, ComposerTarget]>([
     ['members', {kind: 'community', id: 'c1', tier: 'members'}],
     ['paid', {kind: 'community', id: 'c1', tier: 'paid'}],
+    // No binding on a video upload, so public is refused (the bound
+    // applyWrites is the only public PDS write).
+    ['public community', {kind: 'community', id: 'c1', tier: 'public'}],
   ])('a %s target never compresses or uploads', async (_name, target) => {
     const dispatch = await run(target)
     expect(compressVideo).not.toHaveBeenCalled()
@@ -76,7 +79,6 @@ describe('processVideo guard', () => {
 
   it.each<[string, ComposerTarget]>([
     ['profile', {kind: 'profile'}],
-    ['public community', {kind: 'community', id: 'c1', tier: 'public'}],
   ])('a %s target still uploads (control)', async (_name, target) => {
     await run(target)
     expect(compressVideo).toHaveBeenCalledTimes(1)
