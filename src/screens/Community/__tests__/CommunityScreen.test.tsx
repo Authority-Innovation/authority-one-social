@@ -625,14 +625,30 @@ describe('Community home - agent card', () => {
   })
 
   it('shows the name, sponsor line and scope when both are set', async () => {
-    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: communityResponse({agentSponsorName: 'Sam R.'}),
+    })
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
     expect(r.getByText('Steve')).toBeTruthy()
     expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
-      'AI agent · sponsor: Between Two Beers',
+      'AI agent · sponsor: Sam R.',
     )
     expect(r.getByTestId('communityAgentScope')).toBeTruthy()
+  })
+
+  it('shows no sponsor name, and never the community name, when the sponsor has no name', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: communityResponse()})
+    const r = renderScreen()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    const line = r.getByTestId('communityAgentSponsor')
+    expect(line).toHaveTextContent(/^AI agent$/)
+    expect(line).not.toHaveTextContent(/sponsor/i)
+    expect(line).not.toHaveTextContent('Between Two Beers')
+    expect(r.getByTestId('communityAgentCard')).not.toHaveTextContent(
+      'Between Two Beers',
+    )
   })
 })
 

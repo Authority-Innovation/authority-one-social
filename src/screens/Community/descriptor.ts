@@ -84,7 +84,9 @@ export function toDescriptor(
 
   const agentDid = str(config?.agent) ?? str(raw.agentDid)
   const sponsorDid = str(config?.agentSponsor) ?? str(raw.agentSponsor)
-  const sponsorName = str(raw.agentSponsorName) ?? str(brand?.displayName)
+  // Only the resolved sponsor name. Never the community's own brand name: an
+  // unnamed sponsor is shown as absent, not as the community.
+  const sponsorName = str(raw.agentSponsorName)
 
   const agent: CommunityAgent | undefined =
     agentDid && sponsorDid
