@@ -1,13 +1,44 @@
 /**
- * Devtest credentials. Read from e2e/clickthrough/.env.local (gitignored),
- * falling back to the process environment, key by key. Nothing in this module
- * logs or returns a secret in printable form: callers get the values for the
- * browser and `describe()` for anything a human or an artifact will see.
+ * Devtest credentials. Provisioned by a human OUTSIDE any repo, in a fixed
+ * per-user file, and looked up in this order:
+ *
+ * 1. the file named by DEVTEST_ENV_FILE, if set (an override for tests and CI);
+ * 2. otherwise the per-user file `<home>/.ao/devtest.env`
+ *    (%USERPROFILE%\.ao\devtest.env on Windows, ~/.ao/devtest.env on POSIX);
+ * 3. the process environment, key by key, for anything the file does not set
+ *    (so the whole credential when the file is absent).
+ *
+ * The file is parsed in memory and never written or copied. Nothing in this
+ * module logs or returns a secret in printable form: callers get the values
+ * for the browser and `describe()` for anything a human or an artifact will
+ * see.
  */
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 
-const ENV_FILE = path.join(__dirname, '..', '.env.local')
+const OVERRIDE_VAR = 'DEVTEST_ENV_FILE'
+
+/**
+ * The per-user credential file. `homedir` and `pathImpl` are injectable so the
+ * tests can assert the computed path on both platforms without reading it.
+ */
+function userCredFile({homedir = os.homedir(), pathImpl = path} = {}) {
+  return pathImpl.join(homedir, '.ao', 'devtest.env')
+}
+
+/**
+ * The file to read: the DEVTEST_ENV_FILE override, else the per-user file. An
+ * override never falls through to the per-user file, so a test pointing it at
+ * a missing path cannot pick up a real credential.
+ */
+function resolveCredFile(env = process.env, opts = {}) {
+  const override = env[OVERRIDE_VAR]
+  if (typeof override === 'string' && override.trim()) {
+    return path.resolve(override.trim())
+  }
+  return userCredFile(opts)
+}
 
 const KEYS = {
   handle: 'DEVTEST_HANDLE',
@@ -49,15 +80,16 @@ function readEnvFile(file) {
 }
 
 /**
- * @param {{env?: Record<string, string|undefined>, envFile?: string, readFile?: (f: string) => Record<string,string>}} [opts]
+ * @param {{env?: Record<string, string|undefined>, homedir?: string, readFile?: (f: string) => Record<string,string>}} [opts]
  */
 function loadCredentials(opts = {}) {
   const env = opts.env || process.env
-  const fileVals = (opts.readFile || readEnvFile)(opts.envFile || ENV_FILE)
+  const file = resolveCredFile(env, {homedir: opts.homedir})
+  const fileVals = (opts.readFile || readEnvFile)(file)
   const pick = key => {
     const fromFile = fileVals[key]
     if (typeof fromFile === 'string' && fromFile.trim()) {
-      return {value: fromFile.trim(), source: 'env-file'}
+      return {value: fromFile.trim(), source: 'file'}
     }
     const fromEnv = env[key]
     if (typeof fromEnv === 'string' && fromEnv.trim()) {
@@ -132,7 +164,9 @@ function redact(text, secrets) {
 }
 
 module.exports = {
-  ENV_FILE,
+  OVERRIDE_VAR,
+  userCredFile,
+  resolveCredFile,
   KEYS,
   parseDotEnv,
   loadCredentials,

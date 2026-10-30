@@ -3,7 +3,8 @@
  * `pnpm e2e:clickthrough` - the one entry point.
  *
  * 1. Dev guard (no network): refuses a non-Dev runtime or a non-local base URL.
- * 2. Credentials: .env.local, else the process env. None -> a clean SKIP,
+ * 2. Credentials: DEVTEST_ENV_FILE, else ~/.ao/devtest.env, else the process
+ *    env (see lib/creds.js). None -> a clean SKIP,
  *    exit 0, with artifacts saying "no devtest credential".
  * 3. Runs the Playwright flow with the development-communities profile env.
  */
@@ -38,8 +39,7 @@ function main(env = process.env) {
   }
 
   const runId = env.CLICKTHROUGH_RUN_ID || newRunId()
-  // CLICKTHROUGH_ENV_FILE exists for the harness's own tests.
-  const creds = loadCredentials({env, envFile: env.CLICKTHROUGH_ENV_FILE})
+  const creds = loadCredentials({env})
   const seen = describe(creds)
   console.log(`[clickthrough] run ${runId}`)
   console.log(
@@ -56,7 +56,7 @@ function main(env = process.env) {
       steps: [],
       consoleErrors: [],
       notes: [
-        'No DEVTEST_HANDLE / DEVTEST_APP_PASSWORD in e2e/clickthrough/.env.local or the process environment.',
+        'No DEVTEST_HANDLE / DEVTEST_APP_PASSWORD in the DEVTEST_ENV_FILE file, the per-user ~/.ao/devtest.env file or the process environment.',
         'Nothing was opened and no network call was made.',
       ],
     })
