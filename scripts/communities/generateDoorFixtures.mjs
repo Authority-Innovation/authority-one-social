@@ -12,10 +12,11 @@
 import {pathToFileURL} from 'node:url'
 import path from 'node:path'
 
-// The member agentSponsor view (bfd5a63c, door.js 348cd54d) on top of
-// deploy/dev-communities 7f436b82.
-const SOURCE_COMMIT = 'eabfbcdd5f091a1b15b8bf04beb6810b31cbac0b'
-const SOURCE_REF = 'origin/coord/member-community-response-carrie-bfd5a63c'
+// deploy/dev-communities at cca6020d (the Dev door for build 41): the member
+// agentSponsor view (bfd5a63c) and the dark guard (808459e7). The responses
+// are byte-identical to the bfd5a63c ones (eabfbcdd).
+const SOURCE_COMMIT = 'cca6020d551450931a2eea6ec8bb822fca4e396d'
+const SOURCE_REF = 'origin/deploy/dev-communities'
 
 // Item ids end in random bytes; fix them so the output is stable.
 let byte = 0
@@ -122,6 +123,8 @@ const deps = {
   readConfig: async () => CFG,
   now: () => (clock += 1000),
   notFound: () => Response.json({error: 'not found'}, {status: 404}),
+  // The dark guard (808459e7) answers 404 unless the store flag is on.
+  storeEnabled: () => true,
 }
 
 async function call(method, p, {as = ALICE, body} = {}) {

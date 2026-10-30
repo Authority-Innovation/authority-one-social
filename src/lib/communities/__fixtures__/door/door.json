@@ -1,8 +1,8 @@
 {
   "$source": {
     "repo": "authority-one-runtime",
-    "ref": "origin/coord/member-community-response-carrie-bfd5a63c",
-    "commit": "eabfbcdd5f091a1b15b8bf04beb6810b31cbac0b",
+    "ref": "origin/deploy/dev-communities",
+    "commit": "cca6020d551450931a2eea6ec8bb822fca4e396d",
     "module": "src/communities/door.js",
     "harness": "test/communities-agent-slot-fb477fb1.test.js (fakeWorld/setup), flags: communities.enabled, communityAgent, agentGrant, admins all on",
     "generator": "scripts/communities/generateDoorFixtures.mjs"
