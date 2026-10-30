@@ -86,7 +86,9 @@ function withAgentLiveExcluded(config) {
 
 /** The app.config.js plugin entries for this build. */
 function agentLivePlugins(env = process.env) {
-  if (!isAgentLiveEnabled(env)) return [withAgentLiveExcluded]
+  if (!isAgentLiveEnabled(env)) {
+    return ['./plugins/agentLive/withAgentLiveExcluded.js']
+  }
   return [
     '@livekit/react-native-expo-plugin',
     // Permission strings come from ios.infoPlist in app.config.js (the plugin

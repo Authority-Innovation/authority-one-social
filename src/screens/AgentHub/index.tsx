@@ -36,6 +36,7 @@ import {useThreadsQuery} from '#/state/queries/threads'
 import {useSession} from '#/state/session'
 import {PostFeed} from '#/view/com/posts/PostFeed'
 import {EmptyState} from '#/view/com/util/EmptyState'
+import {GoLiveButton} from '#/features/agentLive/GoLiveButton'
 import {channelBadge} from '#/screens/AgentChat/channelBadge'
 import {AgentProfileDialog} from '#/screens/Settings/PersonaSettings/AgentProfileDialog'
 import {atoms as a, useTheme} from '#/alf'
@@ -174,6 +175,8 @@ function AgentHubInner({agentRef}: {agentRef: string}) {
             </Text>
           </View>
         ) : null}
+        {/* Agent Live: renders nothing unless the flag is on and it's owned. */}
+        {owned ? <GoLiveButton agent={agent} /> : null}
       </View>
 
       <HubTabBar tab={tab} onSelect={setTab} showSettings={owned} />
