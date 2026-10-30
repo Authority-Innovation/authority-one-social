@@ -111,6 +111,16 @@ function secretsOf(creds) {
   return [...new Set(out.filter(Boolean))].sort((x, y) => y.length - x.length)
 }
 
+/**
+ * The secrets an Authorization header carries: the whole header and the bare
+ * token, since an error message can quote either.
+ */
+function authSecrets(auth) {
+  if (!auth) return []
+  const token = String(auth).replace(/^Bearer\s+/i, '')
+  return [...new Set([auth, token].filter(Boolean))]
+}
+
 /** Replaces every occurrence of each secret in `text` with a marker. */
 function redact(text, secrets) {
   let out = String(text)
@@ -128,5 +138,6 @@ module.exports = {
   loadCredentials,
   describe,
   secretsOf,
+  authSecrets,
   redact,
 }

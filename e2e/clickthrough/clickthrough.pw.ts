@@ -87,7 +87,7 @@ function watch(page: Page) {
     const auth = req.headers().authorization
     if (!auth || auth === runtimeAuth) return
     runtimeAuth = auth
-    secrets.push(auth, auth.replace(/^Bearers+/i, ''))
+    secrets.push(...credsLib.authSecrets(auth))
     secrets.sort((x, y) => y.length - x.length)
   })
   page.on('response', async res => {

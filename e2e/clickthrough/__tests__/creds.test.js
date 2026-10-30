@@ -8,6 +8,7 @@ const {
   loadCredentials,
   describe: describeCreds,
   secretsOf,
+  authSecrets,
   redact,
 } = require('../lib/creds')
 const {runDir} = require('../lib/report')
@@ -70,6 +71,31 @@ describe('loadCredentials', () => {
     expect(redact(`x ${FAKE_PASSWORD} ${FAKE_HANDLE}`, secretsOf(creds))).toBe(
       'x [REDACTED] [REDACTED]',
     )
+  })
+})
+
+describe('authSecrets', () => {
+  // A made-up JWT-shaped value; not a real token.
+  const FAKE_JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlIn0.c2lnbmF0dXJl'
+
+  it('yields the whole header and the bare token', () => {
+    expect(authSecrets(`Bearer ${FAKE_JWT}`)).toEqual([
+      `Bearer ${FAKE_JWT}`,
+      FAKE_JWT,
+    ])
+    expect(authSecrets(`bearer	${FAKE_JWT}`)).toContain(FAKE_JWT)
+  })
+
+  it('redacts a bare JWT quoted in an error string', () => {
+    const secrets = authSecrets(`Bearer ${FAKE_JWT}`)
+    const err = `Error: invalid token ${FAKE_JWT} for /app/communities`
+    const out = redact(err, secrets)
+    expect(out).not.toContain(FAKE_JWT)
+    expect(out).toBe('Error: invalid token [REDACTED] for /app/communities')
+  })
+
+  it('returns nothing for a missing header', () => {
+    expect(authSecrets(undefined)).toEqual([])
   })
 })
 
