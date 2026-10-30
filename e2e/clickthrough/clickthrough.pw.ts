@@ -11,9 +11,11 @@ import {type Browser, type Page, test} from '@playwright/test'
 import * as checks from './lib/checks'
 import * as credsLib from './lib/creds'
 import * as reportLib from './lib/report'
+import * as runtimeGuardLib from './lib/runtimeGuard'
 
 const COMMUNITY_ID = 'ao-dev-test'
 const runId = process.env.CLICKTHROUGH_RUN_ID || reportLib.newRunId()
+const baseURL = process.env.CLICKTHROUGH_BASE_URL || 'http://localhost:19006'
 const runtimeOrigin = new URL(
   process.env.CLICKTHROUGH_RUNTIME_URL ||
     'https://authority-one-agent-runtime-dev.e-479.workers.dev',
@@ -27,6 +29,14 @@ const knownHandles: string[] = [creds.devtest?.handle, creds.admin?.handle]
   .filter((h): h is string => !!h)
   .map(h => h.replace(/^@/, ''))
 const shapes = checks.doorShapes()
+const runtimeGuard = runtimeGuardLib.createRuntimeGuard()
+// By default every run leaves ao-dev-test first so the join flow is exercised
+// each time. CLICKTHROUGH_KEEP_MEMBERSHIP=1 keeps an existing membership and
+// lets join report already-member instead.
+const keepMembership = process.env.CLICKTHROUGH_KEEP_MEMBERSHIP === '1'
+// The Authorization header the app sends the Dev runtime, kept in memory for
+// the leave call (the app has no leave UI). Never written anywhere.
+let runtimeAuth: string | null = null
 
 type StepStatus = 'pass' | 'fail' | 'skipped' | 'already-member' | 'not run'
 type StepResult = {
@@ -71,6 +81,14 @@ function watch(page: Page) {
     }
     consoleErrors.push(e)
     pendingConsole.push(e)
+  })
+  page.on('request', req => {
+    if (!req.url().startsWith(runtimeOrigin)) return
+    const auth = req.headers().authorization
+    if (!auth || auth === runtimeAuth) return
+    runtimeAuth = auth
+    secrets.push(auth, auth.replace(/^Bearers+/i, ''))
+    secrets.sort((x, y) => y.length - x.length)
   })
   page.on('response', async res => {
     const url = res.url()
@@ -143,6 +161,10 @@ async function step(
   }
   // Let late console messages and responses for this step land.
   await page.waitForTimeout(750).catch(() => {})
+  // A non-Dev runtime call means the bundle under test is not a Dev build:
+  // fail the step and stop, whatever the action itself reported.
+  const blocked = runtimeGuardLib.blockedFailures(runtimeGuard.take())
+  if (blocked.length) actionFailed = true
   try {
     await page.screenshot({
       path: `${reportLib.runDir(runId)}/${file}`,
@@ -169,6 +191,7 @@ async function step(
       knownHandles,
     }),
     ...pendingShape,
+    ...blocked,
   ].map(f => credsLib.redact(f, secrets))
   if (failures.length) {
     result.status = 'fail'
@@ -247,7 +270,8 @@ async function adminLaunch(browser: Browser) {
       reason: 'SKIPPED: no DEVTEST_ADMIN_* credential',
     }
   }
-  const ctx = await browser.newContext()
+  const ctx = await browser.newContext({serviceWorkers: 'block'})
+  await runtimeGuard.install(ctx)
   const admin = await ctx.newPage()
   watch(admin)
   try {
@@ -271,7 +295,13 @@ async function adminLaunch(browser: Browser) {
 test('AO clickthrough on the Dev runtime', async ({page, browser}) => {
   test.skip(!creds.devtest, 'no devtest credential')
   const devtest = creds.devtest!
+  await runtimeGuard.install(page.context())
   watch(page)
+  notes.push(
+    keepMembership
+      ? 'Membership: CLICKTHROUGH_KEEP_MEMBERSHIP=1 - the leave step was not run, so join may report already-member and the join flow may not have been exercised.'
+      : 'Membership: leave-then-join - the run leaves ao-dev-test first (if a member) so the join flow is exercised on this run.',
+  )
   const postText = `Clickthrough ${runId}`
 
   const flow: [
@@ -279,16 +309,64 @@ test('AO clickthrough on the Dev runtime', async ({page, browser}) => {
     () => Promise<{status?: StepStatus; reason?: string} | void>,
   ][] = [
     [
+      'preflight',
+      async () => {
+        const res = await runtimeGuardLib.checkServedBundle(
+          page.request,
+          baseURL,
+        )
+        if (!res.ok) throw new Error(res.reason)
+        return {reason: 'served bundle carries the Dev runtime host'}
+      },
+    ],
+    [
       'signin',
       async () => {
         await signIn(page, devtest.handle, devtest.appPassword)
       },
     ],
     [
+      'leave',
+      async () => {
+        await openCommunity(page)
+        if (!(await isMember(page))) {
+          return {status: 'skipped', reason: 'not a member at the start'}
+        }
+        if (keepMembership) {
+          return {
+            status: 'skipped',
+            reason: 'CLICKTHROUGH_KEEP_MEMBERSHIP=1: still a member',
+          }
+        }
+        const url = `${runtimeOrigin}/app/communities/${COMMUNITY_ID}/leave`
+        // page.request does not go through context.route(); check it here.
+        const decision = runtimeGuardLib.classifyRequest(url)
+        if (decision.action === 'abort') throw new Error(decision.reason)
+        if (!runtimeAuth) {
+          throw new Error('no Dev runtime request seen yet to take auth from')
+        }
+        const res = await page.request.post(url, {
+          headers: {Authorization: runtimeAuth},
+        })
+        if (!res.ok()) throw new Error(`leave POST answered ${res.status()}`)
+        await openCommunity(page)
+        if (await isMember(page)) {
+          throw new Error('community home still shows the member badge')
+        }
+        return {
+          reason:
+            'left through POST /app/communities/ao-dev-test/leave (the app has no leave UI)',
+        }
+      },
+    ],
+    [
       'join',
       async () => {
         await openCommunity(page)
-        if (await isMember(page)) return {status: 'already-member'}
+        if (await isMember(page)) {
+          if (keepMembership) return {status: 'already-member'}
+          throw new Error('still a member after the leave step')
+        }
         // The app's own way in first: the Join button on the community home.
         await page.locator(tid('communityJoinButton')).click()
         const joinScreen = page.locator(tid('communityJoinScreen'))
