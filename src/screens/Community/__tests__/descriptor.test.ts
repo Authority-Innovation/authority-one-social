@@ -4,6 +4,8 @@ import {type Community} from '#/lib/agent-runtime/communitiesClient'
 import {
   asClientCommunity,
   clientCommunity,
+  DEPLOYED_AGENT_DID,
+  deployedHome,
   DOOR_AGENT_DID,
   DOOR_SPONSOR_DID,
   doorCommunity,
@@ -63,8 +65,35 @@ describe('toDescriptor', () => {
     ).toEqual({
       did: DOOR_AGENT_DID,
       sponsorDid: DOOR_SPONSOR_DID,
+      sponsorName: 'carol-sponsor',
       sponsorHandle: 'carol-sponsor',
     })
+  })
+
+  it('builds the agent from the deployed door’s agent {did, is_agent} with no agentSponsor', () => {
+    const home = deployedHome()
+    expect('agentSponsor' in home).toBe(false)
+    const d = toDescriptor('ao-dev-test', asClientCommunity(home))
+    expect(d.agent?.did).toBe(DEPLOYED_AGENT_DID)
+    expect(d.agent?.sponsorDid).toBeUndefined()
+    expect(d.agent?.sponsorName).toBeUndefined()
+    expect(d.agentDid).toBe(DEPLOYED_AGENT_DID)
+  })
+
+  it('has no agent when the deployed door sends agent null or is_agent not true', () => {
+    for (const agent of [
+      null,
+      {did: DEPLOYED_AGENT_DID, is_agent: false},
+      {did: DEPLOYED_AGENT_DID},
+      {did: '', is_agent: true},
+    ]) {
+      const d = toDescriptor(
+        'ao-dev-test',
+        asClientCommunity({...deployedHome(), agent} as never),
+      )
+      expect(d.agent).toBeUndefined()
+      expect(d.agentDid).toBeUndefined()
+    }
   })
 
   it('a null sponsor handle is absent, never the DID or the community name', () => {
@@ -157,7 +186,8 @@ describe('toDescriptor', () => {
           agent: {did: 'did:example:door', is_agent: true},
         }),
       ).agentDid,
-    ).toBe('did:example:config')
+      // The door's `agent` key, when sent, decides over any config record.
+    ).toBe('did:example:door')
     expect(toDescriptor('c1', community()).agentDid).toBeUndefined()
     expect(
       toDescriptor('c1', community({agent: null})).agentDid,

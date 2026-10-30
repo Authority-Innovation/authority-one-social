@@ -85,9 +85,12 @@ jest.mock('#/env', () => ({
 import {setAgentGrant} from '#/lib/agent-runtime/communitiesClient'
 import {
   asClientCommunity,
+  deployedHome,
+  DEV_RUNTIME,
   DOOR_AGENT_DID,
   DOOR_SPONSOR_DID,
   doorCommunity,
+  doorCommunityAsDeployed,
   doorCommunityWithSponsorMember,
   doorItem,
 } from '#/lib/communities/__fixtures__/door'
@@ -132,12 +135,6 @@ const community: CommunityAgentConfig = asClientCommunity(
   doorCommunityWithSponsorMember(),
 )
 const SPONSOR_HANDLE = community.agentSponsor!.handle!
-
-/** The same community without the sponsor view (a runtime before bfd5a63c). */
-function withoutSponsor(c: CommunityAgentConfig): CommunityAgentConfig {
-  const {agentSponsor: _sponsor, ...rest} = c
-  return rest
-}
 
 /** door.json's agent item; by default with no sources, as the door sends them. */
 function agentReply(overrides: Partial<Post> = {}): Post {
@@ -199,19 +196,45 @@ describe('community agent label rule (N1)', () => {
     ).toEqual({kind: 'member'})
   })
 
-  it('agent with no sponsor renders as a human with an operator warning', () => {
-    const noSponsor = {...withoutSponsor(community), viewerIsAdmin: true}
+  it('agent with no agentSponsor (the deployed door) still renders as the agent', () => {
+    const deployed = asClientCommunity(doorCommunityAsDeployed())
+    expect(deployed.agentSponsor).toBeUndefined()
     const r = render(
-      <CommunityThreadPost post={agentReply()} community={noSponsor} />,
+      <CommunityThreadPost post={agentReply()} community={deployed} />,
+    )
+    expect(r.getByTestId('communityPostAgent')).toBeTruthy()
+    expect(r.getByTestId('communityAgentPill')).toBeTruthy()
+    expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(
+      'AI agent',
+      {exact: true},
+    )
+    expect(r.getByTestId('avatarShape-square')).toBeTruthy()
+    expect(r.queryByTestId('communityAgentNoSponsorWarning')).toBeNull()
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('agent null on the home (no valid agent slot) renders the agent item as a member', () => {
+    const noAgent = asClientCommunity({
+      ...doorCommunityAsDeployed(),
+      agent: null,
+    })
+    const r = render(
+      <CommunityThreadPost post={agentReply()} community={noAgent} />,
     )
     expect(r.getByTestId('communityPostMember')).toBeTruthy()
     expect(r.queryByTestId('communityAgentPill')).toBeNull()
     expect(r.queryByTestId('communityAgentSponsor')).toBeNull()
-    expect(r.queryByTestId('communityAgentSources')).toBeNull()
-    expect(r.queryByTestId('communityAgentNoSource')).toBeNull()
     expect(r.getByTestId('avatarShape-circle')).toBeTruthy()
-    expect(r.getByTestId('communityAgentNoSponsorWarning')).toBeTruthy()
-    expect(logger.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('a non-agent author from the real Dev timeline renders as a member', () => {
+    const deployed = asClientCommunity(deployedHome())
+    const [item] = DEV_RUNTIME.timeline.items
+    expect(item.is_agent).toBe(false)
+    const r = render(<CommunityThreadPost post={item} community={deployed} />)
+    expect(r.getByTestId('communityPostMember')).toBeTruthy()
+    expect(r.queryByTestId('communityAgentPill')).toBeNull()
+    expect(r.queryByTestId('communityAgentSponsor')).toBeNull()
   })
 
   it('sponsor with no handle (door answers null) shows the agent label, never the community name or DID', () => {
@@ -235,17 +258,6 @@ describe('community agent label rule (N1)', () => {
     expect(text).not.toContain(community.name)
     expect(text).not.toContain(DOOR_SPONSOR_DID)
     expect(text).not.toContain('run by')
-  })
-
-  it('agent with no sponsor shows no warning to an ordinary member', () => {
-    const r = render(
-      <CommunityThreadPost
-        post={agentReply()}
-        community={withoutSponsor(community)}
-      />,
-    )
-    expect(r.getByTestId('communityPostMember')).toBeTruthy()
-    expect(r.queryByTestId('communityAgentNoSponsorWarning')).toBeNull()
   })
 })
 
