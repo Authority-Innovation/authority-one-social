@@ -10,7 +10,13 @@
  *   machine, any request or WebSocket to an agent-runtime host that is not
  *   the Dev runtime, and records it so the step that made it fails;
  * - a preflight that reads the served bundle and refuses when the Dev runtime
- *   host is not baked into it.
+ *   URL is not baked into it.
+ *
+ * Limits: the route matches hosts with "agent-runtime" in the name, so a
+ * runtime on a custom domain would not be routed; the preflight is what
+ * catches a build pointed elsewhere. And page.request (the APIRequestContext)
+ * does not go through context.route() at all, so harness code that calls the
+ * runtime directly must go through guardedPost().
  */
 
 const {DEV_RUNTIME_HOST} = require('./guard')
@@ -109,8 +115,25 @@ function createRuntimeGuard() {
     }
   }
 
+  /**
+   * page.request bypasses context.route(), so a direct runtime call is
+   * checked here instead: a non-Dev agent-runtime URL is recorded (the step
+   * fails) and refused before anything is sent.
+   *
+   * @param {{post: (url: string, opts?: any) => Promise<any>}} request
+   */
+  async function guardedPost(request, rawUrl, opts) {
+    const decision = classifyRequest(rawUrl)
+    if (decision.action === 'abort') {
+      record(rawUrl, decision, 'api request')
+      throw new Error(decision.reason)
+    }
+    return request.post(rawUrl, opts)
+  }
+
   return {
     install,
+    guardedPost,
     take() {
       const out = pending
       pending = []
@@ -143,11 +166,22 @@ function bundleScriptUrls(html, baseURL) {
   return out
 }
 
+// The Dev runtime URL as a bundle carries it: the whole origin (scheme
+// included, slashes possibly JSON-escaped), not followed by more host
+// characters. A bare mention of the host, or a look-alike such as
+// "<dev host>.evil.example", does not count.
+const DEV_RUNTIME_IN_BUNDLE = new RegExp(
+  String.raw`https:(?://|\\/\\/)` +
+    DEV_RUNTIME_HOST.replace(/[.]/g, String.raw`\.`) +
+    '(?![A-Za-z0-9.-])',
+)
+
 /**
  * Whether the served bundle was built for the Dev runtime. Expo inlines
  * EXPO_PUBLIC_AGENT_RUNTIME_URL at build time, so a Dev build contains the Dev
- * host. The prod host is in every bundle (the AGENT_RUNTIME_SERVICE fallback),
- * so its presence alone proves nothing; the Dev host's absence does.
+ * runtime URL. The prod host is in every bundle (the AGENT_RUNTIME_SERVICE
+ * fallback), so its presence alone proves nothing; the Dev URL's absence
+ * does.
  *
  * @param {string[]} sources the bundle script bodies
  * @returns {{ok: true} | {ok: false, reason: string}}
@@ -160,13 +194,13 @@ function checkBundle(sources) {
         'the served page has no same-origin bundle script; cannot tell which runtime it calls',
     }
   }
-  if (sources.some(s => String(s).includes(DEV_RUNTIME_HOST))) {
+  if (sources.some(s => DEV_RUNTIME_IN_BUNDLE.test(String(s)))) {
     return {ok: true}
   }
   const prod = sources.some(s => String(s).includes(PROD_RUNTIME_HOST))
   return {
     ok: false,
-    reason: `the served bundle does not contain the Dev runtime host ${DEV_RUNTIME_HOST}${prod ? ` but does contain ${PROD_RUNTIME_HOST}` : ''}; it was not built with the development-communities env - refusing to sign in`,
+    reason: `the served bundle does not contain the Dev runtime URL https://${DEV_RUNTIME_HOST}${prod ? ` but does contain ${PROD_RUNTIME_HOST}` : ''}; it was not built with the development-communities env - refusing to sign in`,
   }
 }
 

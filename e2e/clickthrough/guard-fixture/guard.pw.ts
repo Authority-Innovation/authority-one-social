@@ -157,3 +157,32 @@ test('server serving the Dev build: preflight passes, request allowed, step pass
     await server.close()
   }
 })
+
+test('page.request to a non-Dev runtime: guardedPost refuses before sending, step fails', async ({
+  page,
+}) => {
+  const guard = runtimeGuardLib.createRuntimeGuard()
+  await guard.install(page.context())
+  // Count anything that reaches the APIRequestContext; guardedPost must stop
+  // the call before it does.
+  let sent = 0
+  const request = {
+    post: (url: string, opts?: Parameters<typeof page.request.post>[1]) => {
+      sent++
+      return page.request.post(url, opts)
+    },
+  }
+  const step = await runStep(guard, async () => {
+    await guard.guardedPost(
+      request,
+      `${PROD_RUNTIME_URL}/app/communities/ao-dev-test/leave`,
+      {headers: {Authorization: 'Bearer not-a-real-token'}},
+    )
+  })
+  expect(sent).toBe(0)
+  expect(step.status).toBe('fail')
+  expect(step.stops).toBe(true)
+  expect(step.reasons.join('\n')).toContain(
+    `BLOCKED api request: non-Dev agent-runtime request to https://${runtimeGuardLib.PROD_RUNTIME_HOST}`,
+  )
+})

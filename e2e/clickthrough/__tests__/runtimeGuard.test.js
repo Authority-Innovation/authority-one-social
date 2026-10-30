@@ -128,7 +128,69 @@ describe('createRuntimeGuard', () => {
   })
 })
 
+describe('guardedPost (page.request bypasses context.route)', () => {
+  function fakeRequest() {
+    return {post: jest.fn(() => Promise.resolve({ok: () => true}))}
+  }
+
+  it('refuses a page.request to a non-Dev runtime and fails the step', async () => {
+    const guard = createRuntimeGuard()
+    const request = fakeRequest()
+    await expect(
+      guard.guardedPost(request, `${PROD_URL}/app/communities/x/leave?t=abc`, {
+        headers: {Authorization: 'Bearer fake'},
+      }),
+    ).rejects.toThrow('non-Dev agent-runtime request')
+    expect(request.post).not.toHaveBeenCalled()
+    const failures = blockedFailures(guard.take())
+    expect(failures).toEqual([
+      expect.stringMatching(/^BLOCKED api request: /),
+    ])
+    expect(failures[0]).not.toContain('abc')
+  })
+
+  it('refuses plain http to the Dev host', async () => {
+    const guard = createRuntimeGuard()
+    const request = fakeRequest()
+    await expect(
+      guard.guardedPost(request, `http://${DEV_RUNTIME_HOST}/app`),
+    ).rejects.toThrow()
+    expect(request.post).not.toHaveBeenCalled()
+    expect(guard.take()).toHaveLength(1)
+  })
+
+  it('sends a Dev runtime request and records nothing', async () => {
+    const guard = createRuntimeGuard()
+    const request = fakeRequest()
+    const url = `${DEV_RUNTIME_URL}/app/communities/x/leave`
+    const opts = {headers: {Authorization: 'Bearer fake'}}
+    await guard.guardedPost(request, url, opts)
+    expect(request.post).toHaveBeenCalledWith(url, opts)
+    expect(guard.take()).toEqual([])
+  })
+})
+
 describe('checkBundle', () => {
+  it.each([
+    ['plain', `x="${DEV_RUNTIME_URL}"`],
+    ['with a path', `x="${DEV_RUNTIME_URL}/app"`],
+    ['JSON-escaped slashes', String.raw`x="https:\/\/` + DEV_RUNTIME_HOST + '"'],
+  ])('passes the exact Dev runtime URL (%s)', (_, src) => {
+    expect(checkBundle([src])).toEqual({ok: true})
+  })
+
+  it.each([
+    ['a bare mention of the host', `// see ${DEV_RUNTIME_HOST}`],
+    ['a look-alike suffix', `x="https://${DEV_RUNTIME_HOST}.evil.example"`],
+    ['a look-alike prefix', `x="https://x${DEV_RUNTIME_HOST}"`],
+    [
+      'a host where the dots are other characters',
+      `x="https://${DEV_RUNTIME_HOST.replace(/\./g, 'x')}"`,
+    ],
+  ])('refuses %s', (_, src) => {
+    expect(checkBundle([src]).ok).toBe(false)
+  })
+
   it('passes a bundle built for the Dev runtime', () => {
     expect(checkBundle([`var a="${DEV_RUNTIME_URL}"??"${PROD_URL}";`])).toEqual(
       {ok: true},
