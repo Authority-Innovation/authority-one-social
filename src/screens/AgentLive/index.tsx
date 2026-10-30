@@ -82,8 +82,9 @@ function LiveSession({
   const insets = useSafeAreaInsets()
   const navigation = useNavigation<NavigationProp>()
   const [state, setState] = useState<LiveSessionState>(initialLiveSessionState)
-  const [controller, setController] =
-    useState<LiveSessionController | null>(null)
+  const [controller, setController] = useState<LiveSessionController | null>(
+    null,
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -243,7 +244,9 @@ function LiveSession({
           color="negative"
           size="large"
           onPress={onEnd}>
-          <ButtonText>{l({message: 'End', context: 'End a live session'})}</ButtonText>
+          <ButtonText>
+            {l({message: 'End', context: 'End a live session'})}
+          </ButtonText>
         </Button>
       </View>
     </View>

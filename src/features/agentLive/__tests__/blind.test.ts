@@ -27,9 +27,9 @@ describe('blind wire format (ruling 2)', () => {
   })
 
   it('one source: exact bytes', () => {
-    expect(decode(encodeBlindMessage(blindMessage(true, 'screen_share')!))).toBe(
-      '{"t":"blind","on":true,"src":"screen_share"}',
-    )
+    expect(
+      decode(encodeBlindMessage(blindMessage(true, 'screen_share')!)),
+    ).toBe('{"t":"blind","on":true,"src":"screen_share"}')
   })
 
   it('carries exactly t, on, src: no identity of any kind', () => {

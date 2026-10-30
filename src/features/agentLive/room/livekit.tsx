@@ -125,7 +125,8 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
         return
       }
       const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
-      if (pub?.track) await room.localParticipant.unpublishTrack(pub.track, true)
+      if (pub?.track)
+        await room.localParticipant.unpublishTrack(pub.track, true)
     },
     async publishData(payload, {topic, reliable}) {
       await room.localParticipant.publishData(payload, {topic, reliable})

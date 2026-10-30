@@ -35,10 +35,9 @@ const gate = require(path.join(ROOT, 'plugins/agentLive')) as {
   LIVE_JS_MODULE_RE: RegExp
   isAgentLiveEnabled(env: Record<string, string | undefined>): boolean
   agentLivePlugins(env: Record<string, string | undefined>): unknown[]
-  agentLiveRNDependencies(env: Record<string, string | undefined>): Record<
-    string,
-    unknown
-  >
+  agentLiveRNDependencies(
+    env: Record<string, string | undefined>,
+  ): Record<string, unknown>
   addPodfileExclude(src: string): string
   addSettingsGradleExclude(src: string): string
 }
@@ -60,9 +59,7 @@ describe('flag values per EAS profile', () => {
 
   it('every profile sets it explicitly; production, preview and testflight are false', () => {
     for (const [, p] of Object.entries(profiles)) {
-      expect(['true', 'false']).toContain(
-        p.env?.EXPO_PUBLIC_AGENT_LIVE_ENABLED,
-      )
+      expect(['true', 'false']).toContain(p.env?.EXPO_PUBLIC_AGENT_LIVE_ENABLED)
     }
     for (const name of [
       'base',
@@ -133,7 +130,9 @@ describe('native build gate', () => {
 
   it('a template without the anchor fails the build rather than linking the SDK', () => {
     expect(() => gate.addPodfileExclude("target 'App' do\nend\n")).toThrow()
-    expect(() => gate.addSettingsGradleExclude('rootProject.name = "x"')).toThrow()
+    expect(() =>
+      gate.addSettingsGradleExclude('rootProject.name = "x"'),
+    ).toThrow()
   })
 
   it('Metro stubs every SDK import, and nothing else', () => {
@@ -146,7 +145,11 @@ describe('native build gate', () => {
     ]) {
       expect(gate.LIVE_JS_MODULE_RE.test(m)).toBe(true)
     }
-    for (const m of ['@livekit/react-native-expo-plugin', 'react-native', 'livekit']) {
+    for (const m of [
+      '@livekit/react-native-expo-plugin',
+      'react-native',
+      'livekit',
+    ]) {
       expect(gate.LIVE_JS_MODULE_RE.test(m)).toBe(false)
     }
   })
@@ -156,20 +159,23 @@ describe('no SDK import at module load', () => {
   function sourceFiles(dir: string): string[] {
     return fs.readdirSync(dir, {withFileTypes: true}).flatMap(e => {
       const p = path.join(dir, e.name)
-      if (e.isDirectory()) return e.name === 'node_modules' ? [] : sourceFiles(p)
+      if (e.isDirectory())
+        return e.name === 'node_modules' ? [] : sourceFiles(p)
       return /\.(ts|tsx|js|jsx)$/.test(e.name) ? [p] : []
     })
   }
 
   it('only the binding imports LiveKit, and only a dynamic import reaches it', () => {
-    const SDK = /from\s+['"](@livekit\/[^'"]+|livekit-client)['"]|require\(\s*['"](@livekit\/|livekit-client)/
+    const SDK =
+      /from\s+['"](@livekit\/[^'"]+|livekit-client)['"]|require\(\s*['"](@livekit\/|livekit-client)/
     const importers = sourceFiles(path.join(ROOT, 'src'))
       .filter(f => !f.includes('__tests__'))
       .filter(f => SDK.test(fs.readFileSync(f, 'utf8')))
       .map(f => path.relative(ROOT, f).split(path.sep).join('/'))
     expect(importers).toEqual(['src/features/agentLive/room/livekit.tsx'])
 
-    const STATIC_BINDING = /(from|require\()\s*['"](\.\/livekit|#\/features\/agentLive\/room\/livekit)['"]/
+    const STATIC_BINDING =
+      /(from|require\()\s*['"](\.\/livekit|#\/features\/agentLive\/room\/livekit)['"]/
     const staticBindingImporters = sourceFiles(path.join(ROOT, 'src'))
       .filter(f => !f.includes('__tests__'))
       .filter(f => STATIC_BINDING.test(fs.readFileSync(f, 'utf8')))

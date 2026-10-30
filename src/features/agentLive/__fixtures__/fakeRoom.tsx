@@ -48,7 +48,6 @@ export function createFakeRoom(log: string[] = []) {
     showStage(ref: unknown = 'agent-stage') {
       listeners.forEach(cb => cb({kind: 'stage', ref}))
     },
-    cameraPublishes: () =>
-      calls.filter(c => c.op === 'camera' && c.on).length,
+    cameraPublishes: () => calls.filter(c => c.op === 'camera' && c.on).length,
   }
 }

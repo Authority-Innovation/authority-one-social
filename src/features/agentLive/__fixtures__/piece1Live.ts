@@ -19,7 +19,8 @@ export const SESSION_FIXTURE = {
   sid: 'ls_01JBX8M4Q2T7V9WZ3K5N6P8R0S',
   region: 'r1',
   wsUrl: 'wss://media.region-one.test',
-  token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvd25lcjpsc18wMUpCWDhNNFEyVDdWOVdaM0s1TjZQOFIwUzpvazEifQ.c2lnbmF0dXJl',
+  token:
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvd25lcjpsc18wMUpCWDhNNFEyVDdWOVdaM0s1TjZQOFIwUzpvazEifQ.c2lnbmF0dXJl',
   expiresAt: 1793330100,
   consentRequired: [
     'record_audio',
@@ -33,7 +34,8 @@ export const SESSION_FIXTURE = {
 }
 
 export const CAMERA_TOKEN_FIXTURE = {
-  token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvd25lcjpsc18wMUpCWDhNNFEyVDdWOVdaM0s1TjZQOFIwUzpvazEiLCJjYW0iOnRydWV9.Y2FtZXJh',
+  token:
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvd25lcjpsc18wMUpCWDhNNFEyVDdWOVdaM0s1TjZQOFIwUzpvazEiLCJjYW0iOnRydWV9.Y2FtZXJh',
   expiresAt: 1793330400,
 }
 

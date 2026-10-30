@@ -1,9 +1,6 @@
 // Learn more https://docs.expo.io/guides/customizing-metro
 const {getSentryExpoConfig} = require('@sentry/react-native/metro')
-const {
-  isAgentLiveEnabled,
-  LIVE_JS_MODULE_RE,
-} = require('./plugins/agentLive')
+const {isAgentLiveEnabled, LIVE_JS_MODULE_RE} = require('./plugins/agentLive')
 const cfg = getSentryExpoConfig(__dirname)
 
 // inject `.e2e.ts` and `.e2e.tsx` into the sourceExts when running tests

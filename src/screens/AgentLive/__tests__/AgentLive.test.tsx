@@ -180,7 +180,11 @@ function render(ui: React.ReactElement) {
 
 function screen() {
   const props = {
-    route: {key: 'AgentLive-1', name: 'AgentLive', params: {agent: AGENT_HANDLE}},
+    route: {
+      key: 'AgentLive-1',
+      name: 'AgentLive',
+      params: {agent: AGENT_HANDLE},
+    },
     navigation: {},
   } as unknown as React.ComponentProps<typeof AgentLiveScreen>
   return render(<AgentLiveScreen {...props} />)
@@ -207,7 +211,9 @@ beforeEach(() => {
   mockGoBack.mockReset()
   mockLoad.mockReset()
   mockStart.mockReset().mockResolvedValue({ok: true, data: SESSION_FIXTURE})
-  mockToken.mockReset().mockResolvedValue({ok: true, data: CAMERA_TOKEN_FIXTURE})
+  mockToken
+    .mockReset()
+    .mockResolvedValue({ok: true, data: CAMERA_TOKEN_FIXTURE})
   mockEnd.mockReset().mockResolvedValue({ok: true, data: null})
 })
 

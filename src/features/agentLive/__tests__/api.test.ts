@@ -238,7 +238,9 @@ describe('reading piece 1 responses', () => {
 describe('logs (X-LOG-1, client half)', () => {
   it('a network failure logs no token, bearer or DID', async () => {
     fetchMock.mockImplementationOnce(() =>
-      Promise.reject(new Error(`boom ${SESSION_FIXTURE.token} ${BEARER} ${AGENT_DID}`)),
+      Promise.reject(
+        new Error(`boom ${SESSION_FIXTURE.token} ${BEARER} ${AGENT_DID}`),
+      ),
     )
     expect(await startLiveSession({agentDid: AGENT_DID})).toEqual({
       ok: false,

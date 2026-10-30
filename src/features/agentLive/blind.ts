@@ -37,9 +37,7 @@ export function blindMessage(
   return {t: 'blind', on, src}
 }
 
-export function encodeBlindMessage(
-  msg: BlindMessage,
-): Uint8Array<ArrayBuffer> {
+export function encodeBlindMessage(msg: BlindMessage): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(
     JSON.stringify({t: msg.t, on: msg.on, src: msg.src}),
   )
