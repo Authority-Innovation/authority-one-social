@@ -1,0 +1,136 @@
+# Task 55f1f868: fixes for ccacde3b review HIGH 1 and HIGH 2
+
+Branch: `coord/fix-ccacde3b-high-1-gate-agent-l-55f1f868`. It is built on
+`coord/type-drift-fix-2-agent-label-fro-ccacde3b` (76e66607), rebased onto
+`origin/communities/integration` 03ea8768d. Draft only: nothing merged or
+deployed.
+
+## Commits on top of 03ea8768d
+
+| SHA | What |
+| --- | --- |
+| 79e4edc02 .. 7cca43ac3 | The 10 ccacde3b/e31e0aa7 commits, rebased |
+| b0d370957 | HIGH 1 fix: label and card gate on `agent {did, is_agent}`, not `agentSponsor`; deployed-door fixture helpers |
+| 0c065e7f8 | Tests on the deployed door shape; integration-era CommunityScreen fakes moved onto door fixtures |
+| (this report) | docs |
+
+The report commit is the head. Its SHA is in `report_result`.
+
+## HIGH 2: rebase onto 03ea8768d
+
+`git rebase origin/communities/integration`. There were two stops and five
+conflicted files:
+
+1. **e58a84761 (door contract)**, `src/lib/agent-runtime/communitiesClient.ts`.
+   Integration added `CommunityRosterEntry` and `CommunityThreadRoster` for the
+   Members tab, and this branch had replaced the inline types with
+   doorContract aliases. Resolution: keep the aliases and alias the roster
+   types to the contract too (`CommunityRosterEntry = DoorRosterEntry`,
+   `CommunityThreadRoster = DoorRoster`, which have the same shape).
+   `getThreadRoster` and the Members tab are unchanged.
+2. **134691df2 (agent card from agentSponsor)**: `descriptor.ts`,
+   `AgentCard.tsx`, `descriptor.test.ts` and `CommunityScreen.test.tsx`.
+   Every conflict hunk takes the integration side (polish 2 59c238b63: card
+   without a sponsor, "run by <handle>", name from the profile cache; polish
+   5-7 587a35d08/3f06292fc: refetch after launch, Members tab). The
+   sponsor-gated card from 134691df2 is dropped, which is also what HIGH 1
+   needs. The non-conflicting hunks from 134691df2 (join-info gating, door
+   fixture helpers in the tests) are kept.
+
+After the rebase, 8 integration CommunityScreen tests called helpers that
+134691df2 had removed (`communityResponse`, `configWith`, `SPONSOR_DID`).
+0c065e7f8 moves them onto door fixtures (`memberCommunity`, `withoutSponsor`,
+`nonMemberCommunity`, `DOOR_SPONSOR_DID`) and keeps what each test asserts.
+The one exception: the card name test expected "Steve" from a hand-made
+`agentName` that the door never sends, so it now expects "Community agent".
+Polish 1 and 2 (compose entry, grant row in "Your settings", card without a
+sponsor) and the Members tab tests are all still there and pass.
+
+## HIGH 1: gate on the field the deployed door sends
+
+- `src/features/communityAgent/labelRule.ts`: an author is the agent only when
+  the community has `agent.is_agent === true`, the item's
+  `author.is_agent === true`, and `author.did === agent.did` (the shared
+  `isCommunityAgentAuthor` rule). The `agentSponsor` requirement is gone. If a
+  runtime does send `agentSponsor.handle`, it fills the "run by" line;
+  otherwise the line is just "AI agent".
+- `CommunityThreadPost.tsx`: the `agent_without_sponsor` member fallback, the
+  operator warning (`communityAgentNoSponsorWarning`) and its `logger.warn` are
+  removed. They only fired on the sponsor gate.
+- `src/screens/Community/descriptor.ts`: when the response has an `agent` key,
+  that key alone decides. The card exists only for `{did, is_agent: true}`;
+  `agent: null`, or an agent without `is_agent: true`, means no card and no
+  `agentDid`. A response with no `agent` key still falls back to the config
+  agent DID, as before. This is a behaviour change: when both are present, the
+  door's `agent.did` now wins over `config.agent` (test updated).
+- `types.ts`: the doc comment is corrected. `agentSponsor` is still an
+  optional contract field, because the bfd5a63c runtime sends it.
+
+## Fixtures (item 3)
+
+**Assumption, please check:** I could not read
+`authority-one-runtime src/communities/door.js` at 1758605. The local runtime
+clone is at 7f436b82 and doesn't have 1758605. I was not allowed to change
+that shared checkout, and a scratch `git clone --branch deploy/dev-communities`
+was blocked by the deny-list (git-checkout-protected). I asked the
+orchestrator (qid 333e5e3b) and had no answer by the time I finished.
+
+So the fixtures use the **real deployed-door capture** that is already in the
+repo, `src/lib/communities/__fixtures__/door/dev-runtime-2026-10-30.json`
+(Dev runtime, captured 2026-10-30, anonymised). Its shapes match the spec
+exactly:
+
+- home (`home.community`, lines 18-30): `agent: {did, is_agent: true}`, no
+  `agentSponsor`
+- timeline items (lines 32-113): `is_agent` and `author: {did, is_agent}`, all
+  non-agents
+- roster (lines 116-130): `{id, did, is_agent}`, and the agent entry has the
+  home's `agent.did`
+
+New helpers in `src/lib/communities/__fixtures__/door/index.ts`:
+
+- `deployedHome()` and `DEPLOYED_AGENT_DID`, from the capture above.
+- `doorCommunityAsDeployed()`: door.json's community (generated by running
+  door.js at eabfbcdd) with `agentSponsor` removed. The Dev capture has no
+  agent-authored item, so this lets door.json's real agent item
+  (`doorItem('agent')`, `is_agent: true`, author DID = config agent) be tested
+  against a community the way the deployed door sends it.
+- `agent: null` cases spread `{...deployedHome(), agent: null}`. That is the
+  door's own null value from the spec shape.
+
+door.json itself was not regenerated, because 1758605 could not be read.
+
+## Tests
+
+The new or changed cases for this fix:
+
+- The agent label shows for `is_agent: true` with no `agentSponsor`, both from
+  the real Dev home's agent DID and from door.json's agent item
+  (labelRule.test.ts, communityAgent.test.tsx).
+- `agent: null` labels no one, and there is no card (labelRule.test.ts,
+  communityAgent.test.tsx, descriptor.test.ts, CommunityScreen.test.tsx).
+- `agent.is_agent` false, missing or `'true'` labels no one.
+- Every non-agent author in the real Dev timeline renders as a member, with no
+  pill and no sponsor line.
+- The descriptor builds the card from the deployed home with no sponsor.
+
+Commands were run through pnpm 11.5.2, using `npx pnpm@11.5.2 --dir <worktree>`
+because pnpm is not on PATH on this machine:
+
+| Run | Result |
+| --- | --- |
+| `jest src/lib/communities src/features/communities src/features/communityAgent src/screens/Community` | 23 suites passed, 0 failed; 425 tests passed, 0 failed |
+| `jest src/lib/agent-runtime` (communitiesClient was touched) | 29 suites passed, 0 failed; 449 tests passed, 0 failed |
+| `tsc --noEmit -p tsconfig.communities.json` | clean |
+| `pnpm typecheck` (tsgo, whole app) | clean |
+
+**Not run:** every other jest suite in the repo (the full `pnpm test`, for
+example src/view, src/state and the other src/screens), lint over the whole
+repo (lint-staged ran eslint and prettier on the staged files at each commit),
+and anything on a device.
+
+## Flags
+
+`EXPO_PUBLIC_COMMUNITIES_ENABLED` is unchanged. In `eas.json` it is `"true"`
+only in `development-communities` (line 67) and `"false"` everywhere else.
+`git diff 03ea8768d -- eas.json` is empty.
