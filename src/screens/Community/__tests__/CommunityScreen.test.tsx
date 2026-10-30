@@ -855,14 +855,25 @@ describe('Community home - agent card', () => {
 })
 
 describe('Community home - agent launch control', () => {
-  it('an admin sees the launch control below the agent card', async () => {
+  it('an admin sees no Launch while an agent is active (build 41)', async () => {
     getCommunity.mockResolvedValue({
       ok: true,
       data: memberCommunity({viewerIsAdmin: true}),
     })
     const r = renderScreen()
-    await r.findByTestId('communityAgentLaunchControl', {}, {timeout: 3000})
-    expect(r.getByTestId('communityAgentCard')).toBeTruthy()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentLaunchControl')).toBeNull()
+    expect(r.queryByTestId('communityAgentLaunchButton')).toBeNull()
+  })
+
+  it('an admin sees Launch when the community has no agent', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: withoutAgent(memberCommunity({viewerIsAdmin: true})),
+    })
+    const r = renderScreen()
+    await r.findByTestId('communityAgentLaunchButton', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAgentCard')).toBeNull()
   })
 
   it('no viewer_is_admin (the admin role off) gets no launch control', async () => {
@@ -881,6 +892,43 @@ describe('Community home - agent launch control', () => {
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAgentLaunchControl')).toBeNull()
+  })
+})
+
+/*
+ * Build 41: the door sends no membership `role` (door.js publicConfig at
+ * deploy/dev-communities cca6020d), only `viewer_is_admin`, which the header
+ * reads (as `viewerIsAdmin`) for the Admin badge.
+ */
+describe('Community home - Admin badge (build 41)', () => {
+  it('the admin (Dev capture, viewer_is_admin true) sees Member and an Admin badge', async () => {
+    getCommunity.mockResolvedValue({
+      ok: true,
+      data: asClientCommunity(REAL.home.community),
+    })
+    const r = renderScreen({id: 'ao-dev-test'})
+    const badge = await r.findByTestId(
+      'communityAdminBadge',
+      {},
+      {timeout: 3000},
+    )
+    expect(badge).toHaveTextContent('Admin')
+    expect(r.getByTestId('communityMemberBadge')).toBeTruthy()
+  })
+
+  it('a member (viewer_is_admin false) sees Member and no Admin badge', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
+    const r = renderScreen()
+    await r.findByTestId('communityMemberBadge', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAdminBadge')).toBeNull()
+  })
+
+  it('no viewer_is_admin key (the admin role off) shows no Admin badge', async () => {
+    const {viewerIsAdmin: _admin, ...noAdminKey} = memberCommunity()
+    getCommunity.mockResolvedValue({ok: true, data: noAdminKey})
+    const r = renderScreen()
+    await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityAdminBadge')).toBeNull()
   })
 })
 
@@ -1033,11 +1081,11 @@ describe('Community home - after an agent launch (One Dev 39)', () => {
     expect(getAgentGrant).not.toHaveBeenCalled()
 
     fireEvent.press(button)
-    await r.findByTestId('communityAgentLaunched', {}, {timeout: 3000})
-    expect(launchCommunityAgent).toHaveBeenCalledWith('ao-dev-test')
-
     const card = await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
+    expect(launchCommunityAgent).toHaveBeenCalledWith('ao-dev-test')
     expect(getCommunity).toHaveBeenCalledTimes(2)
+    // Build 41: with the agent active, Launch is gone.
+    expect(r.queryByTestId('communityAgentLaunchControl')).toBeNull()
     expect(within(card).getByText('Bob')).toBeTruthy()
     expect(within(card).getByText('◆ Agent')).toBeTruthy()
     expect(r.getByTestId('communityAgentSponsor')).toHaveTextContent(

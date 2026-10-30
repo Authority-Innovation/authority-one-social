@@ -148,6 +148,19 @@ describe('AgentLaunchControl', () => {
     expect(toJSON()).toBeNull()
   })
 
+  it('an admin sees nothing while the community has an active agent (build 41)', () => {
+    const {toJSON} = render(
+      <AgentLaunchControl
+        community={{
+          id: ID,
+          viewerIsAdmin: true,
+          agentDid: 'did:plc:agentagentagentaaaaaaaaa',
+        }}
+      />,
+    )
+    expect(toJSON()).toBeNull()
+  })
+
   it('no community renders nothing', () => {
     expect(render(<AgentLaunchControl community={undefined} />).toJSON()).toBe(
       null,
@@ -199,9 +212,9 @@ describe('isCommunityAdmin', () => {
     expect(isCommunityAdmin(undefined)).toBe(false)
     expect(isCommunityAdmin({viewerIsAdmin: 'true'})).toBe(false)
     expect(isCommunityAdmin({viewerIsAdmin: 1})).toBe(false)
-    expect(
-      isCommunityAdmin({role: 'owner'} as {viewerIsAdmin?: unknown}),
-    ).toBe(false)
+    expect(isCommunityAdmin({role: 'owner'} as {viewerIsAdmin?: unknown})).toBe(
+      false,
+    )
     expect(
       isCommunityAdmin({role: 'moderator'} as {viewerIsAdmin?: unknown}),
     ).toBe(false)
