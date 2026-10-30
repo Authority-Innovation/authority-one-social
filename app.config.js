@@ -6,6 +6,7 @@ const {
   loadBrand,
   resolveBrandName,
 } = require('./scripts/brand-config/loadBrand')
+const {agentLivePlugins} = require('./plugins/agentLive')
 
 /**
  * Authority One: Fraunces (serif) display face for the AO brand theme's
@@ -549,6 +550,10 @@ function appConfigForBrand(BRAND) {
         // SceneDelegate). Required since builds moved to the iOS 27 SDK: without it UIKit
         // traps on background (Non-UI) launches. See plugins/uiSceneLifecycle.
         './plugins/uiSceneLifecycle/withUISceneLifecycle.js',
+        // Agent Live (task 69138168): the LiveKit SDK plugins only with
+        // EXPO_PUBLIC_AGENT_LIVE_ENABLED=true; otherwise the autolinking
+        // exclusion that keeps the SDK's native code out. See plugins/agentLive.
+        ...agentLivePlugins(),
         [
           'expo-font',
           {
