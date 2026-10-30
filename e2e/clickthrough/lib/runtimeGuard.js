@@ -98,7 +98,10 @@ function createRuntimeGuard() {
         const decision = classifyRequest(ws.url())
         if (decision.action === 'abort') {
           record(ws.url(), decision, 'websocket')
-          ws.close({code: 1008, reason: 'blocked by clickthrough Dev guard'})
+          void ws.close({
+            code: 1008,
+            reason: 'blocked by clickthrough Dev guard',
+          })
           return
         }
         ws.connectToServer()

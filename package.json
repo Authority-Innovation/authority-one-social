@@ -73,6 +73,7 @@
     "e2e:start": "EXPO_PUBLIC_ENV=e2e NODE_ENV=test RN_SRC_EXT=e2e.ts,e2e.tsx expo start -c",
     "e2e:run": "maestro test",
     "e2e:clickthrough": "node e2e/clickthrough/run.js",
+    "e2e:clickthrough:guard": "playwright test -c e2e/clickthrough/guard-fixture/playwright.config.ts",
     "perf:test": "NODE_ENV=test maestro test",
     "perf:test:run": "NODE_ENV=test maestro test __e2e__/perf-test.yml",
     "perf:test:measure": "NODE_ENV=test flashlight test --bundleId xyz.blueskyweb.app --testCommand \"pnpm perf:test\" --duration 150000 --resultsFilePath .perf/results.json",

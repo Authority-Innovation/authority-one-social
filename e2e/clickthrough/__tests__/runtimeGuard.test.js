@@ -40,9 +40,14 @@ describe('classifyRequest', () => {
 /** A fake BrowserContext that keeps the handlers install() registers. */
 function fakeContext() {
   const ctx = {routes: [], sockets: []}
-  ctx.route = async (match, handler) => ctx.routes.push({match, handler})
-  ctx.routeWebSocket = async (match, handler) =>
+  ctx.route = (match, handler) => {
+    ctx.routes.push({match, handler})
+    return Promise.resolve()
+  }
+  ctx.routeWebSocket = (match, handler) => {
     ctx.sockets.push({match, handler})
+    return Promise.resolve()
+  }
   return ctx
 }
 
@@ -125,9 +130,9 @@ describe('createRuntimeGuard', () => {
 
 describe('checkBundle', () => {
   it('passes a bundle built for the Dev runtime', () => {
-    expect(
-      checkBundle([`var a="${DEV_RUNTIME_URL}"??"${PROD_URL}";`]),
-    ).toEqual({ok: true})
+    expect(checkBundle([`var a="${DEV_RUNTIME_URL}"??"${PROD_URL}";`])).toEqual(
+      {ok: true},
+    )
   })
 
   it('refuses a bundle that only knows the prod runtime', () => {
@@ -155,13 +160,13 @@ describe('bundleScriptUrls', () => {
 describe('checkServedBundle (reused server fixture)', () => {
   function fakeRequest(pages) {
     return {
-      get: jest.fn(async url => {
+      get: jest.fn(url => {
         const body = pages[url]
-        return {
+        return Promise.resolve({
           ok: () => body !== undefined,
           status: () => (body === undefined ? 404 : 200),
-          text: async () => body,
-        }
+          text: () => Promise.resolve(body),
+        })
       }),
     }
   }
