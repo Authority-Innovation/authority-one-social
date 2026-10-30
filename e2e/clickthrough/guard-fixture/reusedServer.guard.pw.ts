@@ -29,13 +29,9 @@ import * as runtimeGuardLib from '../lib/runtimeGuard'
 const ROOT = path.join(__dirname, '..', '..', '..')
 const PROD = `https://${runtimeGuardLib.PROD_RUNTIME_HOST}`
 
-/**
- * Serves `/` and `/index.bundle`, like an Expo web server on the port. Bound
- * on both loopbacks: Playwright probes `localhost`, which on Windows can
- * resolve to ::1, and an IPv4-only server there is not seen as "on the port".
- */
+/** Serves `/` and `/index.bundle`, like an Expo web server on the port. */
 async function portServer(bundle: string) {
-  const handler: http.RequestListener = (req, res) => {
+  const server = http.createServer((req, res) => {
     if (req.url === '/index.bundle') {
       res.writeHead(200, {'content-type': 'application/javascript'})
       res.end(bundle)
@@ -45,17 +41,13 @@ async function portServer(bundle: string) {
     res.end(
       '<!doctype html><html><body><script src="/index.bundle"></script></body></html>',
     )
-  }
-  const v4 = http.createServer(handler)
-  await new Promise<void>(r => v4.listen(0, '127.0.0.1', r))
-  const {port} = v4.address() as AddressInfo
-  const v6 = http.createServer(handler)
-  await new Promise<void>(r => v6.listen(port, '::1', r))
-  const close = (s: http.Server) => new Promise<void>(r => s.close(() => r()))
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const {port} = server.address() as AddressInfo
   return {
     port,
     baseURL: `http://localhost:${port}`,
-    close: () => Promise.all([close(v4), close(v6)]).then(() => {}),
+    close: () => new Promise<void>(r => server.close(() => r())),
   }
 }
 
