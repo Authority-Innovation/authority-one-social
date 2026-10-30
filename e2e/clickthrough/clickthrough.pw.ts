@@ -87,7 +87,7 @@ function watch(page: Page) {
     const auth = req.headers().authorization
     if (!auth || auth === runtimeAuth) return
     runtimeAuth = auth
-    secrets.push(auth, auth.replace(/^Bearers+/i, ''))
+    secrets.push(...credsLib.authSecrets(auth))
     secrets.sort((x, y) => y.length - x.length)
   })
   page.on('response', async res => {
@@ -339,13 +339,12 @@ test('AO clickthrough on the Dev runtime', async ({page, browser}) => {
           }
         }
         const url = `${runtimeOrigin}/app/communities/${COMMUNITY_ID}/leave`
-        // page.request does not go through context.route(); check it here.
-        const decision = runtimeGuardLib.classifyRequest(url)
-        if (decision.action === 'abort') throw new Error(decision.reason)
         if (!runtimeAuth) {
           throw new Error('no Dev runtime request seen yet to take auth from')
         }
-        const res = await page.request.post(url, {
+        // page.request does not go through context.route(); guardedPost
+        // refuses and records a non-Dev runtime URL so the step fails.
+        const res = await runtimeGuard.guardedPost(page.request, url, {
           headers: {Authorization: runtimeAuth},
         })
         if (!res.ok()) throw new Error(`leave POST answered ${res.status()}`)

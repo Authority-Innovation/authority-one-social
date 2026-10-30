@@ -51,10 +51,21 @@ the flow also checks the browser side:
   before it leaves the machine. The step that made it fails with
   `BLOCKED request: non-Dev agent-runtime request to ...` and the flow stops.
   Service workers are blocked, since their requests would skip the route.
+  The route matches hosts with `agent-runtime` in the name, so it would not
+  catch a runtime on a custom domain; the preflight is what covers a build
+  pointed anywhere other than Dev.
+- **`page.request` bypasses the route.** Playwright's `APIRequestContext`
+  does not go through `context.route()`. Any harness call made with it (today
+  only the leave step's `POST .../leave`) must go through
+  `runtimeGuard.guardedPost()`, which refuses a non-Dev runtime URL before
+  sending and records it, so the step fails with `BLOCKED api request: ...`.
 - **Preflight** (step 00): reads the bundle the base URL serves and refuses to
-  sign in unless the Dev runtime host is baked into it (Expo inlines
-  `EXPO_PUBLIC_AGENT_RUNTIME_URL` at build time; the prod host is in every
-  bundle as the fallback, so only the Dev host's absence is decisive).
+  sign in unless the exact Dev runtime URL (`https://` plus the Dev host, not
+  followed by more host characters) is baked into it. A bare mention of the
+  host, or a look-alike such as `<dev host>.evil.example`, does not count
+  (Expo inlines `EXPO_PUBLIC_AGENT_RUNTIME_URL` at build time; the prod host
+  is in every bundle as the fallback, so only the Dev URL's absence is
+  decisive).
 
 ## Credentials
 
@@ -157,10 +168,15 @@ an installed browser instead: `CLICKTHROUGH_BROWSER_CHANNEL=msedge` (or
 - `guard.test.js` - the refuse-on-prod guard: a non-Dev base URL or runtime
   exits non-zero, with no fetch/http/https/net call and no child process;
 - `creds.test.js` - env-file then env precedence; the no-credential path
-  exits 0 with "SKIPPED: no devtest credential" and prints no secret;
+  exits 0 with "SKIPPED: no devtest credential" and prints no secret; a bare
+  runtime JWT quoted in an error string is redacted, not only the full
+  `Bearer <jwt>` header;
 - `runtimeGuard.test.js` - the browser-side guard on fake route objects: a
   prod runtime request is aborted and fails the step, a Dev one goes through;
-  the served-bundle preflight refuses a prod-only bundle and passes a Dev one;
+  a `page.request` POST to a non-Dev runtime through `guardedPost` is refused
+  before sending and fails the step; the served-bundle preflight refuses a
+  prod-only bundle, a bare host mention and look-alike hosts, and passes the
+  exact Dev URL;
   the config never reuses a server;
 - `checks.test.js` - a literal `{sponsorName}` fails, a raw handle where a
   name is expected fails, a clean fixture passes, and the door shape checks.
@@ -171,7 +187,8 @@ browser against a local fixture server standing in for a reused server. A
 server whose bundle calls the prod runtime: preflight refuses, the request
 fails with `ERR_BLOCKED_BY_CLIENT`, the step fails. A Dev-build server:
 preflight passes, the request is allowed (fulfilled locally), the step passes.
-No request leaves the machine.
+A `page.request` POST to the prod runtime through `guardedPost`: nothing is
+sent, the step fails. No request leaves the machine.
 
 ## Files
 
