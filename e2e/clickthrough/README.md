@@ -2,8 +2,8 @@
 
 A Playwright walk through the One web build (development-communities flags)
 against the **Dev** runtime, `authority-one-agent-runtime-dev`. It signs in as
-the devtest account, joins `ao-dev-test` through the app's join screen if
-needed, and clicks through the community home, agent card, agent grant,
+the devtest account, leaves `ao-dev-test` if it is a member, joins it again
+through the app's join screen, and clicks through the community home, agent card, agent grant,
 Members tab and composer, checking every screen as it goes.
 
 ```bash
@@ -37,8 +37,24 @@ or the web server is launched) unless:
   `https://authority-one-agent-runtime-dev.e-479.workers.dev`.
 
 The Playwright web server runs `expo start --web` with the
-`development-communities` profile env from `eas.json` (reused if one is
-already up on the base URL).
+`development-communities` profile env from `eas.json`. It is **never
+reused**: if something is already on the port, Playwright fails the run; free
+the port first. (`CLICKTHROUGH_NO_SERVER=1` skips starting one, for a server
+you started yourself; the two checks below still apply.)
+
+The environment check above says nothing about the bundle actually served, so
+the flow also checks the browser side:
+
+- **Runtime guard** (`lib/runtimeGuard.js`): a `context.route()` on every
+  browser context aborts any request (and closes any WebSocket) to an
+  agent-runtime host that is not `https://authority-one-agent-runtime-dev...`
+  before it leaves the machine. The step that made it fails with
+  `BLOCKED request: non-Dev agent-runtime request to ...` and the flow stops.
+  Service workers are blocked, since their requests would skip the route.
+- **Preflight** (step 00): reads the bundle the base URL serves and refuses to
+  sign in unless the Dev runtime host is baked into it (Expo inlines
+  `EXPO_PUBLIC_AGENT_RUNTIME_URL` at build time; the prod host is in every
+  bundle as the fallback, so only the Dev host's absence is decisive).
 
 ## Credentials
 
@@ -73,20 +89,30 @@ post author shown by handle.
 
 | nn | step | passes when |
 |---|---|---|
-| 00 | signin | the login form closes |
-| 01 | join | already a member (`already-member`), or joined through the app's join screen |
-| 02 | home | the community switcher is on Home |
-| 03 | community-chip | the `ao-dev-test` chip opens `/c/ao-dev-test` |
-| 04 | community-home | header and member badge |
-| 05 | agent-card | the agent card is shown |
-| 06 | grant-on | the grant switch turns on, the runtime answers `on: true` |
-| 07 | grant-off | the switch turns off, the runtime answers `on: false` |
-| 08 | members-tab | the Members section is shown |
-| 09 | compose | the composer opens and takes text |
-| 10 | post | the runtime accepts `POST /app/communities/ao-dev-test/posts` |
-| 11 | post-in-feed | the new post is in the community Posts list |
-| 12 | door-shapes | at least one timeline and one roster response were seen, all shape-checked |
-| 13 | admin-launch | `SKIPPED` without `DEVTEST_ADMIN_*`; else the admin launches the agent (or it already is) |
+| 00 | preflight | the served bundle carries the Dev runtime host |
+| 01 | signin | the login form closes |
+| 02 | leave | `SKIPPED` if not a member; else `POST /app/communities/ao-dev-test/leave` succeeds and the member badge is gone |
+| 03 | join | joined through the app's join screen (`already-member` only with `CLICKTHROUGH_KEEP_MEMBERSHIP=1`) |
+| 04 | home | the community switcher is on Home |
+| 05 | community-chip | the `ao-dev-test` chip opens `/c/ao-dev-test` |
+| 06 | community-home | header and member badge |
+| 07 | agent-card | the agent card is shown |
+| 08 | grant-on | the grant switch turns on, the runtime answers `on: true` |
+| 09 | grant-off | the switch turns off, the runtime answers `on: false` |
+| 10 | members-tab | the Members section is shown |
+| 11 | compose | the composer opens and takes text |
+| 12 | post | the runtime accepts `POST /app/communities/ao-dev-test/posts` |
+| 13 | post-in-feed | the new post is in the community Posts list |
+| 14 | door-shapes | at least one timeline and one roster response were seen, all shape-checked |
+| 15 | admin-launch | `SKIPPED` without `DEVTEST_ADMIN_*`; else the admin launches the agent (or it already is) |
+
+Leave: so the join flow is exercised on every run, the run leaves first. The
+app has no leave UI yet, so this one step calls the door directly
+(`POST /app/communities/ao-dev-test/leave`) with the Authorization header the
+app itself just sent the Dev runtime (held in memory, redacted from every
+artifact, never printed). `CLICKTHROUGH_KEEP_MEMBERSHIP=1` skips the leave;
+join then reports `already-member` and the join flow is not exercised. The
+report's notes say which mode the run used.
 
 Join: the app's own way in is tried first (the Join button on the community
 home). While that button still opens the holding sheet (`JoinConsentEntry`),
@@ -132,12 +158,25 @@ an installed browser instead: `CLICKTHROUGH_BROWSER_CHANNEL=msedge` (or
   exits non-zero, with no fetch/http/https/net call and no child process;
 - `creds.test.js` - env-file then env precedence; the no-credential path
   exits 0 with "SKIPPED: no devtest credential" and prints no secret;
+- `runtimeGuard.test.js` - the browser-side guard on fake route objects: a
+  prod runtime request is aborted and fails the step, a Dev one goes through;
+  the served-bundle preflight refuses a prod-only bundle and passes a Dev one;
+  the config never reuses a server;
 - `checks.test.js` - a literal `{sponsorName}` fails, a raw handle where a
   name is expected fails, a clean fixture passes, and the door shape checks.
+
+`e2e/clickthrough/guard-fixture/` (`pnpm e2e:clickthrough:guard`, needs a
+browser, default `msedge`; not in `pnpm test`): the same guard in a real
+browser against a local fixture server standing in for a reused server. A
+server whose bundle calls the prod runtime: preflight refuses, the request
+fails with `ERR_BLOCKED_BY_CLIENT`, the step fails. A Dev-build server:
+preflight passes, the request is allowed (fulfilled locally), the step passes.
+No request leaves the machine.
 
 ## Files
 
 - `run.js` - entry: guard, credentials, Playwright
 - `playwright.config.ts`, `clickthrough.pw.ts` - the flow
-- `lib/guard.js`, `lib/creds.js`, `lib/checks.js`, `lib/report.js`
+- `guard-fixture/` - the runtime guard's browser tests
+- `lib/guard.js`, `lib/runtimeGuard.js`, `lib/creds.js`, `lib/checks.js`, `lib/report.js`
 - `MAC-IOS-VARIANT.md` - the pre-TestFlight iOS simulator version (Mac lane)
