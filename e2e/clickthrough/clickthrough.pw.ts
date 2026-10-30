@@ -19,7 +19,9 @@ const runtimeOrigin = new URL(
     'https://authority-one-agent-runtime-dev.e-479.workers.dev',
 ).origin
 
-const creds = credsLib.loadCredentials()
+const creds = credsLib.loadCredentials({
+  envFile: process.env.CLICKTHROUGH_ENV_FILE,
+})
 const secrets: string[] = credsLib.secretsOf(creds)
 const knownHandles: string[] = [creds.devtest?.handle, creds.admin?.handle]
   .filter((h): h is string => !!h)
