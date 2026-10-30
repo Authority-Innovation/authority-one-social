@@ -69,10 +69,21 @@ the flow also checks the browser side:
 
 ## Credentials
 
-Elliott creates the devtest account and puts the credential on the PC:
+Elliott creates the devtest account and puts the credential on the PC, in a
+fixed per-user file OUTSIDE any repo. The harness looks in this order
+(`lib/creds.js`):
+
+1. `DEVTEST_ENV_FILE`, if set - an absolute path, an override for tests and CI
+   only. When set, the per-user file is not consulted.
+2. The per-user file, `path.join(os.homedir(), '.ao', 'devtest.env')`:
+   `%USERPROFILE%\.ao\devtest.env` on Windows, `~/.ao/devtest.env` on POSIX.
+3. The process environment (`DEVTEST_HANDLE`, `DEVTEST_APP_PASSWORD`), key by
+   key, for anything the file does not set - so the whole credential when the
+   file is absent.
+
+The file is plain `KEY=value` lines:
 
 ```
-# e2e/clickthrough/.env.local  (gitignored - never commit it)
 DEVTEST_HANDLE=...
 DEVTEST_APP_PASSWORD=...
 # optional: the admin step (launch) runs only with these
@@ -80,10 +91,9 @@ DEVTEST_ADMIN_HANDLE=...
 DEVTEST_ADMIN_APP_PASSWORD=...
 ```
 
-Each key is read from that file first, then from the process environment.
-The file is gitignored twice (`.env.*` and an explicit
-`/e2e/clickthrough/.env.local` rule). Check with
-`git check-ignore -v e2e/clickthrough/.env.local`.
+It is parsed in memory, never written, copied or logged. The repo no longer
+reads a credential file of its own; the old in-repo `.gitignore` rules stay as
+defence in depth.
 
 No credential: the run **skips cleanly** - exit 0, `SKIPPED: no devtest
 credential` in the console and in `REPORT.md`, no browser, no network.
@@ -167,8 +177,12 @@ an installed browser instead: `CLICKTHROUGH_BROWSER_CHANNEL=msedge` (or
 
 - `guard.test.js` - the refuse-on-prod guard: a non-Dev base URL or runtime
   exits non-zero, with no fetch/http/https/net call and no child process;
-- `creds.test.js` - env-file then env precedence; the no-credential path
-  exits 0 with "SKIPPED: no devtest credential" and prints no secret; a bare
+- `creds.test.js` - the per-user path is computed from `os.homedir()` (mocked;
+  Windows and POSIX formats asserted, the real file is never read);
+  `DEVTEST_ENV_FILE` (a temp file with fake values) is loaded; the process env
+  is the fallback when the file is absent; file then env precedence; the
+  no-credential path exits 0 with "SKIPPED: no devtest credential", makes no
+  network call and starts no browser; no value appears in the output; a bare
   runtime JWT quoted in an error string is redacted, not only the full
   `Bearer <jwt>` header;
 - `runtimeGuard.test.js` - the browser-side guard on fake route objects: a
