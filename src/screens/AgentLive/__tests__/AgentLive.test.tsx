@@ -5,6 +5,7 @@
  *   the camera is off by default and publishes only after the owner turns it
  *   on and the camera token arrives.
  */
+import {StyleSheet} from 'react-native'
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {i18n} from '@lingui/core'
 import {I18nProvider} from '@lingui/react'
@@ -12,16 +13,15 @@ import {
   act,
   fireEvent,
   render as rtlRender,
+  within,
 } from '@testing-library/react-native'
-import {StyleSheet} from 'react-native'
 
 // Real static atoms (so "full screen" is checked against real styles), a
 // stub theme. The #/alf barrel itself drags in native-only modules.
 jest.mock('#/alf', () => {
   const themeProxy: Record<string, object> = new Proxy({}, {get: () => ({})})
   return {
-    atoms: jest.requireActual<typeof import('@bsky.app/alf')>('@bsky.app/alf')
-      .atoms,
+    atoms: jest.requireActual<{atoms: object}>('@bsky.app/alf').atoms,
     useTheme: () => ({
       atoms: themeProxy,
       palette: new Proxy({}, {get: () => '#000000'}),
@@ -149,13 +149,13 @@ jest.mock('livekit-client', () => {
   }
 })
 
+import {createFakeRoom} from '#/features/agentLive/__fixtures__/fakeRoom'
 import {
   AGENT_DID,
   AGENT_HANDLE,
   CAMERA_TOKEN_FIXTURE,
   SESSION_FIXTURE,
 } from '#/features/agentLive/__fixtures__/piece1Live'
-import {createFakeRoom} from '#/features/agentLive/__fixtures__/fakeRoom'
 import {
   endLiveSession,
   requestLiveToken,
@@ -193,7 +193,7 @@ async function flush() {
 }
 
 async function press(el: Parameters<typeof fireEvent.press>[0]) {
-  await act(async () => {
+  act(() => {
     fireEvent.press(el)
   })
   await flush()
@@ -284,16 +284,17 @@ describe('session screen (flag on)', () => {
   it('renders the stage full screen, with mic and blind controls', async () => {
     const {getByTestId, fake} = await startScreen()
     const stage = getByTestId('agentLiveStage')
-    expect(StyleSheet.flatten(stage.props.style)).toMatchObject({
+    const {style} = (stage as unknown as {props: {style: unknown}}).props
+    expect(StyleSheet.flatten(style as object)).toMatchObject({
       position: 'absolute',
       top: 0,
       left: 0,
       right: 0,
       bottom: 0,
     })
-    await act(async () => fake.showStage('agent-stage'))
+    act(() => fake.showStage('agent-stage'))
     // The agent's stage video is inside the full-screen stage view.
-    expect(stage.findByProps({testID: 'fakeStageVideo'})).toBeTruthy()
+    expect(within(stage).getByTestId('fakeStageVideo')).toBeTruthy()
     expect(getByTestId('agentLiveMicButton')).toBeTruthy()
     expect(getByTestId('agentLiveMicIndicator')).toBeTruthy()
     expect(getByTestId('agentLiveBlindButton')).toBeTruthy()

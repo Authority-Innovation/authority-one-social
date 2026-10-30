@@ -1,7 +1,11 @@
+/* eslint-disable import-x/no-nodejs-modules -- Node-side config and source-reading test */
 /**
  * Ruling 1: the LiveKit SDK ships only with EXPO_PUBLIC_AGENT_LIVE_ENABLED on
  * (the development-live profile), and nothing imports it at module load.
  */
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+
 import {describe, expect, it, jest} from '@jest/globals'
 
 const mockSdkLoaded = jest.fn()
@@ -24,9 +28,6 @@ jest.mock('livekit-client', () => {
   return {Room, RoomEvent: {}, Track: {Kind: {}, Source: {}}}
 })
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const fs = jest.requireActual<typeof import('fs')>('fs')
-const path = jest.requireActual<typeof import('path')>('path')
 const ROOT = path.resolve(__dirname, '../../../..')
 const gate = require(path.join(ROOT, 'plugins/agentLive')) as {
   AGENT_LIVE_FLAG: string
@@ -41,13 +42,14 @@ const gate = require(path.join(ROOT, 'plugins/agentLive')) as {
   addPodfileExclude(src: string): string
   addSettingsGradleExclude(src: string): string
 }
-/* eslint-enable @typescript-eslint/no-require-imports */
 
 const ON = {EXPO_PUBLIC_AGENT_LIVE_ENABLED: 'true'}
 
 describe('flag values per EAS profile', () => {
-  const eas = JSON.parse(fs.readFileSync(path.join(ROOT, 'eas.json'), 'utf8'))
-  const profiles = eas.build as Record<string, {env?: Record<string, string>}>
+  const eas = JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'eas.json'), 'utf8'),
+  ) as {build: Record<string, {env?: Record<string, string>}>}
+  const profiles = eas.build
 
   it('only development-live turns it on', () => {
     const on = Object.entries(profiles)

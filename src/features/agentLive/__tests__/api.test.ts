@@ -9,10 +9,12 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 const BEARER = 'opaque-owner-session-bearer'
 
 jest.mock('#/lib/agent-runtime/authToken', () => ({
-  getAgentRuntimeAccessToken: jest.fn(async () => 'opaque-owner-session-bearer'),
+  getAgentRuntimeAccessToken: jest.fn(() =>
+    Promise.resolve('opaque-owner-session-bearer'),
+  ),
 }))
 jest.mock('#/lib/agent-runtime/config', () => ({
-  AGENT_RUNTIME_BASE_URL: 'https://runtime.test/',
+  AGENT_RUNTIME_BASE_URL: 'https://runtime.test',
 }))
 jest.mock('#/logger', () => ({
   logger: {
@@ -26,7 +28,6 @@ jest.mock('#/logger', () => ({
 
 import {getAgentRuntimeAccessToken} from '#/lib/agent-runtime/authToken'
 import {logger} from '#/logger'
-import {endLiveSession, requestLiveToken, startLiveSession} from '../api'
 import {
   AGENT_DID,
   CAMERA_TOKEN_FIXTURE,
@@ -34,21 +35,26 @@ import {
   OWNER_DID,
   SESSION_FIXTURE,
 } from '../__fixtures__/piece1Live'
+import {endLiveSession, requestLiveToken, startLiveSession} from '../api'
 
 type Call = {url: string; init: RequestInit}
 const calls: Call[] = []
 let nextResponse: {status: number; body: unknown}
 
-const fetchMock = jest.fn(async (url: string, init: RequestInit) => {
+const fetchMock = jest.fn((url: string, init: RequestInit) => {
   calls.push({url, init})
   const {status, body} = nextResponse
-  return {
+  const text = typeof body === 'string' ? body : JSON.stringify(body ?? null)
+  return Promise.resolve({
     ok: status >= 200 && status < 300,
     status,
-    text: async () =>
-      typeof body === 'string' ? body : JSON.stringify(body ?? null),
-  } as Response
+    text: () => Promise.resolve(text),
+  } as Response)
 })
+
+/** The request body as sent (always a string or absent). */
+const rawBody = (c: Call): string =>
+  typeof c.init.body === 'string' ? c.init.body : ''
 
 beforeEach(() => {
   calls.length = 0
@@ -86,7 +92,7 @@ function allKeys(x: unknown, out: string[] = []): string[] {
 function bodyOf(c: Call): Record<string, unknown> | undefined {
   return c.init.body === undefined
     ? undefined
-    : (JSON.parse(String(c.init.body)) as Record<string, unknown>)
+    : (JSON.parse(rawBody(c)) as Record<string, unknown>)
 }
 
 function expectNoIdentity(c: Call) {
@@ -97,7 +103,7 @@ function expectNoIdentity(c: Call) {
   // The owner's DID appears nowhere in the request.
   const headers = JSON.stringify(c.init.headers)
   expect(c.url).not.toContain(OWNER_DID)
-  expect(String(c.init.body ?? '')).not.toContain(OWNER_DID)
+  expect(rawBody(c)).not.toContain(OWNER_DID)
   expect(headers).not.toContain(OWNER_DID)
   expect(headers).not.toMatch(/did:/)
   // The bearer is the only identity, sent as the Authorization header.
@@ -131,7 +137,7 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
       ownerDid: OWNER_DID,
       identity: `owner:x:${OWNER_DID}`,
     }
-    await startLiveSession(smuggled as {agentDid: string})
+    await startLiveSession(smuggled)
     expect(bodyOf(calls[0])).toEqual({agentDid: AGENT_DID})
     expectNoIdentity(calls[0])
   })
@@ -145,7 +151,7 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
       `/live/sessions/${SESSION_FIXTURE.sid}/token`,
     )
     expect(bodyOf(c)).toEqual({camera: true})
-    expect(String(c.init.body)).not.toMatch(/did:/)
+    expect(rawBody(c)).not.toMatch(/did:/)
     expect(c.url).not.toMatch(/did:/)
     expectNoIdentity(c)
   })
@@ -231,9 +237,9 @@ describe('reading piece 1 responses', () => {
 
 describe('logs (X-LOG-1, client half)', () => {
   it('a network failure logs no token, bearer or DID', async () => {
-    fetchMock.mockImplementationOnce(async () => {
-      throw new Error(`boom ${SESSION_FIXTURE.token} ${BEARER} ${AGENT_DID}`)
-    })
+    fetchMock.mockImplementationOnce(() =>
+      Promise.reject(new Error(`boom ${SESSION_FIXTURE.token} ${BEARER} ${AGENT_DID}`)),
+    )
     expect(await startLiveSession({agentDid: AGENT_DID})).toEqual({
       ok: false,
       error: {kind: 'network'},

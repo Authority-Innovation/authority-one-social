@@ -3,7 +3,7 @@
  * only after a camera token; blind sent only on the owner's own session, in
  * the ruling 2 shape; the start call carries `agentDid` only.
  */
-import {beforeEach, describe, expect, it, jest} from '@jest/globals'
+import {describe, expect, it, jest} from '@jest/globals'
 
 // The real api module pulls in the runtime auth helpers; the controller gets
 // a fake api instead.
@@ -13,12 +13,12 @@ jest.mock('../api', () => ({
   endLiveSession: jest.fn(),
 }))
 
+import {createFakeRoom} from '../__fixtures__/fakeRoom'
 import {
   AGENT_DID,
   CAMERA_TOKEN_FIXTURE,
   SESSION_FIXTURE,
 } from '../__fixtures__/piece1Live'
-import {createFakeRoom} from '../__fixtures__/fakeRoom'
 import {type LiveResult, type LiveSession, type LiveToken} from '../api'
 import {
   createLiveSessionController,
@@ -26,33 +26,41 @@ import {
   type LiveSessionState,
 } from '../session'
 
+const STARTED: LiveResult<LiveSession> = {ok: true, data: SESSION_FIXTURE}
+const CAMERA: LiveResult<LiveToken> = {ok: true, data: CAMERA_TOKEN_FIXTURE}
+
 function setup({
-  start = {ok: true, data: SESSION_FIXTURE} as LiveResult<LiveSession>,
-  token = {ok: true, data: CAMERA_TOKEN_FIXTURE} as LiveResult<LiveToken>,
+  start = STARTED,
+  token = CAMERA,
+}: {
+  start?: LiveResult<LiveSession>
+  token?: LiveResult<LiveToken>
 } = {}) {
   const log: string[] = []
   const fake = createFakeRoom(log)
   const api = {
-    startLiveSession: jest.fn(async (args: {agentDid: string}) => {
+    startLiveSession: jest.fn((args: {agentDid: string}) => {
       log.push(`api.start(${JSON.stringify(args)})`)
-      return start
+      return Promise.resolve(start)
     }),
-    requestLiveToken: jest.fn(async (args: {sid: string; camera?: boolean}) => {
+    requestLiveToken: jest.fn((args: {sid: string; camera?: boolean}) => {
       log.push(`api.token(${JSON.stringify(args)})`)
-      return token
+      return Promise.resolve(token)
     }),
-    endLiveSession: jest.fn(async (args: {sid: string}) => {
+    endLiveSession: jest.fn((args: {sid: string}) => {
       log.push(`api.end(${args.sid})`)
-      return {ok: true, data: null} as LiveResult<null>
+      const ended: LiveResult<null> = {ok: true, data: null}
+      return Promise.resolve(ended)
     }),
   }
   const states: LiveSessionState[] = []
   const roomFactory = jest.fn(() => fake.room)
+  const fakeApi: LiveApi = api
   const c = createLiveSessionController({
     agentDid: AGENT_DID,
     roomFactory,
     onChange: s => states.push(s),
-    api: api as unknown as LiveApi,
+    api: fakeApi,
   })
   const last = () => states[states.length - 1]
   return {c, api, fake, log, last, roomFactory}

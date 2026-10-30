@@ -82,7 +82,8 @@ function LiveSession({
   const insets = useSafeAreaInsets()
   const navigation = useNavigation<NavigationProp>()
   const [state, setState] = useState<LiveSessionState>(initialLiveSessionState)
-  const [c, setController] = useState<LiveSessionController | null>(null)
+  const [controller, setController] =
+    useState<LiveSessionController | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -110,11 +111,11 @@ function LiveSession({
     }
   }, [agentDid])
 
-  const StageVideo = c?.room()?.StageVideo
+  const StageVideo = controller?.room()?.StageVideo
   const connected = state.phase === 'connected'
 
   const onEnd = () => {
-    void c?.end()
+    void controller?.end()
     if (navigation.canGoBack()) navigation.goBack()
   }
 
@@ -211,7 +212,7 @@ function LiveSession({
           size="large"
           shape="round"
           disabled={!connected}
-          onPress={() => void c?.setMic(!state.micOn)}>
+          onPress={() => void controller?.setMic(!state.micOn)}>
           <ButtonIcon icon={MicIcon} />
         </Button>
         <Button
@@ -222,7 +223,7 @@ function LiveSession({
           size="large"
           shape="round"
           disabled={!connected}
-          onPress={() => void c?.setBlind(!state.blindOn)}>
+          onPress={() => void controller?.setBlind(!state.blindOn)}>
           <ButtonIcon icon={state.blindOn ? EyeSlashIcon : EyeIcon} />
         </Button>
         <Button
@@ -233,7 +234,7 @@ function LiveSession({
           size="large"
           shape="round"
           disabled={!connected || state.cameraPending}
-          onPress={() => void c?.setCamera(!state.cameraOn)}>
+          onPress={() => void controller?.setCamera(!state.cameraOn)}>
           <ButtonIcon icon={CameraIcon} />
         </Button>
         <Button

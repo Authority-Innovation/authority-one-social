@@ -109,7 +109,7 @@ async function post(
     const bearer = await getAgentRuntimeAccessToken()
     if (!bearer) return {ok: false, error: {kind: 'signed_out'}}
     const path = [LIVE_PATH, ...parts.map(encodeURIComponent)].join('/')
-    const url = AGENT_RUNTIME_BASE_URL.replace(/\/+$/, '') + path
+    const url = `${AGENT_RUNTIME_BASE_URL}${path}`
     const headers: Record<string, string> = {Authorization: `Bearer ${bearer}`}
     if (body) headers['Content-Type'] = 'application/json'
     const res = await fetch(url, {
@@ -172,7 +172,7 @@ function readSession(x: unknown): LiveSession | null {
     wsUrl,
     token: t.token,
     expiresAt: t.expiresAt,
-    consentRequired: consentRequired as string[],
+    consentRequired: consentRequired,
     recordPolicy,
     reused: reused === true,
   }

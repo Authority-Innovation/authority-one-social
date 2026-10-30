@@ -95,7 +95,7 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
 
   const StageVideo: LiveRoom['StageVideo'] = ({stage, style}) => (
     <VideoTrack
-      trackRef={stage.ref as StageTrackRef as never}
+      trackRef={stage.ref as StageTrackRef}
       objectFit="contain"
       style={style as never}
     />

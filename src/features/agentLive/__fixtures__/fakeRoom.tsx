@@ -14,25 +14,18 @@ export type RoomCall =
 export function createFakeRoom(log: string[] = []) {
   const calls: RoomCall[] = []
   const listeners = new Set<(s: StageRef | null) => void>()
-  const record = (c: RoomCall) => {
+  const record = (c: RoomCall): Promise<void> => {
     calls.push(c)
     log.push(`room.${c.op}${'on' in c ? `(${c.on})` : ''}`)
+    return Promise.resolve()
   }
   const room: LiveRoom = {
-    async connect({wsUrl, token}) {
-      record({op: 'connect', wsUrl, token})
-    },
-    async disconnect() {
-      record({op: 'disconnect'})
-    },
-    async setMicrophoneEnabled(on) {
-      record({op: 'mic', on})
-    },
-    async setCameraEnabled(on) {
-      record({op: 'camera', on})
-    },
-    async publishData(payload, {topic, reliable}) {
-      record({
+    connect: ({wsUrl, token}) => record({op: 'connect', wsUrl, token}),
+    disconnect: () => record({op: 'disconnect'}),
+    setMicrophoneEnabled: on => record({op: 'mic', on}),
+    setCameraEnabled: on => record({op: 'camera', on}),
+    publishData(payload, {topic, reliable}) {
+      return record({
         op: 'data',
         text: new TextDecoder().decode(payload),
         topic,
