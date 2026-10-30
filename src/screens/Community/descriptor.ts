@@ -15,9 +15,9 @@ import {communityConfigAgentDid} from '#/features/communities/agentLabel'
 export type CommunityTier = 'public' | 'members' | 'paid'
 
 /**
- * The community agent card's data, from the door's member response only:
- * `agent.did` and the `agentSponsor` view `{did, handle}`. The door sends no
- * agent name, sponsor display name or scope.
+ * The community agent card's data. Gated on the door's `agent: {did,
+ * is_agent: true}`; never on `agentSponsor`, which the deployed door does not
+ * send. The sponsor fields are optional extras.
  */
 export type CommunityAgent = {
   did: string
@@ -45,10 +45,13 @@ export type CommunityDescriptor = {
   tier: CommunityTier
   /** Header-only accent (N3). A validated CSS hex colour, or undefined. */
   accent?: string
-  /** Set whenever the community names an agent DID; the sponsor is optional. */
+  /**
+   * Set when the door's `agent` is `{did, is_agent: true}` (or, with no
+   * `agent` key, the config names an agent DID). The sponsor is optional.
+   */
   agent?: CommunityAgent
   /**
-   * The config's agent DID, with or without a sponsor. The posts list matches
+   * The agent DID (as for `agent`), with or without a sponsor. The posts list matches
    * `author.did` against it to label agent items.
    */
   agentDid?: string
@@ -101,7 +104,17 @@ export function toDescriptor(
   const brand = obj(config?.brand)
   const moderation = obj(config?.moderation)
 
-  const agentDid = communityConfigAgentDid(raw)
+  // The deployed door sends `agent: {did, is_agent}` or null, and no
+  // `agentSponsor`. When the door sends the `agent` key it alone decides: a
+  // null agent, or one without `is_agent: true`, is no agent. Older shapes
+  // with no `agent` key fall back to the config's agent DID.
+  const doorAgent = obj(raw.agent)
+  const agentDid =
+    'agent' in raw
+      ? doorAgent?.is_agent === true
+        ? str(doorAgent.did)
+        : undefined
+      : communityConfigAgentDid(raw)
   // The runtime's member response may carry `agentSponsor: {did, handle}`;
   // the config record holds a bare DID. Either may be missing.
   const sponsor = obj(raw.agentSponsor)

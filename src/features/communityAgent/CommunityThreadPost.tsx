@@ -10,12 +10,10 @@ import {useState} from 'react'
 import {Linking, Pressable, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
-import {logger} from '#/logger'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
-import {isCommunityAdmin} from './isCommunityAdmin'
 import {type AuthorLabel, resolveAuthorLabel} from './labelRule'
 import {
   type CommunityAgentConfig,
@@ -45,14 +43,6 @@ export function CommunityThreadPost({
     ? resolveAuthorLabel(post.author, community)
     : {kind: 'member'}
   const isAgent = label.kind === 'agent'
-  const isOperator = isCommunityAdmin(community)
-
-  if (label.kind === 'member' && label.warning) {
-    // No DIDs in logs, only the community id the operator already knows.
-    logger.warn('communityAgent: agent reply without sponsor', {
-      communityId: community?.id,
-    })
-  }
 
   const when = post.createdAt
     ? i18n.date(new Date(post.createdAt), {timeStyle: 'short'})
@@ -82,10 +72,6 @@ export function CommunityThreadPost({
 
         {label.kind === 'agent' ? (
           <SponsorLine sponsorHandle={label.sponsorHandle} />
-        ) : null}
-
-        {label.kind === 'member' && label.warning && isOperator ? (
-          <OperatorWarning />
         ) : null}
 
         {post.text ? (
@@ -145,21 +131,6 @@ function SponsorLine({sponsorHandle}: {sponsorHandle: string}) {
       ) : (
         <Trans>AI agent</Trans>
       )}
-    </Text>
-  )
-}
-
-function OperatorWarning() {
-  const t = useTheme()
-  return (
-    <Text
-      testID="communityAgentNoSponsorWarning"
-      style={[a.text_xs, {color: t.palette.negative_500}]}>
-      <Trans comment="Shown to community admins only">
-        This reply came from an agent, but the community has no agent sponsor
-        set, so it is shown as a member. Add a sponsor in the community
-        settings.
-      </Trans>
     </Text>
   )
 }

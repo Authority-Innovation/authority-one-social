@@ -160,3 +160,28 @@ export function clientCommunity(
     ...overrides,
   }
 }
+
+/**
+ * The community home as the DEPLOYED door sends it: the real Dev runtime
+ * capture (dev-runtime-2026-10-30.json `home`). `agent: {did, is_agent}`, no
+ * `agentSponsor`. `agent: null` is the door's answer when the agent slot is
+ * not valid.
+ */
+export function deployedHome(): DoorCommunity {
+  return copy(DEV_RUNTIME.home.community as DoorCommunity)
+}
+
+/** The configured agent DID in the Dev capture (anonymised). */
+export const DEPLOYED_AGENT_DID = (
+  DEV_RUNTIME.home.community.agent as {did: string}
+).did
+
+/**
+ * door.json's community with the keys the deployed door does not send
+ * removed (`agentSponsor`), so it pairs with door.json's agent item
+ * (`doorItem('agent')`, whose author DID is DOOR_AGENT_DID).
+ */
+export function doorCommunityAsDeployed(): DoorCommunity {
+  const {agentSponsor: _agentSponsor, ...rest} = doorCommunity()
+  return rest
+}

@@ -15,8 +15,9 @@ import {
 /**
  * What the agent slot needs to know about the community: the member
  * community response's own fields, as communitiesClient returns them. `agent`
- * is the config's agent DID (N1); `agentSponsor` is the runtime's sponsor
- * view `{did, handle}`. Without `agentSponsor` no agent label is shown.
+ * is the door's `{did, is_agent}` (N1) and gates the agent label;
+ * `agentSponsor` is an optional sponsor view `{did, handle}` the deployed door
+ * does not send. It only adds the sponsor's handle to the label.
  */
 export type CommunityAgentConfig = Pick<
   Community,

@@ -1,16 +1,20 @@
 import {describe, expect, it} from '@jest/globals'
 
-import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {type Community} from '#/lib/agent-runtime/communitiesClient'
 import {
   asClientCommunity,
+  DEPLOYED_AGENT_DID,
+  deployedHome,
+  DEV_RUNTIME,
   DOOR_AGENT_DID,
   DOOR_SPONSOR_DID,
   doorCommunity,
+  doorCommunityAsDeployed,
   doorCommunityWithSponsorMember,
   doorItem,
 } from '#/lib/communities/__fixtures__/door'
 import {type DoorCommunity} from '#/lib/communities/doorContract'
+import {isCommunityAgentAuthor} from '#/features/communities/agentLabel'
 import {resolveAuthorLabel} from '../labelRule'
 import {type CommunityThreadAuthor} from '../types'
 
@@ -93,14 +97,80 @@ describe('labelRule and agentLabel share one DID-match rule', () => {
     }
   })
 
-  it('a DID match without the agentSponsor view is still a member (labelRule only)', () => {
+  it('a DID match needs no agentSponsor (the deployed door sends none)', () => {
     const author = AUTHORS[0][1]
     const {agentSponsor: _sponsor, ...noSponsor} = config(DOOR_AGENT_DID)
     expect(isCommunityAgentAuthor(author, DOOR_AGENT_DID)).toBe(true)
     expect(resolveAuthorLabel(author, noSponsor)).toEqual({
-      kind: 'member',
-      warning: 'agent_without_sponsor',
+      kind: 'agent',
+      sponsorHandle: '',
     })
+  })
+
+  it('a community agent without is_agent true labels no one', () => {
+    const author = AUTHORS[0][1]
+    const c = config(DOOR_AGENT_DID)
+    for (const is_agent of [false, undefined, 'true']) {
+      const community = {
+        ...c,
+        agent: {did: DOOR_AGENT_DID, is_agent} as never,
+      }
+      expect(resolveAuthorLabel(author, community)).toEqual({kind: 'member'})
+    }
+  })
+})
+
+describe('labelRule on the deployed door (agent {did, is_agent}, no agentSponsor)', () => {
+  it('the real Dev home has agent {did, is_agent: true} and no agentSponsor', () => {
+    const home = deployedHome()
+    expect(home.agent).toEqual({did: DEPLOYED_AGENT_DID, is_agent: true})
+    expect('agentSponsor' in home).toBe(false)
+  })
+
+  it('labels an is_agent author whose DID is the home’s agent.did', () => {
+    const community = asClientCommunity(deployedHome())
+    // The roster's agent entry in the same capture names the same DID.
+    const rosterAgent = DEV_RUNTIME.roster.roster.find(e => e.is_agent)
+    expect(rosterAgent?.did).toBe(DEPLOYED_AGENT_DID)
+    expect(
+      resolveAuthorLabel({did: DEPLOYED_AGENT_DID, is_agent: true}, community),
+    ).toEqual({kind: 'agent', sponsorHandle: ''})
+  })
+
+  it('labels door.json’s agent item against the community with no agentSponsor', () => {
+    const community = asClientCommunity(doorCommunityAsDeployed())
+    expect(community.agentSponsor).toBeUndefined()
+    const item = doorItem('agent')
+    expect(item.is_agent).toBe(true)
+    expect(resolveAuthorLabel(item.author, community)).toEqual({
+      kind: 'agent',
+      sponsorHandle: '',
+    })
+  })
+
+  it('labels no one when the home’s agent is null', () => {
+    const community = asClientCommunity({...deployedHome(), agent: null})
+    expect(
+      resolveAuthorLabel({did: DEPLOYED_AGENT_DID, is_agent: true}, community),
+    ).toEqual({kind: 'member'})
+    expect(
+      resolveAuthorLabel(
+        doorItem('agent').author,
+        asClientCommunity({...doorCommunityAsDeployed(), agent: null}),
+      ),
+    ).toEqual({kind: 'member'})
+  })
+
+  it('every author in the real Dev timeline (all non-agents) is a member', () => {
+    const community = asClientCommunity(deployedHome())
+    const items = DEV_RUNTIME.timeline.items
+    expect(items.length).toBeGreaterThan(0)
+    for (const item of items) {
+      expect(item.is_agent).toBe(false)
+      expect(resolveAuthorLabel(item.author, community)).toEqual({
+        kind: 'member',
+      })
+    }
   })
 })
 
@@ -159,9 +229,9 @@ describe('labelRule reads only what the door sends', () => {
     for (const r of reads.filter(k => k.startsWith('author.'))) {
       expect(['author.did', 'author.is_agent']).toContain(r)
     }
-    // It did read the door's agent and sponsor fields.
+    // It did read the door's agent fields.
     expect(reads).toEqual(
-      expect.arrayContaining(['agent.did', 'agentSponsor.did']),
+      expect.arrayContaining(['agent.did', 'agent.is_agent']),
     )
   })
 })
