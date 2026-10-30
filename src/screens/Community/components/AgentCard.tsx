@@ -11,9 +11,10 @@ import {type CommunityDescriptor} from '../descriptor'
 /**
  * The community agent: who it is, who is accountable for it, and what it can
  * see. Rendered whenever the community names an agent DID. The sponsor line
- * reads "run by <handle>" only when the runtime sends the sponsor's handle
- * (`agentSponsor.handle`); otherwise it is just "AI agent". The sponsor's DID
- * and the community's name are never shown in its place. The agent's label
+ * reads "run by <name>": the sponsor's display name from the profile cache for
+ * `agentSponsor.did`, else the handle the runtime sends (`agentSponsor.handle`).
+ * With neither it is just "AI agent". The sponsor's DID and the community's
+ * name are never shown in its place. The agent's label
  * comes from the config, never from a handle. Its name is the config's, else
  * the display name in the profile cache for the config's agent DID.
  */
@@ -22,6 +23,7 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
   const {t: l} = useLingui()
   const agent = community.agent
   const {data: profile} = useProfileQuery({did: agent?.did})
+  const {data: sponsorProfile} = useProfileQuery({did: agent?.sponsorDid})
   if (!agent) return null
 
   const name =
@@ -29,9 +31,11 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
     (profile?.displayName?.trim()
       ? sanitizeDisplayName(profile.displayName)
       : l`Community agent`)
-  // No fallback to the sponsor DID or the community name: with no handle the
-  // line is just "AI agent".
-  const sponsorName = agent.sponsorName
+  // No fallback to the sponsor DID or the community name: with no name and no
+  // handle the line is just "AI agent".
+  const sponsorName = sponsorProfile?.displayName?.trim()
+    ? sanitizeDisplayName(sponsorProfile.displayName)
+    : agent.sponsorName
 
   return (
     <View
@@ -65,7 +69,9 @@ export function AgentCard({community}: {community: CommunityDescriptor}) {
           emoji
           style={[a.text_sm, t.atoms.text_contrast_medium]}>
           {sponsorName ? (
-            <Trans>AI agent · run by {sponsorName}</Trans>
+            <Trans comment="Under the community agent's name; sponsorName is the display name, else the handle, of the account accountable for the agent">
+              AI agent · run by {sponsorName}
+            </Trans>
           ) : (
             <Trans>AI agent</Trans>
           )}

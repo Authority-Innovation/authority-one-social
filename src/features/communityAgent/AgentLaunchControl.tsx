@@ -6,7 +6,10 @@
  * The control gates itself rather than trusting its caller: it renders
  * nothing (not a disabled button) unless EXPO_PUBLIC_COMMUNITIES_ENABLED is on
  * and the runtime said `viewer_is_admin: true`. The runtime enforces the same
- * rule on POST /app/communities/:id/agent/launch.
+ * rule on POST /app/communities/:id/agent/launch. It also renders nothing while
+ * the community already has an active agent (the door's `agent: {did,
+ * is_agent: true}`, read into `agentDid`): there is nothing to launch, and no
+ * admin "Manage agent" action exists yet to show in its place.
  *
  * Pressing calls `launchCommunityAgent` once. On success the button is
  * replaced by a confirmation and `onLaunched` fires. On failure an error is
@@ -27,7 +30,10 @@ export function AgentLaunchControl({
   community,
   onLaunched,
 }: {
-  community: {id: string; viewerIsAdmin?: boolean} | null | undefined
+  community:
+    | {id: string; viewerIsAdmin?: boolean; agentDid?: string}
+    | null
+    | undefined
   /** Called once the runtime has accepted the launch. */
   onLaunched?: () => void
 }) {
@@ -37,7 +43,12 @@ export function AgentLaunchControl({
   const [launched, setLaunched] = useState(false)
   const [failed, setFailed] = useState(false)
 
-  if (!COMMUNITIES_ENABLED || !community || !isCommunityAdmin(community)) {
+  if (
+    !COMMUNITIES_ENABLED ||
+    !community ||
+    !isCommunityAdmin(community) ||
+    !!community.agentDid
+  ) {
     return null
   }
 

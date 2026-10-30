@@ -205,6 +205,9 @@ export default defineConfig(
             // this is a dep for @atproto/api, but we absolutely need them in sync, so just
             // rely on the transient version
             '@atproto/common-web',
+            // a dep of @lingui/core; its compiler has to match core's version, so
+            // rely on the transient version (see src/locale/messageCompiler.ts)
+            '@lingui/message-utils',
           ],
         },
       ],

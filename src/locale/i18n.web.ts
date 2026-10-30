@@ -1,3 +1,5 @@
+import '#/locale/messageCompiler'
+
 import {useEffect, useState} from 'react'
 import {i18n, type Messages} from '@lingui/core'
 import {type Locale} from 'date-fns/locale'

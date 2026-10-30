@@ -7,6 +7,7 @@ import '@formatjs/intl-displaynames/polyfill-force.js'
 import '@formatjs/intl-pluralrules/locale-data/en.js'
 import '@formatjs/intl-numberformat/locale-data/en.js'
 import '@formatjs/intl-displaynames/locale-data/en.js'
+import '#/locale/messageCompiler'
 
 import {useEffect, useState} from 'react'
 import {i18n} from '@lingui/core'

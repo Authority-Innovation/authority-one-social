@@ -8,6 +8,7 @@ import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Check'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
+import {Shield_Stroke2_Corner0_Rounded as ShieldIcon} from '#/components/icons/Shield'
 import {Text} from '#/components/Typography'
 import {type CommunityDescriptor, type CommunityTier} from '../descriptor'
 
@@ -63,6 +64,25 @@ export function CommunityHeader({
               <CheckIcon size="xs" fill={t.palette.positive_500} />
               <Text style={[a.text_sm, a.font_semi_bold]}>
                 <Trans>Member</Trans>
+              </Text>
+            </View>
+          ) : null}
+          {/* The door sends no membership `role`; `viewer_is_admin` is the
+              caller's own admin role, read into `viewerIsAdmin`. */}
+          {community.isMember && community.viewerIsAdmin ? (
+            <View
+              testID="communityAdminBadge"
+              style={[
+                a.flex_row,
+                a.align_center,
+                a.gap_2xs,
+                a.px_xs,
+                a.rounded_xs,
+                t.atoms.bg_contrast_50,
+              ]}>
+              <ShieldIcon size="xs" fill={t.palette.primary_500} />
+              <Text style={[a.text_sm, a.font_semi_bold]}>
+                <Trans context="community role">Admin</Trans>
               </Text>
             </View>
           ) : null}
