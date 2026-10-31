@@ -89,7 +89,7 @@ None.
 **M1. Landing this onto `main` also brings in unreviewed build-line commits.**
 - **Where:** `da1fce83f`, first parent `569b3b240`.
 - **Failure scenario:** the base is not `main`. It is the build line, which
-  adds 10 commits on top of `571924785`: build 34 through 36, the UIScene
+  adds 7 commits on top of `571924785`: build 34 through 36, the UIScene
   lifecycle, the network and offline latch, and the contextEngine wake
   changes. Those commits are outside this record and outside this review. If
   someone merges the W1-T4 branch, or `communities/integration`, into `main`
