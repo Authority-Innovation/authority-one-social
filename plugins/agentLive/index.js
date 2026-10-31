@@ -84,6 +84,32 @@ function withAgentLiveExcluded(config) {
   return config
 }
 
+/**
+ * Adds 'audio' to UIBackgroundModes, keeping every mode already declared
+ * (remote-notification and location stay as app.config.js sets them). Without
+ * it iOS suspends the app on lock or backgrounding and the live voice session
+ * drops. 'voip' is deliberately not added: it is for PushKit/CallKit, which
+ * this app does not use (see src/features/agentLive/README.md).
+ */
+function addBackgroundAudioMode(infoPlist = {}) {
+  const modes = Array.isArray(infoPlist.UIBackgroundModes)
+    ? infoPlist.UIBackgroundModes
+    : []
+  if (modes.includes('audio')) return infoPlist
+  return {...infoPlist, UIBackgroundModes: [...modes, 'audio']}
+}
+
+/**
+ * On-build only. Sets the mode on the static ios.infoPlist, which prebuild
+ * writes into Info.plist before the other plugins' Info.plist mods append
+ * their own modes.
+ */
+function withAgentLiveBackgroundAudio(config) {
+  config.ios = config.ios ?? {}
+  config.ios.infoPlist = addBackgroundAudioMode(config.ios.infoPlist)
+  return config
+}
+
 /** The app.config.js plugin entries for this build. */
 function agentLivePlugins(env = process.env) {
   if (!isAgentLiveEnabled(env)) {
@@ -94,6 +120,7 @@ function agentLivePlugins(env = process.env) {
     // Permission strings come from ios.infoPlist in app.config.js (the plugin
     // keeps existing ones); Android gets CAMERA, RECORD_AUDIO and the rest.
     '@config-plugins/react-native-webrtc',
+    './plugins/agentLive/withAgentLiveBackgroundAudio.js',
   ]
 }
 
@@ -113,6 +140,8 @@ module.exports = {
   agentLivePlugins,
   agentLiveRNDependencies,
   withAgentLiveExcluded,
+  withAgentLiveBackgroundAudio,
+  addBackgroundAudioMode,
   addPodfileExclude,
   addSettingsGradleExclude,
 }

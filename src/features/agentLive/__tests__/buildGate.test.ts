@@ -13,6 +13,7 @@ jest.mock('@livekit/react-native', () => {
   mockSdkLoaded('@livekit/react-native')
   return {
     registerGlobals: () => {},
+    setupIOSAudioManagement: () => () => {},
     AudioSession: {},
     VideoTrack: () => null,
   }
@@ -96,10 +97,11 @@ describe('native build gate', () => {
     ])
   })
 
-  it('on: the LiveKit Expo plugin and the WebRTC config plugin', () => {
+  it('on: the LiveKit Expo plugin, the WebRTC config plugin and background audio', () => {
     expect(gate.agentLivePlugins(ON)).toEqual([
       '@livekit/react-native-expo-plugin',
       '@config-plugins/react-native-webrtc',
+      './plugins/agentLive/withAgentLiveBackgroundAudio.js',
     ])
   })
 

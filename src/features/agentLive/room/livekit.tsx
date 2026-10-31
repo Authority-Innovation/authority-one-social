@@ -7,7 +7,12 @@
  * voice. Edge sources and guests are not subscribed here. The owner's own
  * tracks are visible to the agent identity only.
  */
-import {AudioSession, registerGlobals, VideoTrack} from '@livekit/react-native'
+import {
+  AudioSession,
+  registerGlobals,
+  setupIOSAudioManagement,
+  VideoTrack,
+} from '@livekit/react-native'
 import {
   type Participant,
   type RemoteParticipant,
@@ -18,6 +23,7 @@ import {
   type TrackPublication,
 } from 'livekit-client'
 
+import {LIVE_IOS_AUDIO_POLICY} from './audioSession'
 import {type LiveRoom, type LiveRoomFactory, type StageRef} from './types'
 
 let globalsRegistered = false
@@ -37,7 +43,11 @@ function isStage(pub: TrackPublication) {
 
 export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
   if (!globalsRegistered) {
-    registerGlobals()
+    // Our own iOS audio policy instead of the SDK default, which leaves
+    // playAndRecord whenever the mic is off (see ./audioSession). A no-op off
+    // iOS.
+    registerGlobals({autoConfigureAudioSession: false})
+    setupIOSAudioManagement(true, LIVE_IOS_AUDIO_POLICY)
     globalsRegistered = true
   }
   const agentPrefix = `agent:${sid}:`
