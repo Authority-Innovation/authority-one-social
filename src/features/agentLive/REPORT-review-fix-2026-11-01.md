@@ -127,7 +127,10 @@ controller tests fail there; the 14th passes trivially).
 | LOW `setCamera` after end | No token is minted once the session is over |
 
 Not changed: unbound-rejoin wait (LOW: no device key ⇒ `duplicate_identity`
-until `participant_left`; the app ends with "removed"), mid-session consent
+until `participant_left`) [superseded: since R2 v2 an unbound removal retries
+in the backoff, and running out ends with "still open on your other device"
+only when a removal was seen; see the R2 v2 section and review 30f293f4 G3],
+mid-session consent
 withdrawal (no control), L1, L2. Fixtures regenerated at runtime
 agent-live/integration 4b08847 (replies byte-identical to 3dd4ac1, plus the
 new N2 case). Prebuild gate re-run on the Mac (flag off: exclude, no source, no
@@ -169,12 +172,12 @@ Report `docs/REVIEW-ONE-APP-LIVE-8c01c1e11.md` on `review/8c01c1e11-one-live-r33
 | **F3 MED** a drop during the first join shows "connected" | `connect()` never marks connected once a rejoin has started (the rejoin decides); the mic intent is recorded first so the rejoin restores it |
 | F4 camera swap alongside a rejoin | A rejoin generation counter: a camera request that saw a rejoin start while its token was minted is dropped ("Couldn't turn the camera on") |
 | F5 a failed `/end` left the registry | It stays registered and sign-out/switch re-sends it (`retryEnd`); a reused session left while starting unregisters |
-| F6 every removal of a continued session read "still open elsewhere" | Only within 15 s of its first join |
+| F6 every removal of a continued session read "still open elsewhere" | Only within 15 s of its first join, or before the first join resolved (30f293f4 G2) |
 | F7 `login` ended sessions before the credentials were checked | Now only after `createAgentAndLogin` succeeds and before the switch |
-| F8 a reused session with a token has no agent check | Connected with no stage for 45 s shows "Your agent hasn't joined yet"; cleared when the stage arrives |
+| F8 a reused session with a token has no agent check | Connected with no stage for 45 s sets `agent_waiting`; cleared when the stage arrives. [Correction, review 30f293f4 G1: at cd5aab174 nothing rendered it. Since the LOW follow-up the stage shows "Your agent hasn't joined yet. Keep waiting, or end and try again later." There is still no agent check on the join itself.] |
 | F9 blind re-sent after mic/camera | Re-sent first on a new connection, before the mic or camera publish |
 | F10 stale comments | Fixed (session header, orphan docblocks, api contract commit, rejoin rule text, the superseded report section) |
-| F11 hook test is source-order only | Unchanged (no provider harness); the login order is now tested too |
+| F11 hook test is source-order only | Since the LOW follow-up: `sessionHook.test.tsx` runs the real session Provider with the reducer wrapped, so the order is the order the store changed in (login, failed login, both logouts, switch, app-start resume) |
 | L1 Sentry breadcrumbs | `beforeBreadcrumb` scrubs `access_token`, `token` and `join_request` query values (`src/logger/sentry/setup/scrub.ts`, tested) |
 
 Not changed: L2 (no client `live.enabled` check: the owner-agents API has no

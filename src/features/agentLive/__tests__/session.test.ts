@@ -802,6 +802,49 @@ describe('review f2caccaa', () => {
     expect(env.last()).toMatchObject({phase: 'ended', endReason: 'removed'})
   })
 
+  it('G2: a removal during the first join of a continued session is “still open”', async () => {
+    const env = setup()
+    await toConsent(env, 'startReused')
+    await env.c.continueHere()
+    env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    env.rt.on('/live/join/prove', 'proveExchange')
+    // The runtime refuses before connect() resolves.
+    const connect = env.fake.room.connect
+    env.fake.room.connect = async args => {
+      env.clock.now += 120
+      env.fake.drop('removed')
+      await connect(args)
+    }
+    await env.c.submitConsent({ai_process: true})
+    await flush()
+    expect(env.last()).toMatchObject({
+      phase: 'ended',
+      endReason: 'still_open_elsewhere',
+    })
+  })
+
+  it('G3: an unbound continued session in a plain outage fails as a reconnect, with /end', async () => {
+    const env = setup({key: false})
+    await toConsent(env, 'startReused')
+    await env.c.continueHere()
+    env.rt.on('/live/sessions/:sid/consent', {
+      status: 200,
+      body: {...reply('consentAdmitted').body, popRequired: false},
+    })
+    await env.c.submitConsent({ai_process: true})
+    env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    env.fake.drop('network')
+    for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
+      await flush(40)
+    }
+    expect(env.last()).toMatchObject({
+      phase: 'failed',
+      error: 'reconnect_failed',
+    })
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+  })
+
   it('F8: no stage 45 s after connecting shows “agent waiting”; the stage clears it', async () => {
     const env = setup()
     await toLive(env)

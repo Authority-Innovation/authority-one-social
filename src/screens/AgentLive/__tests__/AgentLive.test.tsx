@@ -582,6 +582,34 @@ describe('session screen (flag on)', () => {
     expect(getByLabelText('Turn camera off')).toBeTruthy()
   })
 
+  it('no agent stage 45 s after going live: the stage says so (30f293f4 G1)', async () => {
+    const real = global.setTimeout
+    let wait: (() => void) | undefined
+    const spy = jest.spyOn(global, 'setTimeout').mockImplementation(((
+      cb: () => void,
+      ms?: number,
+    ) => {
+      if (ms === 45_000) {
+        wait = cb
+        return 0
+      }
+      return real(cb, ms)
+    }) as typeof setTimeout)
+    try {
+      const {getByTestId, getByText} = await goLive()
+      expect(wait).toBeDefined()
+      act(() => wait!())
+      expect(getByTestId('agentLiveNotice')).toBeTruthy()
+      expect(
+        getByText(
+          'Your agent hasn’t joined yet. Keep waiting, or end and try again later.',
+        ),
+      ).toBeTruthy()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('camera access refused: a notice on the stage, still live', async () => {
     mockCam.mockResolvedValue('denied')
     const {getByTestId, fake} = await goLive()

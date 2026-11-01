@@ -274,6 +274,9 @@ export function createLiveSessionController({
   // camera): kept, then acted on (review 679a9d48 N1), never swallowed.
   let rejoinLive = false
   let rejoinDrop: LiveConnectionEvent | null = null
+  // This rejoin saw an unbound join removed (the other holder), not just an
+  // outage: only then does running out mean "still open elsewhere".
+  let unboundRemoved = false
   // The session whose /end gave up, for retryEnd.
   let endPending: Session | null = null
   // The session ended or left: unregister from the sign-out hook.
@@ -491,7 +494,7 @@ export function createLiveSessionController({
       // removal soon after the last rejoin connected is that rejoin failing
       // after all, so it carries on in the same backoff (F2).
       const carry = deps.nowS() - connectedAt < LIVEKIT_DEPARTURE_TIMEOUT_S
-      await rejoin(carry)
+      await rejoin(carry, true)
       return
     }
     if (e.reason === 'removed') {
@@ -502,9 +505,12 @@ export function createLiveSessionController({
       await finish(
         {
           phase: 'ended',
+          // Before the first join resolved counts as soon (review 30f293f4
+          // G2): the runtime can refuse before connect() returns.
           endReason:
             session?.reused &&
-            deps.nowS() - (session.firstConnectedAt ?? 0) < STILL_OPEN_WINDOW_S
+            (session.firstConnectedAt === undefined ||
+              deps.nowS() - session.firstConnectedAt < STILL_OPEN_WINDOW_S)
               ? 'still_open_elsewhere'
               : 'removed',
         },
@@ -527,6 +533,7 @@ export function createLiveSessionController({
     }
     rejoinDrop = null
     rejoinLive = false
+    unboundRemoved = true
     return true
   }
 
@@ -549,9 +556,10 @@ export function createLiveSessionController({
    * After a drop: a fresh token from the owner's session, proven if bound,
    * and a new join, with backoff; then give up and end. Never a resume.
    */
-  async function rejoin(carry = false) {
+  async function rejoin(carry = false, removal = false) {
     const s = session
     if (!s || !room) return
+    unboundRemoved = removal
     rejoining = true
     rejoinGen++
     set({phase: 'reconnecting'})
@@ -625,9 +633,10 @@ export function createLiveSessionController({
           rejoinLive = false
         }
       }
-      // Out of budget. An unbound continued session that is never admitted is
-      // most likely still held by the other device (F2).
-      if (!s.key && s.reused) {
+      // Out of budget. An unbound continued session whose joins were removed
+      // is most likely still held by the other device (F2). A plain outage
+      // (no removal seen) is a failed reconnect (review 30f293f4 G3).
+      if (!s.key && s.reused && unboundRemoved) {
         await finish(
           {phase: 'ended', endReason: 'still_open_elsewhere'},
           {endRuntime: false},

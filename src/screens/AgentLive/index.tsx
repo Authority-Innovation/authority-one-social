@@ -571,6 +571,8 @@ function Stage({
         return l`Couldn’t turn the camera on.`
       case 'action_failed':
         return l`That didn’t work. Try again.`
+      case 'agent_waiting':
+        return l`Your agent hasn’t joined yet. Keep waiting, or end and try again later.`
       default:
         return null
     }
