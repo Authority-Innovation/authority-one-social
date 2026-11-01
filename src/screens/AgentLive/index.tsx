@@ -20,8 +20,9 @@
 import {useEffect, useRef, useState} from 'react'
 import {ActivityIndicator, Linking, View} from 'react-native'
 import {useSafeAreaInsets} from 'react-native-safe-area-context'
+import {msg} from '@lingui/core/macro'
 import {Trans, useLingui} from '@lingui/react/macro'
-import {useNavigation} from '@react-navigation/native'
+import {useNavigation, usePreventRemove} from '@react-navigation/native'
 
 import {
   type CommonNavigatorParams,
@@ -35,6 +36,7 @@ import {Camera_Stroke2_Corner0_Rounded as CameraIcon} from '#/components/icons/C
 import {Eye_Stroke2_Corner0_Rounded as EyeIcon} from '#/components/icons/Eye'
 import {EyeSlash_Stroke2_Corner0_Rounded as EyeSlashIcon} from '#/components/icons/EyeSlash'
 import {Microphone_Stroke2_Corner0_Rounded as MicIcon} from '#/components/icons/Microphone'
+import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {IS_ANDROID} from '#/env'
 import {AGENT_LIVE_ENABLED} from '#/features/agentLive/flag'
@@ -87,7 +89,10 @@ function LiveSession({
   displayName: string
 }) {
   const navigation = useNavigation<NavigationProp>()
+  const {i18n} = useLingui()
   const [state, setState] = useState<LiveSessionState>(initialLiveSessionState)
+  // The latest state, for the unmount cleanup (it runs with stale closures).
+  const latest = useRef<LiveSessionState>(initialLiveSessionState)
   const [controller, setController] = useState<LiveSessionController | null>(
     null,
   )
@@ -108,7 +113,20 @@ function LiveSession({
         made = createLiveSessionController({
           agentDid,
           roomFactory,
-          onChange: setState,
+          onChange: s => {
+            latest.current = s
+            setState(s)
+          },
+          deps: {
+            // The screen has gone and /end gave up (review f2caccaa F1).
+            onEndGaveUp: () =>
+              Toast.show(
+                i18n._(
+                  msg`Couldn’t end your live session, so your agent may still be live. Open Live again to end it.`,
+                ),
+                {type: 'error'},
+              ),
+          },
         })
         setController(made)
       },
@@ -118,9 +136,10 @@ function LiveSession({
     )
     return () => {
       cancelled = true
+      made?.detach({failureSeen: latest.current.endFailed})
       void made?.end()
     }
-  }, [agentDid])
+  }, [agentDid, i18n])
 
   const leave = () => {
     if (left.current) return
@@ -144,6 +163,18 @@ function LiveSession({
     if (leaveWhenEnded && ended) leave()
   })
 
+  // Review f2caccaa F1: no way out that skips /end. While a session is open,
+  // or its /end is still out, a swipe-back or the header back becomes End (or,
+  // once ending, waits for the answer). On a failed-end panel the owner has
+  // seen the warning, so leaving then is their "Leave anyway".
+  const open =
+    state.phase !== 'idle' &&
+    state.phase !== 'ended' &&
+    state.phase !== 'failed'
+  usePreventRemove(open || state.ending, () => {
+    if (open) onEnd()
+  })
+
   if (loadFailed) {
     return (
       <Finished
@@ -160,7 +191,8 @@ function LiveSession({
           displayName={displayName}
           busy={!controller || state.phase === 'starting'}
           onBegin={() => void controller?.begin()}
-          onCancel={leave}
+          // A session may already be on its way: end it, then leave.
+          onCancel={state.phase === 'starting' ? onEnd : leave}
         />
       )
     case 'reuse':
@@ -446,16 +478,23 @@ function Finished({
           </ButtonText>
         </Button>
       ) : null}
-      <Button
-        testID="agentLiveDoneButton"
-        label={state.endFailed ? l`Leave anyway` : l`Done`}
-        color={state.endFailed ? 'secondary' : 'primary'}
-        size="large"
-        onPress={onDone}>
-        <ButtonText>
-          {state.endFailed ? <Trans>Leave anyway</Trans> : <Trans>Done</Trans>}
-        </ButtonText>
-      </Button>
+      {/* No Done while /end is out: leaving now would hide its answer (F1). */}
+      {state.ending ? null : (
+        <Button
+          testID="agentLiveDoneButton"
+          label={state.endFailed ? l`Leave anyway` : l`Done`}
+          color={state.endFailed ? 'secondary' : 'primary'}
+          size="large"
+          onPress={onDone}>
+          <ButtonText>
+            {state.endFailed ? (
+              <Trans>Leave anyway</Trans>
+            ) : (
+              <Trans>Done</Trans>
+            )}
+          </ButtonText>
+        </Button>
+      )}
     </Panel>
   )
 }

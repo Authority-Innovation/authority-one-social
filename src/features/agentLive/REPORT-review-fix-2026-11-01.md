@@ -95,7 +95,7 @@ follows the doc and must be re-checked against it when it lands.
   open item). R3 (same-session identity replacement) is not needed by this app,
   because its rejoin tokens are bound and proven with the same key.
 
-### Follow-up: the workers' rejoin rule (58b8dd6)
+### Follow-up: the workers' rejoin rule (58b8dd6) [superseded by the R2 v2 section below: backoff is now 1-16 s, unbound removals retry]
 
 `rejoin.ts` mirrors the runtime's `live-agent/src/rejoin.js` on
 `feat/agent-live-r2-workers` @ 58b8dd6: backoff 1, 2, 4, 8 s; FINAL reasons
@@ -156,3 +156,28 @@ bfc09869 M-B(b) and the workers' review):
 
 Fixtures regenerated at ac11bd0 (all earlier replies byte-identical). 3 new
 behaviour tests fail on 21d6edcde.
+
+## Fix pass for review f2caccaa (PC, on 8c01c1e11: NOT CLEAN)
+
+Report `docs/REVIEW-ONE-APP-LIVE-8c01c1e11.md` on `review/8c01c1e11-one-live-r333`
+(6b0cec974). 15 of 19 new tests fail on 8c01c1e11.
+
+| Finding | Fix |
+| --- | --- |
+| **F1 HIGH** swipe-back / Done-while-ending / Cancel-while-starting skip `/end`; a give-up after the screen is gone is silent | `usePreventRemove` while a session is open or `/end` is out: a swipe-back or header back becomes End (or waits for it). No Done while "Ending…" shows. Cancel during `starting` ends the session first. The screen `detach()`es on unmount, and a `/end` that then gives up shows a toast ("Couldn't end your live session, so your agent may still be live…"), not twice if the owner already saw it on screen |
+| **F2 MED** an unbound rejoin can loop for ever | The backoff budget carries across unbound removals that land within LiveKit's 30 s departure timeout of the last connect, so a session that is never admitted runs out: "still open on your other device" for a continued session, else "Couldn't reconnect" |
+| **F3 MED** a drop during the first join shows "connected" | `connect()` never marks connected once a rejoin has started (the rejoin decides); the mic intent is recorded first so the rejoin restores it |
+| F4 camera swap alongside a rejoin | A rejoin generation counter: a camera request that saw a rejoin start while its token was minted is dropped ("Couldn't turn the camera on") |
+| F5 a failed `/end` left the registry | It stays registered and sign-out/switch re-sends it (`retryEnd`); a reused session left while starting unregisters |
+| F6 every removal of a continued session read "still open elsewhere" | Only within 15 s of its first join |
+| F7 `login` ended sessions before the credentials were checked | Now only after `createAgentAndLogin` succeeds and before the switch |
+| F8 a reused session with a token has no agent check | Connected with no stage for 45 s shows "Your agent hasn't joined yet"; cleared when the stage arrives |
+| F9 blind re-sent after mic/camera | Re-sent first on a new connection, before the mic or camera publish |
+| F10 stale comments | Fixed (session header, orphan docblocks, api contract commit, rejoin rule text, the superseded report section) |
+| F11 hook test is source-order only | Unchanged (no provider harness); the login order is now tested too |
+| L1 Sentry breadcrumbs | `beforeBreadcrumb` scrubs `access_token`, `token` and `join_request` query values (`src/logger/sentry/setup/scrub.ts`, tested) |
+
+Not changed: L2 (no client `live.enabled` check: the owner-agents API has no
+such field). Dependency (review section 5): build 42 needs the runtime proof
+exchange (R2 v2) on the Dev worker before it is tested; the app fails visibly
+without it.

@@ -1,6 +1,7 @@
 import {init} from '@sentry/react-native'
 
 import * as env from '#/env'
+import {scrubBreadcrumb} from './scrub'
 
 init({
   enabled: !env.IS_DEV && !!env.SENTRY_DSN,
@@ -31,4 +32,7 @@ init({
    */
   attachStacktrace: false,
   sampleRate: env.IS_INTERNAL ? 1.0 : 0.1,
+  // No join token (or other token query value) in a breadcrumb: livekit-client
+  // fetches /rtc/validate?access_token=... (Agent Live review L1).
+  beforeBreadcrumb: breadcrumb => scrubBreadcrumb(breadcrumb),
 })

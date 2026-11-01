@@ -5,11 +5,13 @@
  * keep the backoff and the final reasons the same in both.
  *
  * A lost LiveKit connection is a FULL rejoin with a FRESH join token, never
- * LiveKit's resume: the Dev signal site refuses every resume (R1), and the
- * runtime admits a fresh, proven token of the same identity as a replacement
- * while the dead participant is still held. FINAL reasons never rejoin: we
- * left, the room or session is over, the runtime removed us, or our own
- * replacement took the identity. Pure: no SDK, no network.
+ * LiveKit's resume: the Dev signal site refuses every resume (R1). A bound
+ * token is proven with the exchange and replaces the held participant; an
+ * unbound one waits until the dead participant leaves (R2 v2). FINAL reasons
+ * never rejoin: we left, the room or session is over, the runtime removed us
+ * (for an unbound session a removal is one failed attempt instead, see
+ * session.ts), or our own replacement took the identity. Pure: no SDK, no
+ * network.
  *
  * Reasons are the LiveKit protocol's DisconnectReason names, shared by
  * livekit-client (this app) and @livekit/rtc-node (the workers).
