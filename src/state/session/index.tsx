@@ -264,14 +264,16 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   )
 
   const resumeSession = useCallback<SessionApiContext['resumeSession']>(
-    async (storedAccount, isSwitchingAccounts = false) => {
+    async (storedAccount, isSwitchingAccounts = false, opts) => {
       addSessionDebugLog({
         type: 'method:start',
         method: 'resumeSession',
         account: storedAccount,
       })
-      if (isSwitchingAccounts) {
+      if (isSwitchingAccounts && !opts?.keepLive) {
         // Agent Live: as on logout, end the old account's live session first.
+        // Not for a switch a notification tap started: that is not the owner
+        // ending Live (it stays owed to sign-out).
         endOpenLiveSessions()
       }
       const signal = cancelPendingTask()

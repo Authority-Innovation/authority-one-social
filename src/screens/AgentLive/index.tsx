@@ -183,9 +183,10 @@ function LiveSession({
   // While a session is open, or its /end is still out, the owner going back
   // (header back, Android back) is End, or, once ending, waits for the
   // answer (review f2caccaa F1). Any other removal (a notification that pops
-  // the stack, a reset) is not the owner going back (review c23bdc031 F1):
-  // it goes through, and the unmount leaves the room but ends nothing (P3).
-  // On a failed-end panel, leaving is the owner's "Leave anyway".
+  // the stack, a reset) is not the owner ending (Dispatch ruling on review
+  // c23bdc031 F1): while the session is open it is refused, so Live stays
+  // and keeps running, as when the owner switches apps; once ending, it goes
+  // through. On a failed-end panel, leaving is the owner's "Leave anyway".
   const open =
     state.phase !== 'idle' &&
     state.phase !== 'ended' &&
@@ -196,7 +197,7 @@ function LiveSession({
     ({data}) => {
       if (OWNER_BACK.has(data.action.type)) {
         if (open) onEnd()
-      } else {
+      } else if (!open) {
         setPassThrough(data.action)
       }
     },

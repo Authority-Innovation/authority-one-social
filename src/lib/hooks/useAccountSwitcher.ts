@@ -37,7 +37,11 @@ export function useAccountSwitcher() {
             // So we change the URL ourselves. The navigator will pick it up on remount.
             history.pushState(null, '', '/')
           }
-          await resumeSession(account, true)
+          // A notification tap is not the owner ending Agent Live (Dispatch
+          // ruling on review c23bdc031 F1); a switch from the switcher is.
+          await resumeSession(account, true, {
+            keepLive: logContext === 'Notification',
+          })
           ax.metric('account:loggedIn', {logContext, withPassword: false})
           Toast.show(_(msg`Signed in as @${account.handle}`))
         } else {

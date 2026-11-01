@@ -224,6 +224,16 @@ describe('sign-out and account switch end open live sessions first', () => {
     ])
   })
 
+  it('a switch a notification tap started (keepLive) ends nothing (ruling on c23bdc031 F1)', async () => {
+    const api = setup()
+    await signedInAs(api)
+    agentModule.createAgentAndResume.mockResolvedValueOnce(account('bob'))
+    await act(() =>
+      api().resumeSession(account('bob').account, true, {keepLive: true}),
+    )
+    expect(order).toEqual(['switched-to-account'])
+  })
+
   it('resumeSession without a switch (app start) ends nothing', async () => {
     const api = setup()
     agentModule.createAgentAndResume.mockResolvedValueOnce(account('alice'))

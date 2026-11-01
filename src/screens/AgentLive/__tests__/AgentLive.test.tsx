@@ -1047,22 +1047,43 @@ describe('session screen (flag on)', () => {
     )
   })
 
-  it('c23bdc031 F1: a notification that pops the stack (POP_TO_TOP) does not end Live: it goes through, no /end', async () => {
+  it('c23bdc031 F1 (ruling): a notification that pops the stack while live is refused: Live stays and keeps running, no /end', async () => {
     mockDispatch.mockClear()
-    const {unmount, fake} = await goLive()
+    const {getByTestId, fake} = await goLive()
     rt.on('/live/sessions/:sid/end', 'end')
     act(() => {
       mockNav.onPrevented('POP_TO_TOP')
     })
     await flush()
-    expect(mockDispatch).toHaveBeenCalledWith({type: 'POP_TO_TOP'})
-    expect(mockNav.prevent).toBe(false)
+    expect(mockDispatch).not.toHaveBeenCalled()
+    expect(mockNav.prevent).toBe(true)
+    expect(getByTestId('agentLiveScreen')).toBeTruthy()
+    expect(fake.calls.map(c => c.op)).not.toContain('disconnect')
     expect(rt.to('/live/sessions/:sid/end')).toEqual([])
-    // The navigator then unmounts the screen: room left, still no /end.
-    unmount()
+  })
+
+  it('c23bdc031 F1: once ending, a programmatic pop goes through (nothing left to keep)', async () => {
+    mockDispatch.mockClear()
+    const {getByTestId} = await goLive()
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const real = rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname.endsWith('/end')) await gate
+      return real(u, i)
+    }
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveEndButton'))
+    act(() => {
+      mockNav.onPrevented('POP_TO_TOP')
+    })
     await flush()
-    expect(fake.calls.map(c => c.op)).toContain('disconnect')
-    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    expect(mockDispatch).toHaveBeenCalledWith({type: 'POP_TO_TOP'})
+    release()
+    await flush()
   })
 
   it('c23bdc031 F1: the owner’s header back (POP) is still End', async () => {

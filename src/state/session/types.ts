@@ -41,6 +41,11 @@ export type SessionApiContext = {
   resumeSession: (
     account: SessionAccount,
     isSwitchingAccounts?: boolean,
+    /**
+     * `keepLive`: a switch started by a notification tap, which is not the
+     * owner ending Agent Live (Dispatch ruling on review c23bdc031 F1).
+     */
+    opts?: {keepLive?: boolean},
   ) => Promise<void>
   removeAccount: (account: SessionAccount) => void
   /**
