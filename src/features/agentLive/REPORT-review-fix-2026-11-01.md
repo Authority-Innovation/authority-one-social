@@ -181,3 +181,33 @@ Not changed: L2 (no client `live.enabled` check: the owner-agents API has no
 such field). Dependency (review section 5): build 42 needs the runtime proof
 exchange (R2 v2) on the Dev worker before it is tested; the app fails visibly
 without it.
+
+## Simulator verification of F1 (2026-11-02)
+
+Driven on the iOS simulator (iPhone 17 Pro, iOS 26.5, Xcode 27.1, Release
+build with Live on) by an XCUITest target added only to the generated `ios/`
+project, against a local test PDS (`@atproto/dev-env` TestNetworkNoAppView,
+a throwaway `.test` account) and a mock runtime serving the runtime's REAL
+`handleLive` over its test world (ac11bd0), `/end` held 8 s. Nothing real was
+used; the stack, the account and the test target were removed afterwards.
+
+What the runs found, in order:
+
+1. Edge swipe on the consent sheet: it opened the app's drawer; nothing left,
+   no `/end`. The drawer (and the tab bar) let the owner walk away from a live
+   session. The consent title ran under the status bar. Fixed in 7e014963d
+   (immersive Live: minimal shell, drawer swipe off while focused, blur ends
+   an open session, safe-area padding).
+2. With 7e014963d, the full-screen and edge back swipes LEFT the screen at
+   once; `/end` went out only from the unmount (no Ending). On iOS 26
+   react-native-screens hands the swipe to the native content-pop gesture,
+   which `usePreventRemove`'s `preventNativeDismiss` did not stop. Fixed in
+   2889012ac: `gestureEnabled: false` while a session is open or ending
+   (react-native-screens refuses the gesture before it begins).
+3. With 2889012ac: PASS, both tests. A full-screen swipe and an edge swipe on
+   an open session leave it in place with no `/end`; Cancel shows "Ending…"
+   with no Done; a swipe during "Ending…" leaves it in place; the screen goes
+   only after `/end` answers. Mock log: one `/end` per session, after Cancel.
+
+Not verified on the simulator: the header back button (Live has no header),
+Android (Live is off there), a physical device.
