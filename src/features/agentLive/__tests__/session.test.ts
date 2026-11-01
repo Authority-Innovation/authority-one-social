@@ -66,6 +66,7 @@ import {
 import {
   createLiveSessionController,
   END_RETRY_DELAYS_MS,
+  END_SLOW_MS,
   type LiveDeps,
   type LiveSessionState,
   REJOIN_BACKOFF_MS,
@@ -770,6 +771,42 @@ describe('review f2caccaa', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
+  it('d8f8f16e H2: a /end out for END_SLOW_MS is endSlow until it answers', async () => {
+    const env = setup()
+    await toLive(env)
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const fetch = env.rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname.endsWith('/end')) await gate
+      return fetch(u, i)
+    }
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const ended = env.c.end()
+    await flush()
+    expect(env.last()).toMatchObject({ending: true, endSlow: false})
+    env.timers.find(t => t.ms === END_SLOW_MS)!.cb()
+    expect(env.last()).toMatchObject({ending: true, endSlow: true})
+    release()
+    await ended
+    expect(env.last()).toMatchObject({ending: false, endSlow: false})
+    expect(env.timers.find(t => t.ms === END_SLOW_MS)!.cancelled).toBe(true)
+  })
+
+  it('d8f8f16e H1: a give-up while off screen is reported at once, and not again on detach', async () => {
+    const env = setup()
+    await toLive(env)
+    env.c.setOnScreen(false)
+    env.rt.on('/live/sessions/:sid/end', E503, E503, E503, E503)
+    await env.c.end()
+    expect(env.deps.onEndGaveUp).toHaveBeenCalledTimes(1)
+    env.c.detach()
+    expect(env.deps.onEndGaveUp).toHaveBeenCalledTimes(1)
+  })
+
   it('F1: after the screen has gone, a /end that gives up is reported (onEndGaveUp)', async () => {
     const env = setup()
     await toLive(env)
@@ -839,6 +876,7 @@ describe('review f2caccaa', () => {
     for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
       await flush(40)
     }
+    await flush()
     expect(env.last()).toMatchObject({
       phase: 'failed',
       error: 'reconnect_failed',

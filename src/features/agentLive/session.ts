@@ -123,6 +123,12 @@ export type LiveSessionState = {
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
   /**
+   * /end has been out for END_SLOW_MS without an answer (review d8f8f16e
+   * H2): the screen offers "Leave anyway"; the end carries on, and a
+   * give-up after leaving is reported (toast).
+   */
+  endSlow: boolean
+  /**
    * The runtime's /end gave up (review 679a9d48 H2): the agent may still be in
    * the room. The screen says so and offers `retryEnd`.
    */
@@ -142,6 +148,7 @@ export const initialLiveSessionState: LiveSessionState = {
   blindOn: false,
   stage: null,
   ending: false,
+  endSlow: false,
   endFailed: false,
 }
 
@@ -202,6 +209,8 @@ export const STILL_OPEN_WINDOW_S = 15
 
 /** Waits between /end attempts (the route is idempotent). */
 export const END_RETRY_DELAYS_MS = [1000, 3000, 7000]
+/** /end out this long with no answer: offer "Leave anyway" (d8f8f16e H2). */
+export const END_SLOW_MS = 8_000
 /**
  * The full rejoin after a drop (join gate R2, runtime design
  * AGENT-LIVE-JOIN-GATE-REVISED @ adeeadb): the edge refuses LiveKit resumes,
@@ -233,6 +242,12 @@ export type LiveSessionController = {
    * screen already showed a give-up the owner chose to leave anyway.
    */
   detach(opts?: {failureSeen?: boolean}): void
+  /**
+   * The screen is (or is no longer) the one in front. A /end that gives up
+   * while it is not (pushed over, review d8f8f16e H1) is reported through
+   * `onEndGaveUp`: the failed-end panel would be behind another screen.
+   */
+  setOnScreen(on: boolean): void
   /** The room, once joining (the screen renders its StageVideo). */
   room(): LiveRoom | null
 }
@@ -284,6 +299,9 @@ export function createLiveSessionController({
   let unregister: (() => void) | null = null
   // The screen has gone (detach): a /end give-up is reported, not shown.
   let detached = false
+  let onScreen = true
+  // This give-up was already reported off-screen (toast): not again on detach.
+  let giveUpReported = false
   // The rejoin ladder's next rung. A refused rejoin (R2 rev 4) carries on
   // from here rather than resetting, so a session that is never admitted
   // runs out and says so (review f2caccaa F2).
@@ -308,7 +326,11 @@ export function createLiveSessionController({
 
   /** The runtime's /end, retried; the session is the account's that started it. */
   async function endOnRuntime(s: Session) {
-    set({ending: true, endFailed: false})
+    set({ending: true, endSlow: false, endFailed: false})
+    giveUpReported = false
+    const cancelSlow = deps.setTimer(END_SLOW_MS, () => {
+      if (state.ending) set({endSlow: true})
+    })
     let ok = false
     for (let attempt = 0; ; attempt++) {
       const res = await api.endLiveSession({sid: s.sid, auth: s.auth})
@@ -323,10 +345,14 @@ export function createLiveSessionController({
       if (wait === undefined) break
       await deps.sleep(wait)
     }
+    cancelSlow()
     endPending = ok ? null : s
-    set({ending: false, endFailed: !ok})
+    set({ending: false, endSlow: false, endFailed: !ok})
     if (ok) unregister?.()
-    else if (detached) deps.onEndGaveUp()
+    else if (detached || !onScreen) {
+      giveUpReported = true
+      deps.onEndGaveUp()
+    }
   }
 
   /** Leave the room (if any) and stop listening to it. */
@@ -969,7 +995,14 @@ export function createLiveSessionController({
 
     detach({failureSeen = false} = {}) {
       detached = true
-      if (state.endFailed && !failureSeen) deps.onEndGaveUp()
+      if (state.endFailed && !failureSeen && !giveUpReported) {
+        giveUpReported = true
+        deps.onEndGaveUp()
+      }
+    },
+
+    setOnScreen(on) {
+      onScreen = on
     },
 
     room: () => room,

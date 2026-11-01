@@ -46,6 +46,7 @@ import {
 import {
   captureLiveAuth,
   endLiveSession,
+  LIVE_REQUEST_TIMEOUT_MS,
   type LiveAuth,
   proveLiveJoin,
   requestLiveToken,
@@ -245,6 +246,32 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
       ok: false,
       error: {kind: 'server_outdated'},
     })
+  })
+
+  it('a request that never answers times out as a network error, and is aborted (d8f8f16e H2)', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      let signal: AbortSignal | undefined
+      ;(globalThis as {fetch: unknown}).fetch = (
+        _u: string,
+        i: RequestInit,
+      ) => {
+        signal = i.signal ?? undefined
+        return new Promise<Response>(() => {})
+      }
+      const res = endLiveSession({sid: SID, auth: AUTH})
+      await Promise.resolve()
+      jest.advanceTimersByTime(LIVE_REQUEST_TIMEOUT_MS - 1)
+      let settled = false
+      void res.then(() => (settled = true))
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      jest.advanceTimersByTime(1)
+      expect(await res).toEqual({ok: false, error: {kind: 'network'}})
+      expect(signal?.aborted).toBe(true)
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('malformed input never reaches the network', async () => {

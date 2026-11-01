@@ -108,6 +108,9 @@ function LiveSession({
   // End was tapped: stay on "Ending…" until the runtime's /end answers
   // (review 679a9d48 H2), then leave. A failed /end stays on screen.
   const [leaveWhenEnded, setLeaveWhenEnded] = useState(false)
+  // "Leave anyway" while a slow /end is still out (review d8f8f16e H2): the
+  // end carries on; a later give-up is a toast (the controller is detached).
+  const [leaveAnyway, setLeaveAnyway] = useState(false)
   const left = useRef(false)
 
   // Loads the binding and makes the controller. Starts nothing: the owner's
@@ -168,7 +171,7 @@ function LiveSession({
     !state.ending &&
     !state.endFailed
   useEffect(() => {
-    if (leaveWhenEnded && ended) leave()
+    if ((leaveWhenEnded && ended) || leaveAnyway) leave()
   })
 
   // Review f2caccaa F1: no way out that skips /end. While a session is open,
@@ -179,23 +182,22 @@ function LiveSession({
     state.phase !== 'idle' &&
     state.phase !== 'ended' &&
     state.phase !== 'failed'
-  usePreventRemove(open || state.ending, () => {
+  usePreventRemove((open || state.ending) && !leaveAnyway, () => {
     if (open) onEnd()
   })
   // The back swipe itself is off while a session is open or ending: on iOS 26
   // the native content-pop gesture is not stopped by usePreventRemove's
   // preventNativeDismiss (seen on the simulator: the swipe left the screen and
   // /end only went out from the unmount). End is the visible way out.
-  const blockGesture = open || state.ending
+  const blockGesture = (open || state.ending) && !leaveAnyway
   useEffect(() => {
     navigation.setOptions({gestureEnabled: !blockGesture})
   }, [navigation, blockGesture])
 
   // Live is immersive (review f2caccaa F1, found on the simulator): the
   // app's drawer swipe won the back gesture and, like the tab bar, let the
-  // owner walk away from a running session with the mic on. With both off,
-  // the only way back is the native back swipe, which usePreventRemove turns
-  // into End.
+  // owner walk away from a running session with the mic on. With both off
+  // and the back swipe off (above), End is the way out.
   useEnableMinimalShellModeForScreen()
   const setDrawerSwipeDisabled = useSetDrawerSwipeDisabled()
   useFocusEffect(
@@ -207,16 +209,24 @@ function LiveSession({
   // Anything that still pushes over Live while a session is open (a deep
   // link, a notification) ends it: no mic left running off-screen. The panel
   // shows the end when the owner comes back.
-  useEffect(
-    () =>
-      navigation.addListener('blur', () => {
-        const p = latest.current.phase
-        if (p !== 'idle' && p !== 'ended' && p !== 'failed') {
-          void controller?.end()
-        }
-      }),
-    [navigation, controller],
-  )
+  // While another screen is in front, a /end that gives up is a toast, not
+  // a panel nobody sees (review d8f8f16e H1).
+  useEffect(() => {
+    const offBlur = navigation.addListener('blur', () => {
+      controller?.setOnScreen(false)
+      const p = latest.current.phase
+      if (p !== 'idle' && p !== 'ended' && p !== 'failed') {
+        void controller?.end()
+      }
+    })
+    const offFocus = navigation.addListener('focus', () =>
+      controller?.setOnScreen(true),
+    )
+    return () => {
+      offBlur()
+      offFocus()
+    }
+  }, [navigation, controller])
 
   if (loadFailed) {
     return (
@@ -262,6 +272,11 @@ function LiveSession({
           state={state}
           onDone={leave}
           onRetryEnd={() => void controller?.retryEnd()}
+          onLeaveAnyway={() => {
+            // From now on a give-up is reported as a toast (no screen).
+            controller?.detach()
+            setLeaveAnyway(true)
+          }}
         />
       )
     default:
@@ -426,10 +441,12 @@ function Finished({
   state,
   onDone,
   onRetryEnd,
+  onLeaveAnyway,
 }: {
   state: LiveSessionState
   onDone: () => void
   onRetryEnd?: () => void
+  onLeaveAnyway?: () => void
 }) {
   const {t: l} = useLingui()
   const message = (() => {
@@ -489,6 +506,28 @@ function Finished({
           <Trans>Ending the session…</Trans>
         </Text>
       ) : null}
+      {state.ending && state.endSlow && onLeaveAnyway ? (
+        <>
+          <Text
+            testID="agentLiveEndSlow"
+            style={[a.text_sm, {color: ON_STAGE_TEXT}]}>
+            <Trans>
+              This is taking longer than usual. You can leave: we’ll keep
+              trying, and tell you if your agent may still be live.
+            </Trans>
+          </Text>
+          <Button
+            testID="agentLiveLeaveAnywayButton"
+            label={l`Leave anyway`}
+            color="secondary"
+            size="large"
+            onPress={onLeaveAnyway}>
+            <ButtonText>
+              <Trans>Leave anyway</Trans>
+            </ButtonText>
+          </Button>
+        </>
+      ) : null}
       {state.endFailed ? (
         <>
           <Text
@@ -523,7 +562,8 @@ function Finished({
           </ButtonText>
         </Button>
       ) : null}
-      {/* No Done while /end is out: leaving now would hide its answer (F1). */}
+      {/* No Done while /end is out: leaving now would hide its answer (F1).
+          A slow one offers Leave anyway above (d8f8f16e H2). */}
       {state.ending ? null : (
         <Button
           testID="agentLiveDoneButton"

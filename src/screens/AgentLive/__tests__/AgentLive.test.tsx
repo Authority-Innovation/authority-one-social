@@ -750,6 +750,97 @@ describe('session screen (flag on)', () => {
     }
   })
 
+  it('d8f8f16e H2: a /end that hangs offers Leave anyway after 8 s; leaving keeps the end going and a give-up is a toast', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {getByTestId, queryByTestId, unmount} = await goLive()
+      // The server accepts /end and never answers.
+      const real = rt.fetch
+      ;(globalThis as {fetch: unknown}).fetch = (u: string, i: RequestInit) =>
+        new URL(u).pathname.endsWith('/end')
+          ? new Promise<Response>(() => {})
+          : real(u, i)
+      await press(getByTestId('agentLiveEndButton'))
+      expect(getByTestId('agentLiveEnding')).toBeTruthy()
+      expect(queryByTestId('agentLiveLeaveAnywayButton')).toBeNull()
+      act(() => {
+        jest.advanceTimersByTime(8000)
+      })
+      await flush()
+      expect(getByTestId('agentLiveEndSlow')).toBeTruthy()
+      expect(mockNav.prevent).toBe(true)
+      await press(getByTestId('agentLiveLeaveAnywayButton'))
+      expect(mockGoBack).toHaveBeenCalledTimes(1)
+      expect(mockNav.prevent).toBe(false)
+      expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(true)
+      // Each try times out at 10 s; after the last, the owner is told.
+      expect(mockToastShow).not.toHaveBeenCalled()
+      for (const ms of [2000, 1000, 10000, 3000, 10000, 7000, 10000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(mockToastShow).toHaveBeenCalledTimes(1)
+      unmount()
+      await flush()
+      expect(mockToastShow).toHaveBeenCalledTimes(1)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('d8f8f16e H1: a /end that gives up after a push (blurred) is a toast, once', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {unmount} = await goLive()
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      act(() => {
+        mockNav.listeners.blur?.()
+      })
+      await flush()
+      for (const ms of [1000, 3000, 7000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(rt.to('/live/sessions/:sid/end')).toHaveLength(4)
+      expect(mockToastShow).toHaveBeenCalledTimes(1)
+      // Unmounting later doesn't report it again.
+      unmount()
+      await flush()
+      expect(mockToastShow).toHaveBeenCalledTimes(1)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('d8f8f16e H1: back in front, a give-up is the panel again, not a toast', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {getByTestId} = await goLive()
+      act(() => {
+        mockNav.listeners.blur?.()
+        mockNav.listeners.focus?.()
+      })
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      await flush()
+      for (const ms of [1000, 3000, 7000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveEndFailed')).toBeTruthy()
+      expect(mockToastShow).not.toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('N2: an agent that couldn’t start says so; nothing joins', async () => {
     const fake = createFakeRoom()
     mockLoad.mockResolvedValue(() => fake.room)

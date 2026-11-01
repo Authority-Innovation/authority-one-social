@@ -310,9 +310,42 @@ function post(
   return send(path, auth, body)
 }
 
+/**
+ * Every Live request gives up after this long, as a network error (review
+ * d8f8f16e H2): a server that accepts and never answers must not hold the
+ * owner on "Ending…" for the platform's own timeout.
+ */
+export const LIVE_REQUEST_TIMEOUT_MS = 10_000
+
 async function send(
   path: string,
   auth: LiveAuth | null,
+  body?: Record<string, unknown>,
+): Promise<LiveResult<unknown>> {
+  const abort = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  // Raced rather than trusting the abort alone: the body read can hang too.
+  const timedOut = new Promise<LiveResult<unknown>>(resolve => {
+    timer = setTimeout(() => {
+      abort.abort()
+      logger.warn('agentLive: request timed out')
+      resolve({ok: false, error: {kind: 'network'}})
+    }, LIVE_REQUEST_TIMEOUT_MS)
+  })
+  try {
+    return await Promise.race([
+      request(path, auth, abort.signal, body),
+      timedOut,
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function request(
+  path: string,
+  auth: LiveAuth | null,
+  signal: AbortSignal,
   body?: Record<string, unknown>,
 ): Promise<LiveResult<unknown>> {
   try {
@@ -322,6 +355,7 @@ async function send(
     const res = await fetch(`${AGENT_RUNTIME_BASE_URL}${path}`, {
       method: 'POST',
       headers,
+      signal,
       ...(body ? {body: JSON.stringify(body)} : {}),
     })
     if (res.status === 401) {
