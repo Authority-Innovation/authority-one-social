@@ -362,7 +362,7 @@ describe('session screen (flag on)', () => {
     rt.on('/live/sessions', start ?? 'startAwaitingConsent')
     await press(r.getByTestId('agentLiveBeginButton'))
     rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-    rt.on('/live/join/prove', 'proveOk')
+    rt.on('/live/join/prove', 'proveExchange')
     await press(r.getByTestId('agentLiveConsent-ai_process'))
     await press(r.getByTestId('agentLiveConsentSubmit'))
     return {...r, fake}
@@ -426,7 +426,8 @@ describe('session screen (flag on)', () => {
       ai_process: 'given',
       remember: 'refused',
     })
-    expect(fake.connects()[0].token).toBe(tokenOf('consentAdmitted'))
+    // R2 v2: the proven token is exchanged; the returned one joins.
+    expect(fake.connects()[0].token).toBe(tokenOf('proveExchange'))
     expect(fake.calls[fake.calls.length - 1]).toEqual({op: 'mic', on: true})
     expect(getByTestId('agentLiveMicIndicator')).toBeTruthy()
   })
@@ -519,7 +520,7 @@ describe('session screen (flag on)', () => {
     expect(rt.to('/live/sessions/:sid/token')).toEqual([])
 
     rt.on('/live/sessions/:sid/token', 'tokenCamera')
-    rt.on('/live/join/prove', 'proveCamera')
+    rt.on('/live/join/prove', 'proveExchange')
     await press(getByTestId('agentLiveCameraButton'))
     expect(rt.to('/live/sessions/:sid/token')[0].body!.camera).toBe(true)
     expect(fake.cameraPublishes()).toBe(1)
@@ -527,7 +528,7 @@ describe('session screen (flag on)', () => {
     const publish = fake.calls.findIndex(c => c.op === 'camera' && c.on)
     expect(lastConnect).toBeLessThan(publish)
     expect(fake.calls[lastConnect]).toMatchObject({
-      token: tokenOf('tokenCamera'),
+      token: tokenOf('proveExchange'),
     })
     expect(getByLabelText('Turn camera off')).toBeTruthy()
   })
@@ -559,13 +560,13 @@ describe('session screen (flag on)', () => {
     jest.useFakeTimers({doNotFake: ['Date']})
     try {
       const e503 = {status: 503, body: {error: 'unavailable'}}
-      rt.on('/live/sessions/:sid/token', e503, e503, e503, e503)
+      rt.on('/live/sessions/:sid/token', e503, e503, e503, e503, e503)
       rt.on('/live/sessions/:sid/end', 'end')
       act(() => fake.drop('network'))
       await flush()
       expect(getByTestId('agentLiveReconnecting')).toBeTruthy()
       expect(queryByTestId('agentLiveMicIndicator')).toBeNull()
-      for (const ms of [1000, 2000, 4000, 8000]) {
+      for (const ms of [1000, 2000, 4000, 8000, 16000]) {
         act(() => {
           jest.advanceTimersByTime(ms)
         })
@@ -575,7 +576,7 @@ describe('session screen (flag on)', () => {
       expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
         'Couldn’t reconnect, so the live session has ended.',
       )
-      expect(rt.to('/live/sessions/:sid/token')).toHaveLength(4)
+      expect(rt.to('/live/sessions/:sid/token')).toHaveLength(5)
     } finally {
       jest.useRealTimers()
     }
@@ -698,7 +699,7 @@ describe('session screen (flag on)', () => {
     await press(r.getByTestId('agentLiveBeginButton'))
     await press(r.getByTestId('agentLiveContinueHereButton'))
     rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-    rt.on('/live/join/prove', 'proveOk')
+    rt.on('/live/join/prove', 'proveExchange')
     await press(r.getByTestId('agentLiveConsent-ai_process'))
     await press(r.getByTestId('agentLiveConsentSubmit'))
     act(() => fake.drop('removed'))

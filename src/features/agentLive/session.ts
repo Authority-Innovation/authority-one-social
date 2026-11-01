@@ -343,19 +343,25 @@ export function createLiveSessionController({
   }
 
   /** Proof of possession for a bound token. Throws on failure. */
-  async function prove(s: Session, j: LiveJoin) {
-    if (!j.popRequired) return
+  /**
+   * The token to join with. A bound token is proven with the exchange and
+   * the RETURNED token is the one that joins (R2 v2): the proven one never
+   * does. An unbound token joins as minted. Throws on failure.
+   */
+  async function prove(s: Session, j: LiveJoin): Promise<string> {
+    if (!j.popRequired) return j.token
     const sig = s.key ? joinProof(s.key, j.token) : null
     if (!sig) throw new JoinError('bad_proof')
     const proved = await api.proveLiveJoin({token: j.token, sig})
     if (!proved.ok) throw new JoinError(proved.error.kind)
+    return proved.data.token
   }
 
   /** The proof, then the join. Throws on failure. */
   async function join(s: Session, j: LiveJoin) {
-    await prove(s, j)
+    const token = await prove(s, j)
     if (over()) throw new JoinError('connect')
-    await room!.connect({wsUrl: s.wsUrl, token: j.token})
+    await room!.connect({wsUrl: s.wsUrl, token})
   }
 
   /**
@@ -363,13 +369,16 @@ export function createLiveSessionController({
    * never drops the live connection; audio kept across the gap.
    */
   async function swap(s: Session, j: LiveJoin) {
-    await prove(s, j)
+    const token = await prove(s, j)
     if (over()) throw new JoinError('connect')
     leaving = true
     await room!.disconnect({keepAudio: true}).catch(() => {})
     leaving = false
     if (over()) throw new JoinError('connect')
-    await room!.connect({wsUrl: s.wsUrl, token: j.token})
+    // From here a drop belongs to the NEW connection (the runtime can refuse
+    // it before connect() even resolves): keep it, never ignore it.
+    rejoinLive = true
+    await room!.connect({wsUrl: s.wsUrl, token})
   }
 
   function watchRoom(r: LiveRoom) {
@@ -422,6 +431,13 @@ export function createLiveSessionController({
       )
       return
     }
+    if (e.reason === 'removed' && session && !session.key) {
+      // An unbound token (no device key) can't replace the held participant;
+      // the runtime removes it until the dead one leaves (R2 v2, up to ~30 s).
+      // Keep trying: the next mint says if the session is really over.
+      await rejoin()
+      return
+    }
     if (e.reason === 'removed') {
       // The runtime removed us (withdrawn consent, a revoked or refused token):
       // it owns the session's state now. On a session continued from another
@@ -437,6 +453,21 @@ export function createLiveSessionController({
       return
     }
     await rejoin()
+  }
+
+  /**
+   * An unbound session's fresh join removed while the dead participant is
+   * still held (R2 v2): not final, just this attempt failing. True when that
+   * was the drop (it is consumed).
+   */
+  function unboundRemoval(s: Session): boolean {
+    const d = rejoinDrop
+    if (!d || s.key || d.type !== 'disconnected' || d.reason !== 'removed') {
+      return false
+    }
+    rejoinDrop = null
+    rejoinLive = false
+    return true
   }
 
   /**
@@ -496,19 +527,31 @@ export function createLiveSessionController({
         try {
           await swap(s, t.data)
           rejoinLive = true
-          if (over() || (await takeRejoinDrop())) return
+          // Each step: an unbound removal is this attempt failing (next
+          // backoff); any other drop is acted on.
+          if (over()) return
+          if (unboundRemoval(s)) continue
+          if (await takeRejoinDrop()) return
           await room.setMicrophoneEnabled(state.micOn)
-          if (over() || (await takeRejoinDrop())) return
+          if (over()) return
+          if (unboundRemoval(s)) continue
+          if (await takeRejoinDrop()) return
           if (wantCamera) await room.setCameraEnabled(true)
-          if (over() || (await takeRejoinDrop())) return
+          if (over()) return
+          if (unboundRemoval(s)) continue
+          if (await takeRejoinDrop()) return
           await resendBlind()
-          if (over() || (await takeRejoinDrop())) return
+          if (over()) return
+          if (unboundRemoval(s)) continue
+          if (await takeRejoinDrop()) return
           rejoinLive = false
           set({phase: 'connected'})
           return
         } catch {
           leaving = false
-          if (over() || (await takeRejoinDrop())) return
+          if (over()) return
+          if (unboundRemoval(s)) continue
+          if (await takeRejoinDrop()) return
           rejoinLive = false
         }
       }

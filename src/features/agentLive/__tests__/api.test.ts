@@ -198,17 +198,38 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
     expectNoIdentity()
   })
 
-  it('prove: {token, sig} and no bearer at all', async () => {
-    rt.on('/live/join/prove', 'proveOk')
-    const token = tokenOf('tokenForJoin')
-    expect(await proveLiveJoin({token, sig: LIVE.proofs.tokenForJoin})).toEqual(
-      {
-        ok: true,
-        data: null,
+  it('prove: {token, sig, exchange: true}, no bearer, and the RETURNED token comes back (R2 v2)', async () => {
+    rt.on('/live/join/prove', 'proveExchange')
+    const token = tokenOf('tokenForExchange')
+    const sig = LIVE.proofs.tokenForExchange
+    expect(await proveLiveJoin({token, sig})).toEqual({
+      ok: true,
+      data: {
+        token: tokenOf('proveExchange'),
+        expiresAt: reply('proveExchange').body.expiresAt,
       },
-    )
-    expect(rt.sent[0].body).toEqual({token, sig: LIVE.proofs.tokenForJoin})
+    })
+    expect(tokenOf('proveExchange')).not.toBe(token)
+    expect(rt.sent[0].body).toEqual({token, sig, exchange: true})
     expect(rt.sent[0].headers.Authorization).toBeUndefined()
+  })
+
+  it('prove: no token back (no exchange) is a bad_response, never a join on the proven token', async () => {
+    rt.on('/live/join/prove', 'proveOk', {
+      status: 200,
+      body: {ok: true, token: tokenOf('tokenForExchange'), expiresAt: 1},
+    })
+    const token = tokenOf('tokenForExchange')
+    const sig = LIVE.proofs.tokenForExchange
+    expect(await proveLiveJoin({token, sig})).toEqual({
+      ok: false,
+      error: {kind: 'bad_response'},
+    })
+    // The same token handed back is not an exchange either.
+    expect(await proveLiveJoin({token, sig})).toEqual({
+      ok: false,
+      error: {kind: 'bad_response'},
+    })
   })
 
   it('malformed input never reaches the network', async () => {

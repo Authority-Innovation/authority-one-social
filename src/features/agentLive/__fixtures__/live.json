@@ -1,8 +1,8 @@
 {
   "source": {
     "repo": "authority-one-runtime",
-    "ref": "origin/agent-live/integration",
-    "commit": "4b08847"
+    "ref": "origin/feat/agent-live-r2-workers-v2",
+    "commit": "ac11bd0"
   },
   "device": {
     "seedHex": "0707070707070707070707070707070707070707070707070707070707070707",
@@ -141,6 +141,22 @@
         "popRequired": false
       }
     },
+    "tokenForExchange": {
+      "status": 200,
+      "body": {
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJBUEl0ZXN0cmVnaW9ua2V5Iiwic3ViIjoib3duZXI6bHNfMDFNNkE2RlQwMzQ1Njc4OUFCQ0RFRkdISks6YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoiLCJuYmYiOjE3OTM0OTEyMDAsImV4cCI6MTc5MzQ5MTI2MCwianRpIjoiMDFNNkE2RlQzMzg5QUJDREVGR0hKS01OUFEiLCJ2aWRlbyI6eyJyb29tIjoibHZfNzR4dGI0emhtbDVxZ3l1ZmZxYWJiNWJqbmFfdXZ3eHl6MjM0NTY3YWJjZCIsInJvb21Kb2luIjp0cnVlLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoU291cmNlcyI6WyJtaWNyb3Bob25lIl0sImNhblN1YnNjcmliZSI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImhpZGRlbiI6ZmFsc2UsInJvb21DcmVhdGUiOmZhbHNlLCJyb29tTGlzdCI6ZmFsc2UsInJvb21BZG1pbiI6ZmFsc2UsInJvb21SZWNvcmQiOmZhbHNlLCJpbmdyZXNzQWRtaW4iOmZhbHNlfSwibWV0YWRhdGEiOiJ7XCJ2XCI6MSxcInNpZFwiOlwibHNfMDFNNkE2RlQwMzQ1Njc4OUFCQ0RFRkdISktcIixcInJvbGVcIjpcIm93bmVyXCIsXCJqdGlcIjpcIjAxTTZBNkZUMzM4OUFCQ0RFRkdISktNTlBRXCIsXCJjbmZcIjpcIjNhZTkwOTA1OWRiZmFlYjNmMjUwOWJlZTU5NzZiZjgwXCJ9IiwiYXR0cmlidXRlcyI6eyJhby5yb2xlIjoib3duZXIifX0.99am9H8OzYeqKcKHnUHoUwFWKSwPQzsldPbtdORcKgk",
+        "expiresAt": 1793491260,
+        "popRequired": true
+      }
+    },
+    "proveExchange": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJBUEl0ZXN0cmVnaW9ua2V5Iiwic3ViIjoib3duZXI6bHNfMDFNNkE2RlQwMzQ1Njc4OUFCQ0RFRkdISks6YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoiLCJuYmYiOjE3OTM0OTEyMDAsImV4cCI6MTc5MzQ5MTI2MCwianRpIjoiMDFNNkE2RlQzQzAxMjM0NTY3ODlBQkNERUYiLCJ2aWRlbyI6eyJyb29tIjoibHZfNzR4dGI0emhtbDVxZ3l1ZmZxYWJiNWJqbmFfdXZ3eHl6MjM0NTY3YWJjZCIsInJvb21Kb2luIjp0cnVlLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoU291cmNlcyI6WyJtaWNyb3Bob25lIl0sImNhblN1YnNjcmliZSI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImhpZGRlbiI6ZmFsc2UsInJvb21DcmVhdGUiOmZhbHNlLCJyb29tTGlzdCI6ZmFsc2UsInJvb21BZG1pbiI6ZmFsc2UsInJvb21SZWNvcmQiOmZhbHNlLCJpbmdyZXNzQWRtaW4iOmZhbHNlfSwibWV0YWRhdGEiOiJ7XCJ2XCI6MSxcInNpZFwiOlwibHNfMDFNNkE2RlQwMzQ1Njc4OUFCQ0RFRkdISktcIixcInJvbGVcIjpcIm93bmVyXCIsXCJqdGlcIjpcIjAxTTZBNkZUM0MwMTIzNDU2Nzg5QUJDREVGXCIsXCJjbmZcIjpcIjNhZTkwOTA1OWRiZmFlYjNmMjUwOWJlZTU5NzZiZjgwXCJ9IiwiYXR0cmlidXRlcyI6eyJhby5yb2xlIjoib3duZXIifX0.ckkvnPENOqTpnFkMFwE65BgCb8Ht-Ep0FhHBBc0mtao",
+        "expiresAt": 1793491260
+      }
+    },
     "startNotOwnedAgent": {
       "status": 404,
       "body": {
@@ -189,7 +205,7 @@
         "ok": true,
         "admitted": true,
         "missing": [],
-        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJBUEl0ZXN0cmVnaW9ua2V5Iiwic3ViIjoib3duZXI6bHNfMDFNNkE2RlQzS1JTVFZXWFlaMDEyMzQ1Njc6dXZ3eHl6MjM0NTY3YWJjZGVmZ2hpamtsbW4iLCJuYmYiOjE3OTM0OTEyMDAsImV4cCI6MTc5MzQ5MTI2MCwianRpIjoiMDFNNkE2RlQzVldYWVowMTIzNDU2Nzg5QUIiLCJ2aWRlbyI6eyJyb29tIjoibHZfdmdycW00NmwzcjcyYzZhdHg1aTJ4bDJiazRfaWprbG1ub3BxcnN0dXZ3eCIsInJvb21Kb2luIjp0cnVlLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoU291cmNlcyI6WyJtaWNyb3Bob25lIl0sImNhblN1YnNjcmliZSI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImhpZGRlbiI6ZmFsc2UsInJvb21DcmVhdGUiOmZhbHNlLCJyb29tTGlzdCI6ZmFsc2UsInJvb21BZG1pbiI6ZmFsc2UsInJvb21SZWNvcmQiOmZhbHNlLCJpbmdyZXNzQWRtaW4iOmZhbHNlfSwibWV0YWRhdGEiOiJ7XCJ2XCI6MSxcInNpZFwiOlwibHNfMDFNNkE2RlQzS1JTVFZXWFlaMDEyMzQ1NjdcIixcInJvbGVcIjpcIm93bmVyXCIsXCJqdGlcIjpcIjAxTTZBNkZUM1ZXWFlaMDEyMzQ1Njc4OUFCXCIsXCJjbmZcIjpcIjNhZTkwOTA1OWRiZmFlYjNmMjUwOWJlZTU5NzZiZjgwXCJ9IiwiYXR0cmlidXRlcyI6eyJhby5yb2xlIjoib3duZXIifX0.-wTy10uHjePh_Db6osyBzgz2CSm_9Sxd4k48oYABq04",
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJBUEl0ZXN0cmVnaW9ua2V5Iiwic3ViIjoib3duZXI6bHNfMDFNNkE2RlQ0SzQ1Njc4OUFCQ0RFRkdISks6YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoiLCJuYmYiOjE3OTM0OTEyMDAsImV4cCI6MTc5MzQ5MTI2MCwianRpIjoiMDFNNkE2RlQ0Vjg5QUJDREVGR0hKS01OUFEiLCJ2aWRlbyI6eyJyb29tIjoibHZfNzR4dGI0emhtbDVxZ3l1ZmZxYWJiNWJqbmFfdXZ3eHl6MjM0NTY3YWJjZCIsInJvb21Kb2luIjp0cnVlLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoU291cmNlcyI6WyJtaWNyb3Bob25lIl0sImNhblN1YnNjcmliZSI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImhpZGRlbiI6ZmFsc2UsInJvb21DcmVhdGUiOmZhbHNlLCJyb29tTGlzdCI6ZmFsc2UsInJvb21BZG1pbiI6ZmFsc2UsInJvb21SZWNvcmQiOmZhbHNlLCJpbmdyZXNzQWRtaW4iOmZhbHNlfSwibWV0YWRhdGEiOiJ7XCJ2XCI6MSxcInNpZFwiOlwibHNfMDFNNkE2RlQ0SzQ1Njc4OUFCQ0RFRkdISktcIixcInJvbGVcIjpcIm93bmVyXCIsXCJqdGlcIjpcIjAxTTZBNkZUNFY4OUFCQ0RFRkdISktNTlBRXCIsXCJjbmZcIjpcIjNhZTkwOTA1OWRiZmFlYjNmMjUwOWJlZTU5NzZiZjgwXCJ9IiwiYXR0cmlidXRlcyI6eyJhby5yb2xlIjoib3duZXIifX0.E8CCVHwivfUnNhsmCMFoUjMFLmueFOEJGhfrbWaXcNc",
         "expiresAt": 1793491260,
         "popRequired": true,
         "agent": "unavailable"
@@ -212,10 +228,19 @@
     "unboundRejoinWhileHeld": {
       "ok": false,
       "reason": "removed"
+    },
+    "joinTradedToken": {
+      "ok": false,
+      "reason": "removed"
+    },
+    "joinExchangedToken": {
+      "ok": true,
+      "identity": "owner:ls_01M6A6FT03456789ABCDEFGHJK:abcdefghijklmnopqrstuvwxyz"
     }
   },
   "proofs": {
     "tokenForJoin": "xclfF8oNmdx797zo-s9dtAUSfiKGjL4InUuxLUFScYQj5GG3F_8piVxDRxD1lAy23BYWI59rqSXPWJhg_ihmBQ",
-    "tokenCamera": "tI8lplLhs5K2oVenWxAkDAjC4XLMaXVLLc4zb3FKgwdLXaWfvY8xpErhnvK5d1oGbeAqZqC4JC0-Hi2xzhhaDA"
+    "tokenCamera": "tI8lplLhs5K2oVenWxAkDAjC4XLMaXVLLc4zb3FKgwdLXaWfvY8xpErhnvK5d1oGbeAqZqC4JC0-Hi2xzhhaDA",
+    "tokenForExchange": "JH2OjuzqAJ-dY7lbJS7XXHe7yJ-7L11nfp7JaiYNOr9w1E1DAH9UP7VWjaMvNpO9LYM5DbEEcZHf0P0RnBLpBQ"
   }
 }

@@ -30,7 +30,7 @@ Built to `authority-one-runtime` `agent-live/integration` @ 3dd4ac1
 | --- | --- | --- |
 | `POST /live/sessions` | `{agentDid, devicePubKey?}` | `{sid, region, wsUrl, token: null, expiresAt: null, popRequired, consentRequired, recordPolicy, reused, consentMissing: true}` before consent |
 | `POST /live/sessions/:sid/consent` | `{decisions, textVersion, devicePubKey?}` | `{admitted, missing, token, expiresAt, popRequired, agent}` |
-| `POST /live/join/prove` | `{token, sig}` (no bearer) | `{ok}`; 401 `bad_proof` |
+| `POST /live/join/prove` | `{token, sig, exchange: true}` (no bearer) | `{ok, token, expiresAt}`: join with THIS token, the proven one is traded and never joins (R2 v2); 401 `bad_proof` |
 | `POST /live/sessions/:sid/token` | `{camera, devicePubKey?}` | `{token, expiresAt, popRequired}`; 403 `consent_required` |
 | `POST /live/sessions/:sid/end` | none | `{ok}` (idempotent) |
 
@@ -63,7 +63,11 @@ ROOM_CLOSED, USER_REJECTED), which end the session; anything else, including no
 reason (the SDK giving up), rejoins.
 Any other drop is a full rejoin: a fresh token from `POST /live/sessions/:sid/token`
 (never the one in hand), its proof, a new join, the mic and camera restored;
-backoff 1, 2, 4, 8 s, then the session stops with "Couldn't reconnect". The
+backoff 1, 2, 4, 8, 16 s (31 s, longer than LiveKit's 30 s departure timeout),
+then the session stops with a visible "Couldn't reconnect". An unbound token (no
+device key) is removed while the dead participant is still held, so for an
+unbound session a removal is one failed attempt, not the end; the next mint
+says whether the session is really over. The
 screen shows Reconnecting meanwhile, with the controls off. A `/rtc/v1` 404 is
 handled inside the SDK (a ServiceNotFound from `/rtc/v1/validate` retries the
 join on `/rtc`); `__tests__/sdkContract.test.ts` fails if an upgrade changes

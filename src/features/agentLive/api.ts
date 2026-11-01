@@ -13,7 +13,9 @@
  *     → {admitted, missing, token|null, expiresAt|null, popRequired, agent}
  *   POST /live/sessions/:sid/token    {camera, devicePubKey?}
  *     → {token, expiresAt, popRequired}   403 {error: consent_required}
- *   POST /live/join/prove             {token, sig}   (no bearer)
+ *   POST /live/join/prove             {token, sig, exchange: true}   (no bearer)
+ *     → {ok, token, expiresAt}: a fresh, proven token. Join with THAT one;
+ *       the proven one is traded and never joins (R2 v2, review bfc09869)
  *   POST /live/sessions/:sid/end      → {ok}  (idempotent)
  *
  * IDENTITY (ruling 3; design r2 §6 step 2, R3, X-TOK-1). The bearer is the
@@ -217,9 +219,12 @@ export async function requestLiveToken({
 }
 
 /**
- * The device-key proof for a bound join token (smoke F7 control c). Sent
- * before joining: without it the runtime removes the participant and revokes
- * the token. Carries no bearer: the token and the signature are the request.
+ * The device-key proof for a bound join token (smoke F7 control c), WITH the
+ * exchange (join gate R2 v2, runtime feat/agent-live-r2-workers-v2 @ ac11bd0,
+ * review bfc09869 M-B(b)): the proven token is traded for the prover's own
+ * fresh, proven token, returned only here. The app joins with the RETURNED
+ * token; the one it proved never joins, so a copy of it is worthless. Carries
+ * no bearer: the token and the signature are the request.
  */
 export async function proveLiveJoin({
   token,
@@ -227,15 +232,23 @@ export async function proveLiveJoin({
 }: {
   token: string
   sig: string
-}): Promise<LiveResult<null>> {
+}): Promise<LiveResult<{token: string; expiresAt: number}>> {
   if (!JWT_RE.test(token) || !SIG_RE.test(sig)) {
     return {ok: false, error: {kind: 'invalid_argument'}}
   }
-  const res = await send('/live/join/prove', null, {token, sig})
+  const res = await send('/live/join/prove', null, {token, sig, exchange: true})
   if (!res.ok) return res
-  return isObject(res.data) && res.data.ok === true
-    ? {ok: true, data: null}
-    : badResponse()
+  // No token back means the exchange didn't happen: never join on the proven
+  // one (it would be refused, or be a copy-holder's race).
+  if (!isObject(res.data) || res.data.ok !== true) return badResponse()
+  const {token: fresh, expiresAt} = res.data
+  if (typeof fresh !== 'string' || !JWT_RE.test(fresh) || fresh === token) {
+    return badResponse()
+  }
+  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+    return badResponse()
+  }
+  return {ok: true, data: {token: fresh, expiresAt}}
 }
 
 export async function endLiveSession({
