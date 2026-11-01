@@ -70,6 +70,10 @@ join on `/rtc`); `__tests__/sdkContract.test.ts` fails if an upgrade changes
 that or the no-retry behaviour.
 
 Stop path: End calls `/end`, which stops the agent's job and deletes the room.
+The screen stays on "Ending…" until it answers; if it gives up, the screen says
+the agent may still be live and offers Try again and Leave anyway. Signing out
+or switching account ends any open session first (`registry.ts`, called from
+`state/session`).
 It goes out with the bearer of the account that started the session (also on
 sign-out or account switch, when the screen unmounts) and is retried; it keeps
 running after the screen has gone. There is no separate "Stop agent" control

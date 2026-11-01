@@ -21,8 +21,9 @@ import {pathToFileURL} from 'node:url'
 
 import {ed25519} from '@noble/curves/ed25519'
 
-// agent-live/integration at 3dd4ac1 (review r298 F1/F2).
-const SOURCE_COMMIT = '3dd4ac1'
+// agent-live/integration at 4b08847 (room-finished landed; the replies are
+// byte-identical to 3dd4ac1's, plus the agent-job failure below).
+const SOURCE_COMMIT = '4b08847'
 const SOURCE_REF = 'origin/agent-live/integration'
 
 // Ids, room names and jtis end in random bytes, and every token carries the
@@ -207,5 +208,43 @@ r.tokenAfterEnd = await call(`/live/sessions/${sid}/token`, {
   bearer: TA.bearer,
   body: {camera: false, devicePubKey: DEVICE_PUB},
 })
+
+// The agent's job fails to start (review 679a9d48 N2): a second world whose job
+// launcher refuses. The owner is admitted, but `agent` says why there is none.
+{
+  const env2 = liveEnv()
+  const w2 = liveDeps(env2, {
+    jobs: {
+      starts: [],
+      stops: [],
+      start: () => Promise.resolve({ok: false}),
+      stop: () => Promise.resolve({ok: true}),
+    },
+  })
+  const call2 = async (p, opts) => {
+    const res = await handleLive(
+      liveRequest(p, opts),
+      env2,
+      new URL(`https://runtime.test${p}`),
+      w2.deps,
+    )
+    return {status: res.status, body: JSON.parse(await res.text())}
+  }
+  const st = await call2('/live/sessions', {
+    bearer: TA.bearer,
+    body: {agentDid: TA.agentDid, devicePubKey: DEVICE_PUB},
+  })
+  r.consentAgentUnavailable = await call2(
+    `/live/sessions/${st.body.sid}/consent`,
+    {
+      bearer: TA.bearer,
+      body: {
+        decisions: ALL_GIVEN,
+        textVersion: 'one-app-v1',
+        devicePubKey: DEVICE_PUB,
+      },
+    },
+  )
+}
 
 process.stdout.write(`${JSON.stringify(out, null, 2)}\n`)

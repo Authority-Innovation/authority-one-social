@@ -54,7 +54,8 @@ import {
 } from '../api'
 
 const OTHER_DID = 'did:plc:someotheraccount00000001'
-const AUTH: LiveAuth = {ownerDid: OWNER_DID, bearer: BEARER}
+// A fresh one per test: a call refreshes the pinned bearer in place.
+let AUTH: LiveAuth = {ownerDid: OWNER_DID, bearer: BEARER}
 const PK = LIVE.device.publicKey
 
 const mockBearer = getAgentRuntimeAccessToken as jest.Mock<
@@ -75,6 +76,7 @@ function signedInAs(did: string | null, bearer: string | null) {
 beforeEach(() => {
   rt = createRuntimeFetch()
   ;(globalThis as {fetch: unknown}).fetch = rt.fetch
+  AUTH = {ownerDid: OWNER_DID, bearer: BEARER}
   for (const fn of Object.values(logger)) (fn as jest.Mock).mockClear()
   mockBearer.mockReset()
   signedInAs(OWNER_DID, BEARER)
@@ -281,6 +283,7 @@ describe('the runtime replies (live.json)', () => {
           expiresAt: reply('consentAdmitted').body.expiresAt,
           popRequired: true,
         },
+        agent: reply('consentAdmitted').body.agent,
       },
     })
     expect(await submitLiveConsent(args)).toEqual({
@@ -289,6 +292,7 @@ describe('the runtime replies (live.json)', () => {
         admitted: false,
         missing: reply('consentPartial').body.missing,
         join: null,
+        agent: reply('consentPartial').body.agent,
       },
     })
   })
@@ -419,6 +423,17 @@ describe('owner scope', () => {
     rt.on('/live/sessions/:sid/end', 'end')
     await endLiveSession({sid: SID, auth: AUTH})
     expect(rt.sent[0].headers.Authorization).toBe('Bearer refreshed-bearer')
+  })
+
+  it('H2: the pinned bearer follows the refresh, so after a sign-out the newest one goes out', async () => {
+    signedInAs(OWNER_DID, 'refreshed-bearer')
+    rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    await requestLiveToken({sid: SID, auth: AUTH})
+    expect(AUTH.bearer).toBe('refreshed-bearer')
+    signedInAs(null, null)
+    rt.on('/live/sessions/:sid/end', 'end')
+    await endLiveSession({sid: SID, auth: AUTH})
+    expect(rt.sent[1].headers.Authorization).toBe('Bearer refreshed-bearer')
   })
 
   it('after an account switch: the session account’s bearer, never the new one', async () => {

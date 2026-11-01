@@ -602,6 +602,112 @@ describe('session screen (flag on)', () => {
     expect(mockGoBack).toHaveBeenCalled()
   })
 
+  it('H2: End stays on “Ending…” until /end answers, then goes back', async () => {
+    const {getByTestId, queryByTestId} = await goLive()
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const real = rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname.endsWith('/end')) await gate
+      return real(u, i)
+    }
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveEndButton'))
+    expect(getByTestId('agentLiveEnding')).toBeTruthy()
+    expect(mockGoBack).not.toHaveBeenCalled()
+    release()
+    await flush()
+    expect(queryByTestId('agentLiveEnding')).toBeNull()
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('H2: a failed /end stays on screen with Try again and Leave anyway', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {getByTestId} = await goLive()
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      await press(getByTestId('agentLiveEndButton'))
+      for (const ms of [1000, 3000, 7000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveEndFailed')).toBeTruthy()
+      expect(mockGoBack).not.toHaveBeenCalled()
+      rt.on('/live/sessions/:sid/end', 'end')
+      await press(getByTestId('agentLiveRetryEndButton'))
+      expect(rt.to('/live/sessions/:sid/end')).toHaveLength(5)
+      expect(mockGoBack).toHaveBeenCalledTimes(1)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('H2: Leave anyway leaves while the end has failed', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {getByTestId} = await goLive()
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      await press(getByTestId('agentLiveEndButton'))
+      for (const ms of [1000, 3000, 7000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveDoneButton')).toHaveProp(
+        'accessibilityLabel',
+        'Leave anyway',
+      )
+      await press(getByTestId('agentLiveDoneButton'))
+      expect(mockGoBack).toHaveBeenCalledTimes(1)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('N2: an agent that couldn’t start says so; nothing joins', async () => {
+    const fake = createFakeRoom()
+    mockLoad.mockResolvedValue(() => fake.room)
+    const r = screen()
+    await flush()
+    rt.on('/live/sessions', 'startAwaitingConsent')
+    await press(r.getByTestId('agentLiveBeginButton'))
+    rt.on('/live/sessions/:sid/consent', 'consentAgentUnavailable')
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(r.getByTestId('agentLiveConsent-ai_process'))
+    await press(r.getByTestId('agentLiveConsentSubmit'))
+    expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+      'Your agent couldn’t start, so the live session has ended. Try again later.',
+    )
+    expect(fake.connects()).toEqual([])
+  })
+
+  it('M2: a continued session still open on the other device says so', async () => {
+    const fake = createFakeRoom()
+    mockLoad.mockResolvedValue(() => fake.room)
+    const r = screen()
+    await flush()
+    rt.on('/live/sessions', 'startReused')
+    await press(r.getByTestId('agentLiveBeginButton'))
+    await press(r.getByTestId('agentLiveContinueHereButton'))
+    rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    rt.on('/live/join/prove', 'proveOk')
+    await press(r.getByTestId('agentLiveConsent-ai_process'))
+    await press(r.getByTestId('agentLiveConsentSubmit'))
+    act(() => fake.drop('removed'))
+    await flush()
+    expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+      'This live session is still open on your other device. End it there, then try again here.',
+    )
+  })
+
   it('End with nothing to go back to opens the agent’s hub', async () => {
     mockNav.canGoBack = false
     const {getByTestId} = await goLive()

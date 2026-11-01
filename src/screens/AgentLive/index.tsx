@@ -17,7 +17,7 @@
  *
  * Not here yet: edge sources (step 6), playback (step 9), inviting guests.
  */
-import {useEffect, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import {ActivityIndicator, Linking, View} from 'react-native'
 import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {Trans, useLingui} from '@lingui/react/macro'
@@ -92,6 +92,10 @@ function LiveSession({
     null,
   )
   const [loadFailed, setLoadFailed] = useState(false)
+  // End was tapped: stay on "Ending…" until the runtime's /end answers
+  // (review 679a9d48 H2), then leave. A failed /end stays on screen.
+  const [leaveWhenEnded, setLeaveWhenEnded] = useState(false)
+  const left = useRef(false)
 
   // Loads the binding and makes the controller. Starts nothing: the owner's
   // tap does (begin). Leaving the screen ends whatever was started.
@@ -119,14 +123,26 @@ function LiveSession({
   }, [agentDid])
 
   const leave = () => {
+    if (left.current) return
+    left.current = true
     if (navigation.canGoBack()) navigation.goBack()
     else navigation.navigate('AgentHub', {agent: agentRef})
   }
   const onEnd = () => {
-    // /end keeps retrying in the controller after the screen has gone.
-    void controller?.end()
-    leave()
+    if (!controller) {
+      leave()
+      return
+    }
+    setLeaveWhenEnded(true)
+    void controller.end()
   }
+  const ended =
+    (state.phase === 'ended' || state.phase === 'failed') &&
+    !state.ending &&
+    !state.endFailed
+  useEffect(() => {
+    if (leaveWhenEnded && ended) leave()
+  })
 
   if (loadFailed) {
     return (
@@ -166,7 +182,13 @@ function LiveSession({
       )
     case 'ended':
     case 'failed':
-      return <Finished state={state} onDone={leave} />
+      return (
+        <Finished
+          state={state}
+          onDone={leave}
+          onRetryEnd={() => void controller?.retryEnd()}
+        />
+      )
     default:
       return (
         <Stage
@@ -297,7 +319,8 @@ function Reuse({
       <Text style={[a.text_md, {color: ON_STAGE_TEXT}]}>
         <Trans>
           A live session with this agent is already open, maybe on another
-          device. Continuing here moves it to this device.
+          device. You can continue it here once it’s closed there; if it’s still
+          open on the other device, end it there first.
         </Trans>
       </Text>
       <Button
@@ -327,9 +350,11 @@ function Reuse({
 function Finished({
   state,
   onDone,
+  onRetryEnd,
 }: {
   state: LiveSessionState
   onDone: () => void
+  onRetryEnd?: () => void
 }) {
   const {t: l} = useLingui()
   const message = (() => {
@@ -343,6 +368,8 @@ function Finished({
           return l`Live isn’t available for this agent.`
         case 'reconnect_failed':
           return l`Couldn’t reconnect, so the live session has ended.`
+        case 'agent_unavailable':
+          return l`Your agent couldn’t start, so the live session has ended. Try again later.`
         case 'consent_incomplete':
         case 'consent_required':
           return l`Your agent can’t join until every choice is made.`
@@ -360,6 +387,8 @@ function Finished({
         return l`You were removed from the live session.`
       case 'other_device':
         return l`This live session moved to another device.`
+      case 'still_open_elsewhere':
+        return l`This live session is still open on your other device. End it there, then try again here.`
       case 'consent_withdrawn':
         return l`The live session stopped because consent was withdrawn.`
       case 'ended_elsewhere':
@@ -383,6 +412,28 @@ function Finished({
           <Trans>Ending the session…</Trans>
         </Text>
       ) : null}
+      {state.endFailed ? (
+        <>
+          <Text
+            testID="agentLiveEndFailed"
+            style={[a.text_sm, a.font_bold, {color: ON_STAGE_TEXT}]}>
+            <Trans>
+              Couldn’t end the session, so your agent may still be live. Try
+              again, or it ends on its own at the session’s time limit.
+            </Trans>
+          </Text>
+          <Button
+            testID="agentLiveRetryEndButton"
+            label={l`Try ending the session again`}
+            color="negative"
+            size="large"
+            onPress={() => onRetryEnd?.()}>
+            <ButtonText>
+              <Trans>Try again</Trans>
+            </ButtonText>
+          </Button>
+        </>
+      ) : null}
       {state.error === 'mic_denied' ? (
         <Button
           testID="agentLiveOpenSettingsButton"
@@ -397,12 +448,12 @@ function Finished({
       ) : null}
       <Button
         testID="agentLiveDoneButton"
-        label={l`Done`}
-        color="primary"
+        label={state.endFailed ? l`Leave anyway` : l`Done`}
+        color={state.endFailed ? 'secondary' : 'primary'}
         size="large"
         onPress={onDone}>
         <ButtonText>
-          <Trans>Done</Trans>
+          {state.endFailed ? <Trans>Leave anyway</Trans> : <Trans>Done</Trans>}
         </ButtonText>
       </Button>
     </Panel>
