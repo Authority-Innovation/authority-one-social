@@ -487,6 +487,38 @@ describe('H1: the media connection', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
   })
 
+  it('a server without the join exchange fails visibly as server_outdated, and never joins', async () => {
+    const env = setup()
+    await toConsent(env)
+    env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    await env.c.submitConsent({ai_process: true, transcribe: true})
+    await flush()
+    expect(env.fake.connects()).toEqual([])
+    expect(env.last()).toMatchObject({
+      phase: 'failed',
+      error: 'server_outdated',
+    })
+  })
+
+  it('a rejoin onto a server without the exchange stops at once as server_outdated', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    env.fake.drop('network')
+    await flush(400)
+    // No retry burns the backoff: an old server won't get better.
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+    expect(env.fake.connects()).toHaveLength(1)
+    expect(env.last()).toMatchObject({
+      phase: 'failed',
+      error: 'server_outdated',
+    })
+  })
+
   it('R2: every rejoin attempt is a fresh token from /token, proven, then a new join (never a resume)', async () => {
     const env = setup()
     await toLive(env)

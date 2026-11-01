@@ -612,9 +612,14 @@ export function createLiveSessionController({
           connectedAt = deps.nowS()
           set({phase: 'connected'})
           return
-        } catch {
+        } catch (e) {
           leaving = false
           if (over()) return
+          // A server without the new join flow won't get better with a retry.
+          if (e instanceof JoinError && e.kind === 'server_outdated') {
+            await fail('server_outdated')
+            return
+          }
           if (unboundRemoval(s)) continue
           if (await takeRejoinDrop()) return
           rejoinLive = false
