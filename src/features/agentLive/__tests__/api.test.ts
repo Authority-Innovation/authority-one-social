@@ -214,11 +214,15 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
     expect(rt.sent[0].headers.Authorization).toBeUndefined()
   })
 
-  it('prove: no token back (no exchange) is a bad_response, never a join on the proven token', async () => {
-    rt.on('/live/join/prove', 'proveOk', {
-      status: 200,
-      body: {ok: true, token: tokenOf('tokenForExchange'), expiresAt: 1},
-    })
+  it('prove: a half-exchange (no token back) is a bad_response, never a join on the proven token', async () => {
+    rt.on(
+      '/live/join/prove',
+      {status: 200, body: {ok: true, expiresAt: 1}},
+      {
+        status: 200,
+        body: {ok: true, token: tokenOf('tokenForExchange'), expiresAt: 1},
+      },
+    )
     const token = tokenOf('tokenForExchange')
     const sig = LIVE.proofs.tokenForExchange
     expect(await proveLiveJoin({token, sig})).toEqual({
@@ -229,6 +233,17 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
     expect(await proveLiveJoin({token, sig})).toEqual({
       ok: false,
       error: {kind: 'bad_response'},
+    })
+  })
+
+  it('prove: the plain {ok: true} of a server before the exchange) is server_outdated', async () => {
+    // The recorded reply of a runtime without the exchange.
+    rt.on('/live/join/prove', 'proveOk')
+    const token = tokenOf('tokenForExchange')
+    const sig = LIVE.proofs.tokenForExchange
+    expect(await proveLiveJoin({token, sig})).toEqual({
+      ok: false,
+      error: {kind: 'server_outdated'},
     })
   })
 

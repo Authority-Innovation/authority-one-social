@@ -49,6 +49,11 @@ export type LiveError =
   | {kind: 'not_found'}
   | {kind: 'consent_required'}
   | {kind: 'bad_proof'}
+  /**
+   * The server accepted the proof but returned no exchanged token: it predates
+   * the new join flow (runtime R2 v2), so Live can't join on it.
+   */
+  | {kind: 'server_outdated'}
   | {kind: 'unavailable'; status: number}
   | {kind: 'http'; status: number}
   | {kind: 'network'}
@@ -243,6 +248,11 @@ export async function proveLiveJoin({
   // one (it would be refused, or be a copy-holder's race).
   if (!isObject(res.data) || res.data.ok !== true) return badResponse()
   const {token: fresh, expiresAt} = res.data
+  // A plain {ok: true}: the proof was accepted the old way. This server has
+  // no exchange (before runtime R2 v2), so say so instead of a generic error.
+  if (fresh === undefined && expiresAt === undefined) {
+    return {ok: false, error: {kind: 'server_outdated'}}
+  }
   if (typeof fresh !== 'string' || !JWT_RE.test(fresh) || fresh === token) {
     return badResponse()
   }
