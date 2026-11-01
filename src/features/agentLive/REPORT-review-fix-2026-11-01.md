@@ -132,3 +132,27 @@ withdrawal (no control), L1, L2. Fixtures regenerated at runtime
 agent-live/integration 4b08847 (replies byte-identical to 3dd4ac1, plus the
 new N2 case). Prebuild gate re-run on the Mac (flag off: exclude, no source, no
 audio, original strings; flag on: source, audio, the live strings).
+
+## R2 v2 contract (2026-11-02, runtime feat/agent-live-r2-workers-v2 @ ac11bd0)
+
+Contract updates in AUTONOMOUS-LOG for session local_b97286ac (review
+bfc09869 M-B(b) and the workers' review):
+
+- **Proof exchange:** `POST /live/join/prove {token, sig, exchange: true}`
+  returns `{ok, token, expiresAt}`; the app connects with the RETURNED token,
+  never the one it proved (first join, camera rejoin, every rejoin). No token
+  back, or the same one, is a `bad_response` and nothing joins. live.json now
+  carries the real exchange and the runtime's own evidence: the traded token's
+  join is removed, the exchanged token's is admitted.
+- **Backoff 1, 2, 4, 8, 16 s** (`rejoin.ts`, = the workers' v2 rule; final
+  reasons unchanged); a failed rejoin stays a visible "Couldn't reconnect".
+- **Unbound wait:** with no device key, a fresh token no longer replaces the
+  held participant, so the runtime removes it until the dead one leaves. For an
+  unbound session a removal (during a rejoin, or while connected) is a failed
+  attempt: Reconnecting stays up and the next mint decides (404 ended, 403
+  consent withdrawn). Bound sessions keep removal FINAL.
+- Also: a drop that arrives while the rejoin's `connect()` is still resolving
+  now belongs to the new connection (it was ignored before).
+
+Fixtures regenerated at ac11bd0 (all earlier replies byte-identical). 3 new
+behaviour tests fail on 21d6edcde.

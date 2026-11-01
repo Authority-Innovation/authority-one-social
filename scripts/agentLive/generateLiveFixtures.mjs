@@ -21,10 +21,11 @@ import {pathToFileURL} from 'node:url'
 
 import {ed25519} from '@noble/curves/ed25519'
 
-// agent-live/integration at 4b08847 (room-finished landed; the replies are
-// byte-identical to 3dd4ac1's, plus the agent-job failure below).
-const SOURCE_COMMIT = '4b08847'
-const SOURCE_REF = 'origin/agent-live/integration'
+// feat/agent-live-r2-workers-v2 at ac11bd0 (R2 v2, review bfc09869: the proof
+// exchange). It contains agent-live/integration; the replies are byte-identical
+// to 4b08847's, plus the exchange and the agent-job failure below.
+const SOURCE_COMMIT = 'ac11bd0'
+const SOURCE_REF = 'origin/feat/agent-live-r2-workers-v2'
 
 // Ids, room names and jtis end in random bytes, and every token carries the
 // clock: fix both so the output is stable.
@@ -186,6 +187,24 @@ r.tokenUnbound = await call(`/live/sessions/${sid}/token`, {
 })
 out.media.unboundRejoinWhileHeld = await w.media.join(
   r.tokenUnbound.body.token,
+  room,
+)
+
+// The proof EXCHANGE (R2 v2, review bfc09869 M-B(b)): proving with exchange
+// trades the proven token for a fresh, proven one returned only to the prover.
+// The client joins with the RETURNED token; the traded one never joins.
+r.tokenForExchange = await call(`/live/sessions/${sid}/token`, {
+  bearer: TA.bearer,
+  body: {camera: false, devicePubKey: DEVICE_PUB},
+})
+const traded = r.tokenForExchange.body.token
+out.proofs.tokenForExchange = sign(traded)
+r.proveExchange = await call('/live/join/prove', {
+  body: {token: traded, sig: out.proofs.tokenForExchange, exchange: true},
+})
+out.media.joinTradedToken = await w.media.join(traded, room)
+out.media.joinExchangedToken = await w.media.join(
+  r.proveExchange.body.token,
   room,
 )
 

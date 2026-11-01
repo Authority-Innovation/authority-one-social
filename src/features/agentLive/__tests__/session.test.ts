@@ -148,7 +148,7 @@ async function toConsent(env: Env, start = 'startAwaitingConsent') {
 async function toLive(env: Env) {
   await toConsent(env)
   env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-  env.rt.on('/live/join/prove', 'proveOk')
+  env.rt.on('/live/join/prove', 'proveExchange')
   await env.c.submitConsent({ai_process: true, transcribe: true})
 }
 
@@ -224,6 +224,8 @@ describe('B2: nothing before the owner taps, no media before consent', () => {
     const token = tokenOf('consentAdmitted')
     const prove = env.rt.to('/live/join/prove')[0]
     expect(prove.body!.token).toBe(token)
+    // R2 v2: the proof asks for the exchange, and the RETURNED token joins.
+    expect(prove.body!.exchange).toBe(true)
     expect(proofVerifies(token, String(prove.body!.sig))).toBe(true)
     expect(env.log).toEqual([
       'api /live/sessions',
@@ -237,8 +239,9 @@ describe('B2: nothing before the owner taps, no media before consent', () => {
       wsUrl:
         reply('consentAdmitted').body.wsUrl ??
         reply('startAwaitingConsent').body.wsUrl,
-      token,
+      token: tokenOf('proveExchange'),
     })
+    expect(tokenOf('proveExchange')).not.toBe(token)
     expect(env.last()).toMatchObject({
       phase: 'connected',
       micOn: true,
@@ -398,7 +401,7 @@ describe('H1: the media connection', () => {
       () => new Promise<void>(r => (release = r)),
     )
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange')
     env.fake.drop('network')
     await flush()
     env.fake.drop('network')
@@ -422,7 +425,7 @@ describe('H1: the media connection', () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange')
     env.fake.drop('network')
     await flush()
     const t = env.rt.to('/live/sessions/:sid/token')
@@ -430,9 +433,10 @@ describe('H1: the media connection', () => {
       camera: false,
       devicePubKey: LIVE.device.publicKey,
     })
+    // Each join is on the token the exchange returned (R2 v2).
     expect(env.fake.connects().map(c => c.token)).toEqual([
-      tokenOf('consentAdmitted'),
-      tokenOf('tokenForJoin'),
+      tokenOf('proveExchange'),
+      tokenOf('proveExchange'),
     ])
     const sig = String(env.rt.to('/live/join/prove')[1].body!.sig)
     expect(sig).toBe(LIVE.proofs.tokenForJoin)
@@ -451,18 +455,18 @@ describe('H1: the media connection', () => {
     expect(env.last()).toMatchObject({...expected, micOn: false})
   })
 
-  it('a drop it can’t recover from: backoff 1, 2, 4, 8 s, then “reconnect failed”, room left, session ended', async () => {
+  it('a drop it can’t recover from: backoff 1, 2, 4, 8, 16 s, then a visible “reconnect failed”, room left, session ended', async () => {
     const env = setup()
     await toLive(env)
-    env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503)
+    env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
     env.rt.on('/live/sessions/:sid/end', 'end')
     env.fake.drop('network')
     await flush(400)
     expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual(
       REJOIN_BACKOFF_MS,
     )
-    expect(REJOIN_BACKOFF_MS).toEqual([1000, 2000, 4000, 8000])
-    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(4)
+    expect(REJOIN_BACKOFF_MS).toEqual([1000, 2000, 4000, 8000, 16000])
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(5)
     expect(env.last()).toMatchObject({
       phase: 'failed',
       error: 'reconnect_failed',
@@ -475,7 +479,7 @@ describe('H1: the media connection', () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
-    env.rt.on('/live/join/prove', 'proveOk', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
     // The first rejoin's join fails (e.g. the edge refused it); the second goes through.
     env.fake.fail('connect')
     env.fake.drop('network')
@@ -492,11 +496,15 @@ describe('H1: the media connection', () => {
       .map(p => p.body!.token)
     expect(proved).toEqual([tokenOf('tokenForJoin'), tokenOf('tokenCamera')])
     // The joins used the fresh tokens, never the first (single-use) one again.
-    expect(env.fake.connects().map(c => c.token)).toEqual([
-      tokenOf('consentAdmitted'),
-      tokenOf('tokenForJoin'),
-      tokenOf('tokenCamera'),
-    ])
+    // Every join is on an exchanged token; no token sent to /prove ever joins.
+    const sentToProve = new Set(
+      env.rt.to('/live/join/prove').map(p => p.body!.token),
+    )
+    expect(env.fake.connects()).toHaveLength(3)
+    for (const c of env.fake.connects()) {
+      expect(c.token).toBe(tokenOf('proveExchange'))
+      expect(sentToProve.has(c.token)).toBe(false)
+    }
     expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
       1000, 2000,
     ])
@@ -511,7 +519,7 @@ describe('H1: the media connection', () => {
       () => new Promise<void>(r => (release = r)),
     )
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange')
     env.fake.drop('network')
     await flush()
     expect(env.last().phase).toBe('reconnecting')
@@ -532,6 +540,95 @@ describe('H1: the media connection', () => {
     env.fake.fail('data')
     await expect(env.c.setBlind(true)).resolves.toBe(false)
     expect(env.last().blindOn).toBe(false)
+  })
+})
+
+describe('R2 v2: the proof exchange and the unbound wait (ac11bd0)', () => {
+  it('the runtime refuses the traded token and admits the exchanged one (live.json media)', () => {
+    expect(LIVE.media.joinTradedToken).toMatchObject({ok: false})
+    expect(LIVE.media.joinExchangedToken).toMatchObject({ok: true})
+    expect(tokenOf('proveExchange')).not.toBe(tokenOf('tokenForExchange'))
+  })
+
+  it('unbound: the fresh join is removed while the dead one is held, so it keeps “Reconnecting” and tries again', async () => {
+    const env = setup({key: false})
+    await toConsent(env)
+    env.rt.on('/live/sessions/:sid/consent', {
+      status: 200,
+      body: {...reply('consentAdmitted').body, popRequired: false},
+    })
+    await env.c.submitConsent({ai_process: true})
+    const unbound = {...reply('tokenUnbound').body, popRequired: false}
+    env.rt.on(
+      '/live/sessions/:sid/token',
+      {status: 200, body: unbound},
+      {status: 200, body: unbound},
+      {status: 200, body: unbound},
+    )
+    // The runtime removes the first two rejoins (participant still held).
+    const connect = env.fake.room.connect
+    let n = 0
+    env.fake.room.connect = async args => {
+      await connect(args)
+      if (n++ < 2) env.fake.drop('removed')
+    }
+    const seen: string[] = []
+    env.fake.drop('network')
+    for (let i = 0; i < 40; i++) {
+      await flush(20)
+      seen.push(env.last().phase)
+    }
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(3)
+    expect(env.rt.to('/live/join/prove')).toEqual([])
+    expect(seen).not.toContain('ended')
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
+  })
+
+  it('unbound: removed while connected rejoins, and the mint says if it is over (404 → ended)', async () => {
+    const env = setup({key: false})
+    await toConsent(env)
+    env.rt.on('/live/sessions/:sid/consent', {
+      status: 200,
+      body: {...reply('consentAdmitted').body, popRequired: false},
+    })
+    await env.c.submitConsent({ai_process: true})
+    env.rt.on('/live/sessions/:sid/token', 'tokenAfterEnd')
+    env.fake.drop('removed')
+    await flush(200)
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+    expect(env.last()).toMatchObject({
+      phase: 'ended',
+      endReason: 'ended_elsewhere',
+    })
+  })
+
+  it('bound: a removal that arrives while the rejoin’s connect() resolves is FINAL, not lost', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    env.rt.on('/live/join/prove', 'proveExchange')
+    const connect = env.fake.room.connect
+    env.fake.room.connect = async args => {
+      await connect(args)
+      env.fake.drop('removed')
+    }
+    env.fake.drop('network')
+    await flush(400)
+    expect(env.last()).toMatchObject({
+      phase: 'ended',
+      endReason: 'removed',
+      micOn: false,
+    })
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+  })
+
+  it('bound: removed stays FINAL (no rejoin, no mint)', async () => {
+    const env = setup()
+    await toLive(env)
+    env.fake.drop('removed')
+    await flush()
+    expect(env.rt.to('/live/sessions/:sid/token')).toEqual([])
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'removed'})
   })
 })
 
@@ -605,7 +702,7 @@ describe('review 679a9d48', () => {
       const env = setup()
       await toLive(env)
       env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-      env.rt.on('/live/join/prove', 'proveOk')
+      env.rt.on('/live/join/prove', 'proveExchange')
       const mic = env.fake.room.setMicrophoneEnabled
       let first = true
       env.fake.room.setMicrophoneEnabled = on => {
@@ -631,7 +728,7 @@ describe('review 679a9d48', () => {
     await toLive(env)
     await env.c.setMic(false)
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange')
     const mic = env.fake.room.setMicrophoneEnabled
     let first = true
     env.fake.room.setMicrophoneEnabled = on => {
@@ -650,7 +747,7 @@ describe('review 679a9d48', () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
-    env.rt.on('/live/join/prove', 'proveOk', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
     const mic = env.fake.room.setMicrophoneEnabled
     let first = true
     env.fake.room.setMicrophoneEnabled = on => {
@@ -670,7 +767,7 @@ describe('review 679a9d48', () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/token', 'tokenCamera')
-    env.rt.on('/live/join/prove', 'proveCamera')
+    env.rt.on('/live/join/prove', 'proveExchange')
     const mic = env.fake.room.setMicrophoneEnabled
     let first = true
     env.fake.room.setMicrophoneEnabled = on => {
@@ -712,7 +809,7 @@ describe('review 679a9d48', () => {
     await toConsent(env, 'startReused')
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange')
     await env.c.submitConsent({ai_process: true})
     env.fake.drop('removed')
     await flush()
@@ -728,7 +825,7 @@ describe('review 679a9d48', () => {
     await toLive(env)
     await env.c.setBlind(true)
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange')
     env.fake.drop('network')
     await flush(400)
     const data = env.fake.calls.filter(c => c.op === 'data')
@@ -852,7 +949,7 @@ describe('H3: a failed start leaves nothing behind', () => {
       const env = setup()
       await toConsent(env)
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-      env.rt.on('/live/join/prove', 'proveOk')
+      env.rt.on('/live/join/prove', 'proveExchange')
       env.rt.on('/live/sessions/:sid/end', 'end')
       env.fake.fail(op)
       await env.c.submitConsent({ai_process: true})
@@ -910,10 +1007,14 @@ describe('H3: a failed start leaves nothing behind', () => {
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange')
     await env.c.submitConsent({ai_process: true})
-    expect(env.fake.connects().map(c => c.token)).toEqual([
+    // The fresh token is the one proven; the exchange's token joins.
+    expect(env.rt.to('/live/join/prove')[0].body!.token).toBe(
       tokenOf('tokenForJoin'),
+    )
+    expect(env.fake.connects().map(c => c.token)).toEqual([
+      tokenOf('proveExchange'),
     ])
   })
 })
@@ -924,7 +1025,7 @@ describe('camera: off by default, published only once on (M1)', () => {
     await toLive(env)
     env.log.length = 0
     env.rt.on('/live/sessions/:sid/token', 'tokenCamera')
-    env.rt.on('/live/join/prove', 'proveCamera')
+    env.rt.on('/live/join/prove', 'proveExchange')
     await env.c.setCamera(true)
     expect(env.deps.requestCameraAccess).toHaveBeenCalled()
     expect(env.rt.to('/live/sessions/:sid/token')[0].body).toEqual({
@@ -946,7 +1047,8 @@ describe('camera: off by default, published only once on (M1)', () => {
       op: 'disconnect',
       keepAudio: true,
     })
-    expect(env.fake.connects()[1].token).toBe(tokenOf('tokenCamera'))
+    // The camera token is proven; the exchanged token joins.
+    expect(env.fake.connects()[1].token).toBe(tokenOf('proveExchange'))
     expect(env.last()).toMatchObject({
       cameraOn: true,
       cameraPending: false,
@@ -999,7 +1101,7 @@ describe('camera: off by default, published only once on (M1)', () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/token', 'tokenCamera', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveCamera', 'proveOk')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
     env.fake.fail('connect')
     await env.c.setCamera(true)
     await flush()
@@ -1019,7 +1121,7 @@ describe('camera: off by default, published only once on (M1)', () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/token', 'tokenCamera')
-    env.rt.on('/live/join/prove', 'proveCamera')
+    env.rt.on('/live/join/prove', 'proveExchange')
     await env.c.setCamera(true)
     await env.c.setCamera(false)
     expect(env.fake.calls[env.fake.calls.length - 1]).toEqual({

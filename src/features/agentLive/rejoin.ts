@@ -1,7 +1,7 @@
 /**
  * REJOIN (join gate R2, runtime design AGENT-LIVE-JOIN-GATE-REVISED @ adeeadb).
  * The One app's copy of the runtime's rule, `live-agent/src/rejoin.js` on
- * feat/agent-live-r2-workers @ 58b8dd6 (the agent job and AO Edge use it):
+ * feat/agent-live-r2-workers-v2 @ ac11bd0 (the agent job and AO Edge use it):
  * keep the backoff and the final reasons the same in both.
  *
  * A lost LiveKit connection is a FULL rejoin with a FRESH join token, never
@@ -16,9 +16,17 @@
  */
 import {type LiveDisconnectReason} from './room/types'
 
-/** One attempt after each wait; after the last, give up ("reconnect failed"). */
+/** LiveKit's departure_timeout (livekit-server 1.9.1 default, seconds): how long a dead participant is held. */
+export const LIVEKIT_DEPARTURE_TIMEOUT_S = 30
+
+/**
+ * One attempt after each wait; after the last, give up ("reconnect failed",
+ * shown on screen). 31 s in all, longer than the departure timeout, so an
+ * unbound rejoin that has to wait for the dead participant to leave still
+ * gets a try after it has (the runtime no longer replaces it, R2 v2).
+ */
 export const REJOIN_BACKOFF_MS: readonly number[] = Object.freeze([
-  1000, 2000, 4000, 8000,
+  1000, 2000, 4000, 8000, 16000,
 ])
 
 export const FINAL_REASONS: ReadonlySet<string> = new Set([
