@@ -360,6 +360,49 @@ describe('H1: the media connection', () => {
     },
   )
 
+  it('a CLIENT_INITIATED drop we didn’t ask for is FINAL: ended, runtime session ended, no rejoin', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    env.fake.drop('client')
+    await flush()
+    expect(env.last()).toMatchObject({
+      phase: 'ended',
+      endReason: 'local',
+      micOn: false,
+    })
+    expect(env.rt.to('/live/sessions/:sid/token')).toEqual([])
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+  })
+
+  it('USER_REJECTED is FINAL: ended, no rejoin', async () => {
+    const env = setup()
+    await toLive(env)
+    env.fake.drop('rejected')
+    await flush()
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'removed'})
+    expect(env.rt.to('/live/sessions/:sid/token')).toEqual([])
+  })
+
+  it('one rejoin at a time: a second drop during a rejoin starts nothing more', async () => {
+    const env = setup()
+    await toLive(env)
+    let release!: () => void
+    ;(env.deps.sleep as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>(r => (release = r)),
+    )
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    env.rt.on('/live/join/prove', 'proveOk')
+    env.fake.drop('network')
+    await flush()
+    env.fake.drop('network')
+    await flush()
+    release()
+    await flush(200)
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+    expect(env.last().phase).toBe('connected')
+  })
+
   it('the SDK’s own resume: reconnecting, then connected', async () => {
     const env = setup()
     await toLive(env)
