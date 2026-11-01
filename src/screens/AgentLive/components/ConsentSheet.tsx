@@ -6,6 +6,7 @@
  */
 import {useState} from 'react'
 import {ScrollView, View} from 'react-native'
+import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {atoms as a, useTheme} from '#/alf'
@@ -33,6 +34,7 @@ export function ConsentSheet({
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
+  const insets = useSafeAreaInsets()
   const [choices, setChoices] = useState<ConsentChoices>(() =>
     initialChoices(required),
   )
@@ -73,7 +75,13 @@ export function ConsentSheet({
 
   return (
     <View testID="agentLiveConsentSheet" style={[a.flex_1, t.atoms.bg]}>
-      <ScrollView contentContainerStyle={[a.px_lg, a.pb_lg, a.gap_lg]}>
+      <ScrollView
+        contentContainerStyle={[
+          a.px_lg,
+          a.gap_lg,
+          // Below the status bar (it overlapped the title on the simulator).
+          {paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16},
+        ]}>
         <View style={[a.gap_sm]}>
           <Text style={[a.text_xl, a.font_bold, t.atoms.text]}>
             <Trans>Before you go live</Trans>
