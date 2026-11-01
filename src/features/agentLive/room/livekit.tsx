@@ -7,9 +7,9 @@
  * voice. Edge sources and guests are not subscribed here. The owner's own
  * tracks are visible to the agent identity only.
  *
- * Connection: the SDK's own resume shows as reconnecting/reconnected. A drop
- * it can't recover from is reported once with its reason (types.ts), and the
- * session decides what to do (rejoin with a fresh token, or end).
+ * Connection: the SDK's own resume and reconnect are off (NO_SDK_RECONNECT).
+ * A drop is reported once with its reason (types.ts), and the session decides
+ * what to do (a full rejoin with a fresh token, or end).
  */
 import {
   AudioSession,
@@ -20,6 +20,7 @@ import {
 import {
   DisconnectReason,
   type Participant,
+  type ReconnectPolicy,
   type RemoteParticipant,
   type RemoteTrackPublication,
   Room,
@@ -38,6 +39,19 @@ import {
 } from './types'
 
 let globalsRegistered = false
+
+/**
+ * The SDK never resumes or reconnects on its own (join gate R1/R2, runtime
+ * design AGENT-LIVE-JOIN-GATE-REVISED @ adeeadb). The edge refuses every
+ * resume (`reconnect=1`), and a full reconnect on the token in hand would be a
+ * second use of a single-use token. With no retry, a lost connection is
+ * reported as Disconnected at once, and the session does the full rejoin with
+ * a fresh token. The `/rtc/v1` 404 is handled by the SDK itself: a
+ * ServiceNotFound from `/rtc/v1/validate` retries the join on `/rtc`.
+ */
+export const NO_SDK_RECONNECT: ReconnectPolicy = {
+  nextRetryDelayInMs: () => null,
+}
 
 type StageTrackRef = {
   participant: Participant
@@ -81,7 +95,11 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
   }
   const agentPrefix = `agent:${sid}:`
   const isAgent = (p: Participant) => p.identity.startsWith(agentPrefix)
-  const room = new Room({adaptiveStream: true, dynacast: true})
+  const room = new Room({
+    adaptiveStream: true,
+    dynacast: true,
+    reconnectPolicy: NO_SDK_RECONNECT,
+  })
   const stageListeners = new Set<(stage: StageRef | null) => void>()
   const connListeners = new Set<(e: LiveConnectionEvent) => void>()
   let audioOn = false

@@ -53,10 +53,17 @@ mic access → `POST /live/sessions` (a session, no media) → if `reused`,
 proven camera token and a rejoin. A session whose `recordPolicy` isn't `off`
 shows a recording indicator, on the sheet and on the stage.
 
-Connection: the SDK's own resume shows as Reconnecting. A drop the SDK can't
-recover from ends the session (removed: consent withdrawn or a refused token;
-the room deleted: ended elsewhere, the agent or a voice "stop"; another device)
-or is retried with a fresh token (network), and ends if that fails.
+Connection (join gate R2, runtime design `AGENT-LIVE-JOIN-GATE-REVISED` @ adeeadb):
+the edge refuses every LiveKit resume, so the SDK's own resume and reconnect are
+off (`room/livekit.tsx` `NO_SDK_RECONNECT`) and a lost connection is reported as
+Disconnected at once. Removed / room deleted / another device end the session.
+Any other drop is a full rejoin: a fresh token from `POST /live/sessions/:sid/token`
+(never the one in hand), its proof, a new join, the mic and camera restored;
+backoff 1, 2, 4, 8 s, then the session stops with "Couldn't reconnect". The
+screen shows Reconnecting meanwhile, with the controls off. A `/rtc/v1` 404 is
+handled inside the SDK (a ServiceNotFound from `/rtc/v1/validate` retries the
+join on `/rtc`); `__tests__/sdkContract.test.ts` fails if an upgrade changes
+that or the no-retry behaviour.
 
 Stop path: End calls `/end`, which stops the agent's job and deletes the room.
 It goes out with the bearer of the account that started the session (also on

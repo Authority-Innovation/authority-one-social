@@ -63,6 +63,7 @@ import {
   END_RETRY_DELAYS_MS,
   type LiveDeps,
   type LiveSessionState,
+  REJOIN_BACKOFF_MS,
 } from '../session'
 
 const EXP = reply('consentAdmitted').body.expiresAt as number
@@ -145,8 +146,8 @@ async function toLive(env: Env) {
   await env.c.submitConsent({ai_process: true, transcribe: true})
 }
 
-const flush = async () => {
-  for (let i = 0; i < 20; i++) await Promise.resolve()
+const flush = async (turns = 20) => {
+  for (let i = 0; i < turns; i++) await Promise.resolve()
 }
 
 /** The proof a request carried verifies under the fixture device key. */
@@ -401,19 +402,76 @@ describe('H1: the media connection', () => {
     expect(env.last()).toMatchObject({...expected, micOn: false})
   })
 
-  it('a drop it can’t recover from: failed, room left, session ended', async () => {
+  it('a drop it can’t recover from: backoff 1, 2, 4, 8 s, then “reconnect failed”, room left, session ended', async () => {
     const env = setup()
     await toLive(env)
-    env.rt.on('/live/sessions/:sid/token', E503, E503)
+    env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503)
     env.rt.on('/live/sessions/:sid/end', 'end')
     env.fake.drop('network')
-    await flush()
+    await flush(400)
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual(
+      REJOIN_BACKOFF_MS,
+    )
+    expect(REJOIN_BACKOFF_MS).toEqual([1000, 2000, 4000, 8000])
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(4)
     expect(env.last()).toMatchObject({
       phase: 'failed',
-      error: 'connect',
+      error: 'reconnect_failed',
       micOn: false,
     })
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+  })
+
+  it('R2: every rejoin attempt is a fresh token from /token, proven, then a new join (never a resume)', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveOk', 'proveOk')
+    // The first rejoin's join fails (e.g. the edge refused it); the second goes through.
+    env.fake.fail('connect')
+    env.fake.drop('network')
+    await flush(400)
+    const tokens = env.rt.to('/live/sessions/:sid/token')
+    expect(tokens).toHaveLength(2)
+    expect(
+      tokens.every(t => t.body!.devicePubKey === LIVE.device.publicKey),
+    ).toBe(true)
+    // Each fresh token was proven before its join.
+    const proved = env.rt
+      .to('/live/join/prove')
+      .slice(1)
+      .map(p => p.body!.token)
+    expect(proved).toEqual([tokenOf('tokenForJoin'), tokenOf('tokenCamera')])
+    // The joins used the fresh tokens, never the first (single-use) one again.
+    expect(env.fake.connects().map(c => c.token)).toEqual([
+      tokenOf('consentAdmitted'),
+      tokenOf('tokenForJoin'),
+      tokenOf('tokenCamera'),
+    ])
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
+      1000, 2000,
+    ])
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
+  })
+
+  it('R2: “Reconnecting” throughout the rejoin, and never “connected” on a dead room', async () => {
+    const env = setup()
+    await toLive(env)
+    let release!: () => void
+    ;(env.deps.sleep as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>(r => (release = r)),
+    )
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    env.rt.on('/live/join/prove', 'proveOk')
+    env.fake.drop('network')
+    await flush()
+    expect(env.last().phase).toBe('reconnecting')
+    // Controls are off while reconnecting.
+    await env.c.setMic(false)
+    expect(env.fake.calls.filter(c => c.op === 'mic' && !c.on)).toEqual([])
+    release()
+    await flush()
+    expect(env.last().phase).toBe('connected')
   })
 
   it('a failing control is a notice, never an unhandled rejection', async () => {

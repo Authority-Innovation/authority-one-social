@@ -79,6 +79,7 @@ export type LiveFailure =
   | 'mic_denied'
   | 'consent_incomplete'
   | 'connect'
+  | 'reconnect_failed'
 
 /** Why a session ended (the screen words it). */
 export type LiveEndReason =
@@ -165,8 +166,14 @@ const defaultDeps: LiveDeps = {
 /** Waits between /end attempts (the route is idempotent). */
 export const END_RETRY_DELAYS_MS = [1000, 3000, 7000]
 /** Fresh-token rejoins after a drop the SDK couldn't recover from. */
-export const REJOIN_ATTEMPTS = 2
-export const REJOIN_DELAY_MS = 1000
+/**
+ * The full rejoin after a drop (join gate R2, runtime design
+ * AGENT-LIVE-JOIN-GATE-REVISED @ adeeadb): the edge refuses LiveKit resumes,
+ * and the SDK's own retries are off (room/livekit.tsx), so continuity is a
+ * fresh token, its proof, and a new join. One attempt after each wait; after
+ * the last, the session stops with "reconnect failed".
+ */
+export const REJOIN_BACKOFF_MS = [1000, 2000, 4000, 8000]
 /** A token this close to `expiresAt` is replaced before joining. */
 const TOKEN_MARGIN_S = 5
 
@@ -293,6 +300,14 @@ export function createLiveSessionController({
       s.join = null // single use
       return {ok: true, data: j}
     }
+    return mintJoin(s, camera)
+  }
+
+  /** Always a new token from the owner's session (POST .../token). */
+  function mintJoin(
+    s: Session,
+    camera: boolean,
+  ): Promise<LiveResult<LiveJoin>> {
     s.join = null
     return api.requestLiveToken({
       sid: s.sid,
@@ -375,7 +390,10 @@ export function createLiveSessionController({
     await rejoin()
   }
 
-  /** After a drop: fresh tokens, a few times, then give up and end. */
+  /**
+   * After a drop: a fresh token from the owner's session, proven if bound,
+   * and a new join, with backoff; then give up and end. Never a resume.
+   */
   async function rejoin() {
     const s = session
     if (!s || !room) return
@@ -383,10 +401,10 @@ export function createLiveSessionController({
     set({phase: 'reconnecting'})
     const wantCamera = state.cameraOn
     try {
-      for (let attempt = 0; attempt < REJOIN_ATTEMPTS; attempt++) {
-        if (attempt > 0) await deps.sleep(REJOIN_DELAY_MS)
+      for (const wait of REJOIN_BACKOFF_MS) {
+        await deps.sleep(wait)
         if (over()) return
-        const t = await freshJoin(s, wantCamera)
+        const t = await mintJoin(s, wantCamera)
         if (over()) return
         if (!t.ok) {
           const k = t.error.kind
@@ -410,6 +428,7 @@ export function createLiveSessionController({
           }
           continue
         }
+        // A fresh token, never the one in hand: a join token is single use.
         try {
           await swap(s, t.data)
           if (over()) return
@@ -421,7 +440,7 @@ export function createLiveSessionController({
           leaving = false
         }
       }
-      await fail('connect')
+      await fail('reconnect_failed')
     } finally {
       rejoining = false
     }
