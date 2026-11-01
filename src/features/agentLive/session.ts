@@ -127,6 +127,11 @@ export type LiveSessionState = {
    * held this session itself).
    */
   canTakeOver: boolean
+  /**
+   * On `reuse`: this device has a key (a bound session). Unbound, it can't
+   * continue the session at all: "Reconnect failed" (Dispatch ruling).
+   */
+  reuseBound: boolean
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
   /**
@@ -155,6 +160,7 @@ export const initialLiveSessionState: LiveSessionState = {
   blindOn: false,
   stage: null,
   canTakeOver: false,
+  reuseBound: false,
   ending: false,
   endSlow: false,
   endFailed: false,
@@ -847,7 +853,7 @@ export function createLiveSessionController({
         const canTakeOver =
           !!key && (await deps.wasHeldHere(auth.ownerDid, sid))
         if (phase() !== 'starting') return
-        set({phase: 'reuse', canTakeOver})
+        set({phase: 'reuse', canTakeOver, reuseBound: !!key})
         return
       }
       await afterStart()

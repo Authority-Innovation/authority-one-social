@@ -886,11 +886,11 @@ describe('session screen (flag on)', () => {
     expect(getByTestId('agentLiveEndOpenButton')).toBeTruthy()
   })
 
-  it('ruling (563477989 R1, R2): open on a device this one never held: “Couldn’t reconnect”, no Take over', async () => {
+  it('ruling (563477989 R1): bound, but another device holds it: “Still open on your other device”, no Take over, no /end', async () => {
     mockHeld.here = false
     const {getByTestId, queryByTestId} = await toSheet('startReused')
     expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
-      'Couldn’t reconnect',
+      'Still open on your other device',
     )
     expect(queryByTestId('agentLiveContinueHereButton')).toBeNull()
     await press(getByTestId('agentLiveNotNowButton'))
@@ -898,7 +898,7 @@ describe('session screen (flag on)', () => {
     expect(mockGoBack).toHaveBeenCalled()
   })
 
-  it('ruling: without a device key there is no Take over here either (R3)', async () => {
+  it('ruling (563477989 R2): unbound, it can’t continue: “Couldn’t reconnect”, no Take over', async () => {
     mockKey.mockReset().mockResolvedValue(null)
     const {getByTestId, queryByTestId} = await toSheet('startReused')
     expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(

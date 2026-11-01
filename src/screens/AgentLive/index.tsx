@@ -260,6 +260,7 @@ function LiveSession({
         <Reuse
           displayName={displayName}
           canTakeOver={state.canTakeOver}
+          bound={state.reuseBound}
           onContinue={() => void controller?.continueHere()}
           onEndOpen={() => {
             setLeaveWhenEnded(true)
@@ -407,21 +408,26 @@ function Intro({
 
 /**
  * The server says a session with this agent is open (the start reply's
- * `reused`). Ruling (review 7919b5692 item 8), as re-reviewed (563477989 R1,
- * R2, R3f): "Still open on your other device" with "Take over here" only
- * where R3 allows it (this device held the session, so it has the holder's
- * key); otherwise "Couldn't reconnect". Either way the owner can end it here,
- * for every device: the toast after a failed end sends them here for that.
+ * `reused`). Ruling (review 7919b5692 item 8; Dispatch on 563477989):
+ * - this device held it (it has the holder's key, R3's mayReplace): "Still
+ *   open on your other device" with "Take over here";
+ * - bound, but another device holds it: "Still open on your other device",
+ *   no takeover;
+ * - unbound (no key): it can't continue here, "Couldn't reconnect".
+ * Nothing here sends /end on its own. The owner can end it for every device
+ * (the toast after a failed end sends them here for that).
  */
 function Reuse({
   displayName,
   canTakeOver = false,
+  bound = false,
   onContinue,
   onEndOpen,
   onCancel,
 }: {
   displayName: string
   canTakeOver?: boolean
+  bound?: boolean
   onContinue: () => void
   onEndOpen: () => void
   onCancel: () => void
@@ -433,7 +439,7 @@ function Reuse({
       <Text
         testID="agentLiveStillOpen"
         style={[a.text_md, a.font_bold, {color: ON_STAGE_TEXT}]}>
-        {canTakeOver ? (
+        {bound ? (
           <Trans>Still open on your other device</Trans>
         ) : (
           <Trans>Couldn’t reconnect</Trans>
@@ -445,11 +451,16 @@ function Reuse({
             A live session with this agent is open. Take it over here, or end
             it. If another device is still connected, it keeps the session.
           </Trans>
+        ) : bound ? (
+          <Trans>
+            A live session with this agent is open on your other device. End it
+            there, or end it here for every device.
+          </Trans>
         ) : (
           <Trans>
-            A live session with this agent is still open on another device, and
-            this device can’t take it over. End it there, or end it here for
-            every device.
+            A live session with this agent is open, and this device can’t
+            continue it. End it on the other device, or end it here for every
+            device.
           </Trans>
         )}
       </Text>

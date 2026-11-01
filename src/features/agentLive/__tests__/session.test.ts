@@ -1439,17 +1439,30 @@ describe('review 679a9d48', () => {
   it('reuse: Take over only where R3 allows it - a key, and this device held the session (563477989 R1)', async () => {
     const held = setup({held: true})
     await toConsent(held, 'startReused')
-    expect(held.last()).toMatchObject({phase: 'reuse', canTakeOver: true})
+    expect(held.last()).toMatchObject({
+      phase: 'reuse',
+      canTakeOver: true,
+      reuseBound: true,
+    })
     expect(held.deps.wasHeldHere).toHaveBeenCalledWith(OWNER_DID, SID)
     const otherDevice = setup({held: false})
     await toConsent(otherDevice, 'startReused')
     expect(otherDevice.last()).toMatchObject({
       phase: 'reuse',
       canTakeOver: false,
+      reuseBound: true,
     })
     const unbound = setup({key: false, held: true})
     await toConsent(unbound, 'startReused')
-    expect(unbound.last()).toMatchObject({phase: 'reuse', canTakeOver: false})
+    expect(unbound.last()).toMatchObject({
+      phase: 'reuse',
+      canTakeOver: false,
+      reuseBound: false,
+    })
+    // Nothing on the reuse panel sends /end on its own.
+    for (const e of [held, otherDevice, unbound]) {
+      expect(e.rt.to('/live/sessions/:sid/end')).toEqual([])
+    }
   })
 
   it('LOW: blind is sent again on the new connection after a rejoin', async () => {
