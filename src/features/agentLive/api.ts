@@ -146,10 +146,12 @@ export async function startLiveSession({
   }
   const pk = pubKeyOrNull(devicePubKey)
   if (pk === undefined) return {ok: false, error: {kind: 'invalid_argument'}}
-  const res = await post([], auth, {
-    agentDid,
-    ...(pk ? {devicePubKey: pk} : {}),
-  })
+  const res = await post(
+    [],
+    auth,
+    {agentDid, ...(pk ? {devicePubKey: pk} : {})},
+    LIVE_START_TIMEOUT_MS,
+  )
   if (!res.ok) return res
   const s = readSession(res.data)
   return s ? {ok: true, data: s} : badResponse()
@@ -185,11 +187,12 @@ export async function submitLiveConsent({
     }
     clean[kind] = d
   }
-  const res = await post([sid, 'consent'], auth, {
-    decisions: clean,
-    textVersion,
-    ...(pk ? {devicePubKey: pk} : {}),
-  })
+  const res = await post(
+    [sid, 'consent'],
+    auth,
+    {decisions: clean, textVersion, ...(pk ? {devicePubKey: pk} : {})},
+    LIVE_START_TIMEOUT_MS,
+  )
   if (!res.ok) return res
   const c = readConsent(res.data)
   return c ? {ok: true, data: c} : badResponse()
@@ -302,12 +305,13 @@ function post(
   parts: string[],
   auth: LiveAuth,
   body?: Record<string, unknown>,
+  timeoutMs = LIVE_REQUEST_TIMEOUT_MS,
 ): Promise<LiveResult<unknown>> {
   if (!auth || !auth.bearer || !DID_RE.test(auth.ownerDid)) {
     return Promise.resolve({ok: false, error: {kind: 'signed_out'}})
   }
   const path = [LIVE_PATH, ...parts.map(encodeURIComponent)].join('/')
-  return send(path, auth, body)
+  return send(path, auth, body, timeoutMs)
 }
 
 /**
@@ -316,11 +320,17 @@ function post(
  * owner on "Ending…" for the platform's own timeout.
  */
 export const LIVE_REQUEST_TIMEOUT_MS = 10_000
+/**
+ * Start and consent can launch the agent's job before they answer (review
+ * 563477989 K5): a longer bound, still finite.
+ */
+export const LIVE_START_TIMEOUT_MS = 30_000
 
 async function send(
   path: string,
   auth: LiveAuth | null,
   body?: Record<string, unknown>,
+  timeoutMs = LIVE_REQUEST_TIMEOUT_MS,
 ): Promise<LiveResult<unknown>> {
   const abort = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -330,7 +340,7 @@ async function send(
       abort.abort()
       logger.warn('agentLive: request timed out')
       resolve({ok: false, error: {kind: 'network'}})
-    }, LIVE_REQUEST_TIMEOUT_MS)
+    }, timeoutMs)
   })
   try {
     return await Promise.race([

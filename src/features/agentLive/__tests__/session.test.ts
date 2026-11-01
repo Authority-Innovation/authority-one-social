@@ -42,6 +42,7 @@ jest.mock('../permissions', () => ({
 import {getAgentRuntimeAccessToken} from '#/lib/agent-runtime/authToken'
 import * as persisted from '#/state/persisted'
 import {createFakeRoom} from '../__fixtures__/fakeRoom'
+import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {createRuntimeFetch} from '../__fixtures__/runtimeFetch'
 import {
   AGENT_DID,
@@ -52,7 +53,6 @@ import {
   SID,
   tokenOf,
 } from '../__fixtures__/runtimeLive'
-import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {
   b64urlDecode,
   deviceKeyFromSeed,
@@ -103,10 +103,13 @@ function setup({
   key = true,
   nowS = EXP - 30,
   roomFactory,
+  held = false,
 }: {
   mic?: 'granted' | 'denied'
   camera?: 'granted' | 'denied'
   key?: boolean
+  /** This device held the reused session before (heldSessions). */
+  held?: boolean
   nowS?: number
   roomFactory?: () => never
 } = {}) {
@@ -127,6 +130,8 @@ function setup({
     getDeviceKey: jest.fn(() =>
       Promise.resolve(key ? deviceKeyFromSeed(DEVICE_SEED) : null),
     ),
+    wasHeldHere: jest.fn(() => Promise.resolve(held)),
+    markHeldHere: jest.fn(() => Promise.resolve()),
     requestMicAccess: jest.fn(() => Promise.resolve(mic)),
     requestCameraAccess: jest.fn(() => Promise.resolve(camera)),
     sleep: jest.fn(() => Promise.resolve()),
@@ -608,10 +613,12 @@ describe('review f2caccaa', () => {
   it.each<[string, string, Record<string, unknown>]>([
     // Ruling (review 7919b5692 item 8): no guessing "still open" from
     // removals; a continued session runs out like a new one.
+    // A continued session (the server said `reused`) whose joins are refused
+    // is held elsewhere: said, and left running (review 563477989 R1).
     [
       'startReused',
       'a continued session',
-      {phase: 'failed', error: 'reconnect_failed'},
+      {phase: 'ended', endReason: 'still_open_elsewhere'},
     ],
     [
       'startAwaitingConsent',
@@ -1351,8 +1358,8 @@ describe('review 679a9d48', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
   })
 
-  it('M2 (ruling 7919b5692): a continued session removed right after it joined is refused; one that never gets in fails as a reconnect, with /end', async () => {
-    const env = setup()
+  it('R1 (563477989): a takeover the holder refuses climbs the ladder, then says it is still open and does NOT /end it', async () => {
+    const env = setup({held: true})
     await toConsent(env, 'startReused')
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
@@ -1362,7 +1369,6 @@ describe('review 679a9d48', () => {
       env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
       env.rt.on('/live/join/prove', 'proveExchange')
     }
-    env.rt.on('/live/sessions/:sid/end', 'end')
     // The other device holds it: every join is removed as it connects.
     const connect = env.fake.room.connect
     env.fake.room.connect = async args => {
@@ -1370,7 +1376,7 @@ describe('review 679a9d48', () => {
       env.fake.drop('removed')
     }
     env.fake.drop('removed')
-    for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
+    for (let i = 0; i < 60 && env.last().phase !== 'ended'; i++) {
       await flush(40)
     }
     await flush()
@@ -1378,17 +1384,70 @@ describe('review 679a9d48', () => {
       1000, 2000, 4000, 8000, 16000,
     ])
     expect(env.last()).toMatchObject({
+      phase: 'ended',
+      endReason: 'still_open_elsewhere',
+      micOn: false,
+    })
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+  })
+
+  it('a continued session that took over and then lost the network fails as a reconnect, with /end', async () => {
+    const env = setup({held: true})
+    await toConsent(env, 'startReused')
+    await env.c.continueHere()
+    env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    env.rt.on('/live/join/prove', 'proveExchange')
+    await env.c.submitConsent({ai_process: true})
+    env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    env.fake.drop('network')
+    for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
+      await flush(40)
+    }
+    await flush()
+    expect(env.last()).toMatchObject({
       phase: 'failed',
       error: 'reconnect_failed',
     })
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
   })
 
-  it('reuse: only a device with a key may take over (R3); the server’s `reused` is what says it is open', async () => {
+  it('a bound join that connects records the session as held here; an unbound one does not', async () => {
     const bound = setup()
-    await toConsent(bound, 'startReused')
-    expect(bound.last()).toMatchObject({phase: 'reuse', canTakeOver: true})
+    await toLive(bound)
+    expect(bound.deps.markHeldHere).toHaveBeenCalledWith(OWNER_DID, SID)
     const unbound = setup({key: false})
+    await toConsent(unbound)
+    unbound.rt.on('/live/sessions/:sid/consent', {
+      status: 200,
+      body: {...reply('consentAdmitted').body, popRequired: false},
+    })
+    await unbound.c.submitConsent({ai_process: true})
+    expect(unbound.deps.markHeldHere).not.toHaveBeenCalled()
+  })
+
+  it('R3f: endOpen ends a reused session for every device (/end), even with no key', async () => {
+    const env = setup({key: false})
+    await toConsent(env, 'startReused')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    await env.c.endOpen()
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'local'})
+    expect(env.fake.connects()).toEqual([])
+  })
+
+  it('reuse: Take over only where R3 allows it - a key, and this device held the session (563477989 R1)', async () => {
+    const held = setup({held: true})
+    await toConsent(held, 'startReused')
+    expect(held.last()).toMatchObject({phase: 'reuse', canTakeOver: true})
+    expect(held.deps.wasHeldHere).toHaveBeenCalledWith(OWNER_DID, SID)
+    const otherDevice = setup({held: false})
+    await toConsent(otherDevice, 'startReused')
+    expect(otherDevice.last()).toMatchObject({
+      phase: 'reuse',
+      canTakeOver: false,
+    })
+    const unbound = setup({key: false, held: true})
     await toConsent(unbound, 'startReused')
     expect(unbound.last()).toMatchObject({phase: 'reuse', canTakeOver: false})
   })

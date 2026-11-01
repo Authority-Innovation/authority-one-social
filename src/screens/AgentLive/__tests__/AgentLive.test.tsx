@@ -152,6 +152,11 @@ jest.mock('#/logger', () => ({
   },
 }))
 jest.mock('#/features/agentLive/deviceKey', () => ({getDeviceKey: jest.fn()}))
+const mockHeld = {here: true}
+jest.mock('#/features/agentLive/heldSessions', () => ({
+  wasHeldHere: () => Promise.resolve(mockHeld.here),
+  markHeldHere: () => Promise.resolve(),
+}))
 jest.mock('#/features/agentLive/permissions', () => ({
   requestMicAccess: jest.fn(),
   requestCameraAccess: jest.fn(),
@@ -250,6 +255,7 @@ jest.mock('livekit-client', () => {
 })
 
 import {createFakeRoom} from '#/features/agentLive/__fixtures__/fakeRoom'
+import LEGACY from '#/features/agentLive/__fixtures__/legacy-ac11bd0.json'
 import {createRuntimeFetch} from '#/features/agentLive/__fixtures__/runtimeFetch'
 import {
   AGENT_DID,
@@ -259,7 +265,6 @@ import {
   reply,
   tokenOf,
 } from '#/features/agentLive/__fixtures__/runtimeLive'
-import LEGACY from '#/features/agentLive/__fixtures__/legacy-ac11bd0.json'
 import {getDeviceKey} from '#/features/agentLive/deviceKey'
 import {GoLiveButton} from '#/features/agentLive/GoLiveButton'
 import {
@@ -324,6 +329,7 @@ beforeEach(() => {
   mockToastShow.mockReset()
   mockLoad.mockReset()
   mockKey.mockReset().mockResolvedValue(deviceKeyFromSeed(DEVICE_SEED))
+  mockHeld.here = true
   mockMic.mockReset().mockResolvedValue('granted')
   mockCam.mockReset().mockResolvedValue('granted')
   rt = createRuntimeFetch()
@@ -868,7 +874,7 @@ describe('session screen (flag on)', () => {
     expect(fake.connects()).toEqual([])
   })
 
-  it('ruling 7919b5692: the server says it is open: “Still open on your other device”, with Take over here', async () => {
+  it('ruling: the server says it is open and this device held it: “Still open on your other device”, Take over here, End', async () => {
     const {getByTestId} = await toSheet('startReused')
     expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
       'Still open on your other device',
@@ -877,16 +883,51 @@ describe('session screen (flag on)', () => {
       'accessibilityLabel',
       'Take the live session over here',
     )
+    expect(getByTestId('agentLiveEndOpenButton')).toBeTruthy()
   })
 
-  it('ruling 7919b5692: without a device key there is no Take over here (R3); Done leaves it running', async () => {
-    mockKey.mockReset().mockResolvedValue(null)
+  it('ruling (563477989 R1, R2): open on a device this one never held: “Couldn’t reconnect”, no Take over', async () => {
+    mockHeld.here = false
     const {getByTestId, queryByTestId} = await toSheet('startReused')
-    expect(getByTestId('agentLiveStillOpen')).toBeTruthy()
+    expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
+      'Couldn’t reconnect',
+    )
     expect(queryByTestId('agentLiveContinueHereButton')).toBeNull()
     await press(getByTestId('agentLiveNotNowButton'))
     expect(rt.to('/live/sessions/:sid/end')).toEqual([])
     expect(mockGoBack).toHaveBeenCalled()
+  })
+
+  it('ruling: without a device key there is no Take over here either (R3)', async () => {
+    mockKey.mockReset().mockResolvedValue(null)
+    const {getByTestId, queryByTestId} = await toSheet('startReused')
+    expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
+      'Couldn’t reconnect',
+    )
+    expect(queryByTestId('agentLiveContinueHereButton')).toBeNull()
+  })
+
+  it('R3f: End on the open-session panel ends it for every device, then leaves', async () => {
+    mockKey.mockReset().mockResolvedValue(null)
+    const {getByTestId} = await toSheet('startReused')
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveEndOpenButton'))
+    await flush()
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('K3: back in front of a Live left under another route, Done works again', async () => {
+    mockNav.canGoBack = false
+    const {getByTestId} = await goLive()
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveEndButton'))
+    expect(mockNavigate).toHaveBeenCalledTimes(1)
+    act(() => {
+      mockNav.listeners.focus?.()
+    })
+    await press(getByTestId('agentLiveDoneButton'))
+    expect(mockNavigate).toHaveBeenCalledTimes(2)
   })
 
   it('J9: an old server shows the “needs a server update” copy', async () => {

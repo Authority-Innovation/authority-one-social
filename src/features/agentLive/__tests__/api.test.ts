@@ -34,6 +34,7 @@ jest.mock('#/logger', () => ({
 import {getAgentRuntimeAccessToken} from '#/lib/agent-runtime/authToken'
 import {logger} from '#/logger'
 import * as persisted from '#/state/persisted'
+import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {createRuntimeFetch} from '../__fixtures__/runtimeFetch'
 import {
   AGENT_DID,
@@ -43,11 +44,11 @@ import {
   SID,
   tokenOf,
 } from '../__fixtures__/runtimeLive'
-import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {
   captureLiveAuth,
   endLiveSession,
   LIVE_REQUEST_TIMEOUT_MS,
+  LIVE_START_TIMEOUT_MS,
   type LiveAuth,
   proveLiveJoin,
   requestLiveToken,
@@ -270,6 +271,29 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
       jest.advanceTimersByTime(1)
       expect(await res).toEqual({ok: false, error: {kind: 'network'}})
       expect(signal?.aborted).toBe(true)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('K5: start may take longer (it can launch the agent job), still bounded', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      ;(globalThis as {fetch: unknown}).fetch = () =>
+        new Promise<Response>(() => {})
+      let settled = false
+      const res = startLiveSession({
+        agentDid: AGENT_DID,
+        auth: AUTH,
+        devicePubKey: PK,
+      })
+      void res.then(() => (settled = true))
+      await Promise.resolve()
+      jest.advanceTimersByTime(LIVE_REQUEST_TIMEOUT_MS + 1)
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      jest.advanceTimersByTime(LIVE_START_TIMEOUT_MS - LIVE_REQUEST_TIMEOUT_MS)
+      expect(await res).toEqual({ok: false, error: {kind: 'network'}})
     } finally {
       jest.useRealTimers()
     }

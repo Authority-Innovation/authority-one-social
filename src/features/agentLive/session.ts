@@ -52,6 +52,7 @@ import {
   decisionsFor,
 } from './consent'
 import {getDeviceKey} from './deviceKey'
+import {markHeldHere, wasHeldHere} from './heldSessions'
 import {
   type MediaAccess,
   requestCameraAccess,
@@ -93,6 +94,7 @@ export type LiveEndReason =
   | 'removed'
   | 'other_device'
   | 'consent_withdrawn'
+  | 'still_open_elsewhere'
 
 /** Something that went wrong without ending the session. */
 export type LiveNotice =
@@ -121,7 +123,8 @@ export type LiveSessionState = {
   stage: StageRef | null
   /**
    * On `reuse` (the server says the session is open, maybe on another
-   * device): this device can try to take it over (it has a device key).
+   * device): this device can take it over (it holds the key R3 needs: it
+   * held this session itself).
    */
   canTakeOver: boolean
   /** The runtime's /end is still being sent (retried). */
@@ -169,6 +172,9 @@ export type LiveApi = {
 export type LiveDeps = {
   api: LiveApi
   getDeviceKey: (ownerDid: string) => Promise<DeviceKey | null>
+  /** This device held that session itself (heldSessions.ts). */
+  wasHeldHere: (ownerDid: string, sid: string) => Promise<boolean>
+  markHeldHere: (ownerDid: string, sid: string) => Promise<void>
   requestMicAccess: () => Promise<MediaAccess>
   requestCameraAccess: () => Promise<MediaAccess>
   sleep: (ms: number) => Promise<void>
@@ -193,6 +199,8 @@ const defaultDeps: LiveDeps = {
     endLiveSession,
   },
   getDeviceKey,
+  wasHeldHere,
+  markHeldHere,
   requestMicAccess,
   requestCameraAccess,
   sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
@@ -233,6 +241,8 @@ export type LiveSessionController = {
   setBlind(on: boolean, src?: string): Promise<boolean>
   setCamera(on: boolean): Promise<void>
   end(): Promise<void>
+  /** On `reuse`: end the open session (on every device), stopping the agent. */
+  endOpen(): Promise<void>
   /** Send the runtime's /end again after it gave up (`endFailed`). */
   retryEnd(): Promise<void>
   /**
@@ -287,9 +297,8 @@ export function createLiveSessionController({
   // camera): kept, then acted on (review 679a9d48 N1), never swallowed.
   let rejoinLive = false
   let rejoinDrop: LiveConnectionEvent | null = null
-  // This rejoin saw its join removed (refused, or an unbound one held off by
-  // the other holder), not just an outage: only then does an unbound
-  // continued session running out mean "still open elsewhere".
+  // This rejoin saw its join removed (refused: the holder kept it), not just
+  // an outage.
   let removalSeen = false
   // The session whose /end gave up, for retryEnd.
   let endPending: Session | null = null
@@ -654,8 +663,8 @@ export function createLiveSessionController({
           // The owner's intent, also when the drop came before the first
           // join turned the mic on (review 30f293f4 G4).
           await room.setMicrophoneEnabled(wantMic)
-          set({micOn: wantMic})
           if (over()) return
+          set({micOn: wantMic})
           if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
           if (wantCamera) await room.setCameraEnabled(true)
@@ -666,6 +675,7 @@ export function createLiveSessionController({
           connectedAt = deps.nowS()
           connFromRejoin = true
           set({phase: 'connected'})
+          if (s.key) void deps.markHeldHere(s.auth.ownerDid, s.sid)
           // A first join that dropped before it connected never armed it (G4).
           if (!cancelStageWait && !state.stage) armStageWait()
           return
@@ -682,10 +692,18 @@ export function createLiveSessionController({
           rejoinLive = false
         }
       }
-      // Out of budget: "Couldn't reconnect", with /end (R2 rev 4). Only the
-      // server says a session is open elsewhere (the start reply's `reused`),
-      // never a guess from removals (ruling, review 7919b5692 item 8).
-      await fail('reconnect_failed')
+      // Out of budget. A continued session (the server said it is open,
+      // `reused`) whose joins were refused is still held elsewhere: say so,
+      // and leave it running, never /end it (review 563477989 R1). Anything
+      // else, a plain outage too: "Couldn't reconnect", with /end (R2 rev 4).
+      if (s.reused && removalSeen) {
+        await finish(
+          {phase: 'ended', endReason: 'still_open_elsewhere'},
+          {endRuntime: false},
+        )
+      } else {
+        await fail('reconnect_failed')
+      }
     } finally {
       rejoining = false
       rejoinLive = false
@@ -730,6 +748,7 @@ export function createLiveSessionController({
     // A continued session's first join stands in for a rejoin of the held one.
     connFromRejoin = s.reused
     set({phase: 'connected'})
+    if (s.key) void deps.markHeldHere(s.auth.ownerDid, s.sid)
     armStageWait()
   }
 
@@ -822,9 +841,13 @@ export function createLiveSessionController({
       }
       set({consentRequired, recordPolicy})
       if (reused) {
-        // R3: only the same device key, proven, replaces a held participant,
-        // so only a device with a key can offer "Take over here".
-        set({phase: 'reuse', canTakeOver: !!key})
+        // R3 replaces a held participant only with the SAME key, proven, and
+        // keys never leave a device: offer "Take over here" only when this
+        // device held this session itself (review 563477989 R1).
+        const canTakeOver =
+          !!key && (await deps.wasHeldHere(auth.ownerDid, sid))
+        if (phase() !== 'starting') return
+        set({phase: 'reuse', canTakeOver})
         return
       }
       await afterStart()
@@ -982,6 +1005,13 @@ export function createLiveSessionController({
         {phase: 'ended', endReason: 'local'},
         {endRuntime: phase() !== 'reuse'},
       )
+    },
+
+    async endOpen() {
+      // On `reuse`: end the open session for every device (review 563477989
+      // R3f: the only way to end it from here, also with no key).
+      if (phase() !== 'reuse') return
+      await finish({phase: 'ended', endReason: 'local'}, {endRuntime: true})
     },
 
     async retryEnd() {

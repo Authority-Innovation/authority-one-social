@@ -223,9 +223,12 @@ function LiveSession({
         void controller?.end()
       }
     })
-    const offFocus = navigation.addListener('focus', () =>
-      controller?.setOnScreen(true),
-    )
+    const offFocus = navigation.addListener('focus', () => {
+      controller?.setOnScreen(true)
+      // Back on a Live left under another route (review 563477989 K3): its
+      // exits work again.
+      left.current = false
+    })
     return () => {
       offBlur()
       offFocus()
@@ -258,6 +261,10 @@ function LiveSession({
           displayName={displayName}
           canTakeOver={state.canTakeOver}
           onContinue={() => void controller?.continueHere()}
+          onEndOpen={() => {
+            setLeaveWhenEnded(true)
+            void controller?.endOpen()
+          }}
           onCancel={onEnd}
         />
       )
@@ -400,20 +407,23 @@ function Intro({
 
 /**
  * The server says a session with this agent is open (the start reply's
- * `reused`). Ruling (review 7919b5692 item 8): "Still open on your other
- * device", with "Take over here" only where R3 allows it (a device key: the
- * same key, proven, replaces the held participant). Without a key nothing
- * here can replace it, so the owner ends it there.
+ * `reused`). Ruling (review 7919b5692 item 8), as re-reviewed (563477989 R1,
+ * R2, R3f): "Still open on your other device" with "Take over here" only
+ * where R3 allows it (this device held the session, so it has the holder's
+ * key); otherwise "Couldn't reconnect". Either way the owner can end it here,
+ * for every device: the toast after a failed end sends them here for that.
  */
 function Reuse({
   displayName,
   canTakeOver = false,
   onContinue,
+  onEndOpen,
   onCancel,
 }: {
   displayName: string
   canTakeOver?: boolean
   onContinue: () => void
+  onEndOpen: () => void
   onCancel: () => void
 }) {
   const {t: l} = useLingui()
@@ -423,19 +433,23 @@ function Reuse({
       <Text
         testID="agentLiveStillOpen"
         style={[a.text_md, a.font_bold, {color: ON_STAGE_TEXT}]}>
-        <Trans>Still open on your other device</Trans>
+        {canTakeOver ? (
+          <Trans>Still open on your other device</Trans>
+        ) : (
+          <Trans>Couldn’t reconnect</Trans>
+        )}
       </Text>
       <Text style={[a.text_md, {color: ON_STAGE_TEXT}]}>
         {canTakeOver ? (
           <Trans>
-            A live session with this agent is open. Take it over here, or end it
-            on the other device first. If that device is still connected, taking
-            over may not work.
+            A live session with this agent is open. Take it over here, or end
+            it. If another device is still connected, it keeps the session.
           </Trans>
         ) : (
           <Trans>
-            A live session with this agent is open. End it on the other device,
-            then try again here.
+            A live session with this agent is still open on another device, and
+            this device can’t take it over. End it there, or end it here for
+            every device.
           </Trans>
         )}
       </Text>
@@ -451,6 +465,16 @@ function Reuse({
           </ButtonText>
         </Button>
       ) : null}
+      <Button
+        testID="agentLiveEndOpenButton"
+        label={l`End the live session on every device`}
+        color="negative"
+        size="large"
+        onPress={onEndOpen}>
+        <ButtonText>
+          <Trans>End the live session</Trans>
+        </ButtonText>
+      </Button>
       <Button
         testID="agentLiveNotNowButton"
         label={l`Leave the open session where it is`}
@@ -509,6 +533,8 @@ function Finished({
         return l`You were removed from the live session.`
       case 'other_device':
         return l`This live session moved to another device.`
+      case 'still_open_elsewhere':
+        return l`Couldn’t take the live session over: it’s still open on your other device, and it wasn’t ended. End it there, or open Live again to end it.`
       case 'consent_withdrawn':
         return l`The live session stopped because consent was withdrawn.`
       case 'ended_elsewhere':
