@@ -29,6 +29,7 @@ import {
   type TrackPublication,
 } from 'livekit-client'
 
+import {disconnectReasonOf as reasonOf, reasonName} from '../rejoin'
 import {LIVE_IOS_AUDIO_POLICY} from './audioSession'
 import {
   type LiveConnectionEvent,
@@ -66,22 +67,11 @@ function isStage(pub: TrackPublication) {
   )
 }
 
+/** The session's reason for an SDK DisconnectReason (../rejoin.ts decides). */
 export function disconnectReasonOf(
   reason: DisconnectReason | undefined,
 ): LiveDisconnectReason {
-  switch (reason) {
-    case DisconnectReason.CLIENT_INITIATED:
-      return 'client'
-    case DisconnectReason.PARTICIPANT_REMOVED:
-      return 'removed'
-    case DisconnectReason.ROOM_DELETED:
-    case DisconnectReason.ROOM_CLOSED:
-      return 'room_deleted'
-    case DisconnectReason.DUPLICATE_IDENTITY:
-      return 'duplicate_identity'
-    default:
-      return 'network'
-  }
+  return reasonOf(reasonName(reason, DisconnectReason))
 }
 
 export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {

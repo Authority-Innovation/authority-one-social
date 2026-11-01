@@ -82,16 +82,10 @@ jest.mock('livekit-client', () => ({
       ScreenShare: 'screen_share',
     },
   },
-  DisconnectReason: {
-    UNKNOWN_REASON: 0,
-    CLIENT_INITIATED: 1,
-    DUPLICATE_IDENTITY: 2,
-    SERVER_SHUTDOWN: 3,
-    PARTICIPANT_REMOVED: 4,
-    ROOM_DELETED: 5,
-    SIGNAL_CLOSE: 9,
-    ROOM_CLOSED: 10,
-  },
+  // The real protocol enum (numbers and their names).
+  DisconnectReason: jest.requireActual<{DisconnectReason: object}>(
+    '@livekit/protocol',
+  ).DisconnectReason,
 }))
 
 import {type LiveConnectionEvent} from '../room'
@@ -198,6 +192,7 @@ describe('connection', () => {
 
   it.each([
     [1, 'client'],
+    [12, 'rejected'],
     [2, 'duplicate_identity'],
     [4, 'removed'],
     [5, 'room_deleted'],

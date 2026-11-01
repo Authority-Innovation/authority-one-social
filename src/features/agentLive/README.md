@@ -56,7 +56,11 @@ shows a recording indicator, on the sheet and on the stage.
 Connection (join gate R2, runtime design `AGENT-LIVE-JOIN-GATE-REVISED` @ adeeadb):
 the edge refuses every LiveKit resume, so the SDK's own resume and reconnect are
 off (`room/livekit.tsx` `NO_SDK_RECONNECT`) and a lost connection is reported as
-Disconnected at once. Removed / room deleted / another device end the session.
+Disconnected at once. The rule is `rejoin.ts`, the runtime workers' own
+(`live-agent/src/rejoin.js` @ 58b8dd6): the same backoff and the same FINAL reasons
+(CLIENT_INITIATED, DUPLICATE_IDENTITY, PARTICIPANT_REMOVED, ROOM_DELETED,
+ROOM_CLOSED, USER_REJECTED), which end the session; anything else, including no
+reason (the SDK giving up), rejoins.
 Any other drop is a full rejoin: a fresh token from `POST /live/sessions/:sid/token`
 (never the one in hand), its proof, a new join, the mic and camera restored;
 backoff 1, 2, 4, 8 s, then the session stops with "Couldn't reconnect". The

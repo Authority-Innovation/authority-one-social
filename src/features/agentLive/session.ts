@@ -56,6 +56,7 @@ import {
   requestMicAccess,
 } from './permissions'
 import {type DeviceKey, joinProof} from './pop'
+import {REJOIN_BACKOFF_MS} from './rejoin'
 import {
   type LiveConnectionEvent,
   type LiveRoom,
@@ -170,10 +171,10 @@ export const END_RETRY_DELAYS_MS = [1000, 3000, 7000]
  * The full rejoin after a drop (join gate R2, runtime design
  * AGENT-LIVE-JOIN-GATE-REVISED @ adeeadb): the edge refuses LiveKit resumes,
  * and the SDK's own retries are off (room/livekit.tsx), so continuity is a
- * fresh token, its proof, and a new join. One attempt after each wait; after
- * the last, the session stops with "reconnect failed".
+ * fresh token, its proof, and a new join. The backoff and the final reasons
+ * are ./rejoin.ts, the runtime workers' rule (live-agent/src/rejoin.js).
  */
-export const REJOIN_BACKOFF_MS = [1000, 2000, 4000, 8000]
+export {REJOIN_BACKOFF_MS}
 /** A token this close to `expiresAt` is replaced before joining. */
 const TOKEN_MARGIN_S = 5
 
@@ -364,8 +365,18 @@ export function createLiveSessionController({
       if (phase() === 'reconnecting') set({phase: 'connected'})
       return
     }
+    // FINAL reasons (./rejoin.ts) end the session; anything else rejoins.
     if (e.reason === 'client') {
       if (leaving) return
+      // A leave we didn't ask for: out of the room for good, as the workers
+      // treat CLIENT_INITIATED. End the runtime session too (nothing to leave
+      // the agent in).
+      await finish({phase: 'ended', endReason: 'local'}, {endRuntime: true})
+      return
+    }
+    if (e.reason === 'rejected') {
+      await finish({phase: 'ended', endReason: 'removed'}, {endRuntime: false})
+      return
     }
     if (e.reason === 'duplicate_identity') {
       await finish(

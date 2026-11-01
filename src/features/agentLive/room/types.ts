@@ -15,13 +15,17 @@ export type StageRef = {readonly kind: 'stage'; readonly ref: unknown}
  * - `room_deleted`: the session ended elsewhere (the owner's other device, the
  *   agent or a voice "stop", the session's hard end);
  * - `duplicate_identity`: the owner joined from another device;
- * - `network`: anything else, worth one fresh token and a rejoin.
+ * - `rejected`: the server refused us (USER_REJECTED);
+ * - `network`: anything else (no reason included): a full rejoin.
+ * All but `network` are FINAL (../rejoin.ts, mirroring the runtime's
+ * live-agent/src/rejoin.js).
  */
 export type LiveDisconnectReason =
   | 'client'
   | 'removed'
   | 'room_deleted'
   | 'duplicate_identity'
+  | 'rejected'
   | 'network'
 
 export type LiveConnectionEvent =

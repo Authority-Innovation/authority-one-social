@@ -94,3 +94,15 @@ follows the doc and must be re-checked against it when it lands.
 - Not verified: the real SDK against an R1 edge on a device (the design's own
   open item). R3 (same-session identity replacement) is not needed by this app,
   because its rejoin tokens are bound and proven with the same key.
+
+### Follow-up: the workers' rejoin rule (58b8dd6)
+
+`rejoin.ts` mirrors the runtime's `live-agent/src/rejoin.js` on
+`feat/agent-live-r2-workers` @ 58b8dd6: backoff 1, 2, 4, 8 s; FINAL reasons
+CLIENT_INITIATED, DUPLICATE_IDENTITY, PARTICIPANT_REMOVED, ROOM_DELETED,
+ROOM_CLOSED, USER_REJECTED end the session, anything else rejoins, one rejoin
+at a time. Two behaviour changes from 44f69af93: a CLIENT_INITIATED drop the app
+did not ask for now ends the session (it rejoined before), and USER_REJECTED
+ends it (it was treated as a network drop). The SDK's give-up under the
+no-retry policy carries no reason (livekit-client esm.mjs ~25360/35782), so it
+still rejoins. The binding names reasons through the real protocol enum.
