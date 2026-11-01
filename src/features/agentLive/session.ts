@@ -86,6 +86,8 @@ export type LiveFailure =
   | 'connect'
   | 'reconnect_failed'
   | 'agent_unavailable'
+  /** Consent was admitted but the runtime sent no join token. */
+  | 'no_join'
 
 /** Why a session ended (the screen words it). */
 export type LiveEndReason =
@@ -138,6 +140,11 @@ export type LiveSessionState = {
    * continue the session at all: "Couldn't reconnect" (Dispatch ruling).
    */
   reuseBound: boolean
+  /**
+   * Stopped here without /end (not the owner's action, not an outage): the
+   * runtime session may run on to its time limit. The screen says so.
+   */
+  leftRunning: boolean
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
   /**
@@ -165,6 +172,7 @@ export const initialLiveSessionState: LiveSessionState = {
   cameraPending: false,
   blindOn: false,
   stage: null,
+  leftRunning: false,
   canTakeOver: false,
   reuseBound: false,
   ending: false,
@@ -253,6 +261,13 @@ export type LiveSessionController = {
   setBlind(on: boolean, src?: string): Promise<boolean>
   setCamera(on: boolean): Promise<void>
   end(): Promise<void>
+  /**
+   * The screen went away without the owner ending (an OS unmount; Dispatch
+   * ruling on 0dcc84ad3 P3): leave the room, so the mic isn't live with no
+   * screen, but don't end the session. It stays registered, so sign-out
+   * still ends it; reopening Live finds it (`reused`).
+   */
+  leave(): Promise<void>
   /** On `reuse`: end the open session (on every device), stopping the agent. */
   endOpen(): Promise<void>
   /** Send the runtime's /end again after it gave up (`endFailed`). */
@@ -330,6 +345,8 @@ export function createLiveSessionController({
   let unregister: (() => void) | null = null
   // The screen has gone (detach): a /end give-up is reported, not shown.
   let detached = false
+  // The screen went away without the owner ending (leave()).
+  let screenLeft = false
   let onScreen = true
   // This give-up was already reported off-screen (toast): not again on detach.
   let giveUpReported = false
@@ -414,6 +431,7 @@ export function createLiveSessionController({
       endRuntime,
       owner = false,
       everywhere = false,
+      keepRegistered = false,
     }: {
       endRuntime: boolean
       /**
@@ -423,6 +441,8 @@ export function createLiveSessionController({
       owner?: boolean
       /** The open-session panel's "End the live session" (every device). */
       everywhere?: boolean
+      /** Stay registered for sign-out (leave()). */
+      keepRegistered?: boolean
     },
   ): Promise<void> {
     if (ending) return ending
@@ -432,14 +452,24 @@ export function createLiveSessionController({
     cancelTakeover = null
     const s = session
     session = null
-    if (endRuntime && s?.reused && !s.tookOver && !everywhere) {
-      // Not ours yet: only the panel's End for every device ends it.
-      endRuntime = false
-      patch = leftOpen(patch)
-    } else if (endRuntime && s?.refused && !owner && !everywhere) {
-      // After a refusal, never on our own (Dispatch ruling, 7f87024af).
-      endRuntime = false
-      patch = refusedLeftOpen(patch)
+    // When /end goes out (Dispatch rulings on 7f87024af and 0dcc84ad3):
+    // 1. a reused session not taken over: only the panel's End for every
+    //    device;
+    // 2. the owner's own action (End, a deliberate back, Cancel, sign-out);
+    // 3. otherwise never after a refusal;
+    // 4. otherwise only after an outage on this device's own session;
+    // 5. anything else stops here and says the session wasn't ended.
+    if (endRuntime && s && !everywhere) {
+      if (s.reused && !s.tookOver) {
+        endRuntime = false
+        patch = leftOpen(patch)
+      } else if (!owner && s.refused) {
+        endRuntime = false
+        patch = refusedLeftOpen(patch)
+      } else if (!owner && !isOutage(patch)) {
+        endRuntime = false
+        patch = {...patch, leftRunning: true}
+      }
     }
     set({
       micOn: false,
@@ -448,7 +478,7 @@ export function createLiveSessionController({
       stage: null,
       ...patch,
     })
-    if (!endRuntime || !s) unregister?.()
+    if ((!endRuntime || !s) && !keepRegistered) unregister?.()
     // /end first: its bearer is read now, before any await.
     const runtime = endRuntime && s ? endOnRuntime(s) : Promise.resolve()
     ending = Promise.all([runtime, leaveRoom()]).then(() => {})
@@ -457,6 +487,21 @@ export function createLiveSessionController({
 
   const fail = (error: LiveFailure) =>
     finish({phase: 'failed', error}, {endRuntime: true})
+
+  /**
+   * A failure that is an outage of this device's own session (the network,
+   * the runtime's 5xx, a garbled reply, a reconnect ladder that ran out with
+   * no refused rung): /end is allowed. Refusals are caught before this.
+   */
+  const OUTAGES: ReadonlySet<LiveFailure> = new Set([
+    'network',
+    'unavailable',
+    'http',
+    'bad_response',
+    'reconnect_failed',
+  ])
+  const isOutage = (patch: Partial<LiveSessionState>) =>
+    patch.phase === 'failed' && !!patch.error && OUTAGES.has(patch.error)
 
   /** Errors that say what to do, kept as they are; anything else says "left open". */
   const KEEP_ON_LEFT_OPEN: ReadonlySet<LiveFailure> = new Set([
@@ -636,8 +681,8 @@ export function createLiveSessionController({
     if (e.reason === 'client') {
       if (leaving) return
       // A leave we didn't ask for: out of the room for good, as the workers
-      // treat CLIENT_INITIATED. End the runtime session too (nothing to leave
-      // the agent in).
+      // treat CLIENT_INITIATED. Not the owner's action, so no /end (review
+      // 0dcc84ad3 P4): the screen says it wasn't ended.
       await finish({phase: 'ended', endReason: 'local'}, {endRuntime: true})
       return
     }
@@ -961,9 +1006,10 @@ export function createLiveSessionController({
         reused,
       } = res.data
       session = {sid, wsUrl, auth, key, join: j, reused}
-      // Sign-out / switch: end it, or re-send a /end that gave up (F5).
+      // Sign-out / switch: end it, or send the /end that is still owed (a
+      // /end that gave up, F5, or a session the screen left running).
       unregister = registerLiveSession(() =>
-        state.endFailed ? controller.retryEnd() : controller.end(),
+        endPending ? controller.retryEnd() : controller.end(),
       )
       // Left before the runtime answered: end the session it just made (not a
       // reused one, which may be live on another device).
@@ -971,6 +1017,8 @@ export function createLiveSessionController({
         const s = session
         session = null
         if (reused) unregister?.()
+        // The screen went away (not Cancel): keep it owed to sign-out, P3.
+        else if (screenLeft) endPending = s
         else await endOnRuntime(s)
         return
       }
@@ -1019,7 +1067,7 @@ export function createLiveSessionController({
         return
       }
       if (!res.data.join) {
-        await fail('unavailable')
+        await fail('no_join')
         return
       }
       // The agent's job didn't start (review 679a9d48 N2): don't join an
@@ -1155,6 +1203,22 @@ export function createLiveSessionController({
         {phase: 'ended', endReason: 'local'},
         {endRuntime: true, everywhere: true},
       )
+    },
+
+    async leave() {
+      if (phase() === 'ended' || phase() === 'failed' || phase() === 'idle') {
+        return
+      }
+      screenLeft = true
+      const s = session
+      // A reused session not taken over is the other device's: not ours to
+      // end at sign-out either.
+      const ours = !!s && !(s.reused && !s.tookOver)
+      await finish(
+        {phase: 'ended', endReason: 'left_open'},
+        {endRuntime: false, keepRegistered: ours},
+      )
+      if (s && ours) endPending = s
     },
 
     async retryEnd() {

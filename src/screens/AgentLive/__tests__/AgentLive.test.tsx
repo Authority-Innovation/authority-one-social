@@ -272,6 +272,10 @@ import {
   requestMicAccess,
 } from '#/features/agentLive/permissions'
 import {deviceKeyFromSeed} from '#/features/agentLive/pop'
+import {
+  endOpenLiveSessions,
+  forgetLiveSessionsForTests,
+} from '#/features/agentLive/registry'
 import {loadLiveRoomFactory} from '#/features/agentLive/room'
 import {AgentLiveScreen} from '../index'
 
@@ -315,6 +319,8 @@ async function press(el: Parameters<typeof fireEvent.press>[0]) {
 }
 
 beforeEach(() => {
+  // Sessions a test's screen left running stay registered for sign-out.
+  forgetLiveSessionsForTests()
   mockFlag.on = false
   mockEnv.android = false
   mockOwned.agent = OWNED
@@ -833,12 +839,13 @@ describe('session screen (flag on)', () => {
     }
   })
 
-  it('d8f8f16e H1: a /end that gives up after a push (blurred) is a toast, once', async () => {
+  it('d8f8f16e H1: End, then a push over Live: a /end that gives up is a toast, once', async () => {
     jest.useFakeTimers({doNotFake: ['Date']})
     try {
-      const {unmount} = await goLive()
+      const {getByTestId, unmount} = await goLive()
       const e503 = {status: 503, body: {error: 'unavailable'}}
       rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      await press(getByTestId('agentLiveEndButton'))
       act(() => {
         mockNav.listeners.blur?.()
       })
@@ -864,12 +871,13 @@ describe('session screen (flag on)', () => {
     jest.useFakeTimers({doNotFake: ['Date']})
     try {
       const {getByTestId} = await goLive()
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      await press(getByTestId('agentLiveEndButton'))
       act(() => {
         mockNav.listeners.blur?.()
         mockNav.listeners.focus?.()
       })
-      const e503 = {status: 503, body: {error: 'unavailable'}}
-      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
       await flush()
       for (const ms of [1000, 3000, 7000]) {
         act(() => {
@@ -931,15 +939,23 @@ describe('session screen (flag on)', () => {
     expect(getByTestId('agentLiveEndOpenButton')).toBeTruthy()
   })
 
-  it('m3 (P6): pushed over the open-session panel: “left open” copy, no /end', async () => {
+  it('P3: pushed over the open-session panel: it stays, nothing ends', async () => {
     const {getByTestId} = await toSheet('startReused')
     act(() => {
       mockNav.listeners.blur?.()
     })
     await flush()
-    expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
-      'You left the live session. It’s still open on your other device and wasn’t ended. End it there, or open Live again to end it.',
-    )
+    expect(getByTestId('agentLiveReuse')).toBeTruthy()
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+  })
+
+  it('m3: leaving the open-session panel by unmount leaves it running and owes no /end to sign-out', async () => {
+    mockHeld.here = false
+    const {unmount} = await toSheet('startReused')
+    unmount()
+    await flush()
+    endOpenLiveSessions()
+    await flush()
     expect(rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
@@ -1087,13 +1103,20 @@ describe('session screen (flag on)', () => {
     expect(mockGoBack).toHaveBeenCalledTimes(1)
   })
 
-  it('F1: the screen goes (account switch, unmount) and /end gives up: a toast says so, once', async () => {
+  it('P3: the screen unmounts: the session is kept; sign-out ends it, and a give-up then is a toast, once', async () => {
     jest.useFakeTimers({doNotFake: ['Date']})
     try {
-      const {unmount} = await goLive()
+      const {unmount, fake} = await goLive()
+      unmount()
+      await act(async () => {
+        for (let i = 0; i < 30; i++) await Promise.resolve()
+      })
+      // Left the room (no mic with no screen), but no /end.
+      expect(fake.calls.map(c => c.op)).toContain('disconnect')
+      expect(rt.to('/live/sessions/:sid/end')).toEqual([])
       const e503 = {status: 503, body: {error: 'unavailable'}}
       rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
-      unmount()
+      endOpenLiveSessions()
       for (const ms of [0, 1000, 3000, 7000]) {
         await act(async () => {
           jest.advanceTimersByTime(ms)
@@ -1177,15 +1200,15 @@ describe('session screen (flag on)', () => {
     expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(true)
   })
 
-  it('F1: something pushed over a live session (blur) ends it; the panel shows it on return', async () => {
-    const {getByTestId} = await goLive()
-    rt.on('/live/sessions/:sid/end', 'end')
+  it('P3: something pushed over a live session (blur) does NOT end it: Live keeps running behind', async () => {
+    const {getByTestId, fake} = await goLive()
     act(() => {
       mockNav.listeners.blur?.()
     })
     await flush()
-    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
-    expect(getByTestId('agentLiveEnded')).toBeTruthy()
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    expect(getByTestId('agentLiveScreen')).toBeTruthy()
+    expect(fake.calls.map(c => c.op)).not.toContain('disconnect')
     expect(mockGoBack).not.toHaveBeenCalled()
   })
 
@@ -1205,10 +1228,13 @@ describe('session screen (flag on)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('AgentHub', {agent: AGENT_HANDLE})
   })
 
-  it('leaving the screen ends the session, with this account’s bearer', async () => {
+  it('P3: an unmount leaves the room but sends no /end; sign-out then ends it, with this account’s bearer', async () => {
     const {unmount} = await goLive()
     rt.on('/live/sessions/:sid/end', 'end')
     unmount()
+    await flush()
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    endOpenLiveSessions()
     await flush()
     const end = rt.to('/live/sessions/:sid/end')
     expect(end).toHaveLength(1)

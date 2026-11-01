@@ -114,7 +114,7 @@ function LiveSession({
   const left = useRef(false)
 
   // Loads the binding and makes the controller. Starts nothing: the owner's
-  // tap does (begin). Leaving the screen ends whatever was started.
+  // tap does (begin). An unmount leaves the room but ends nothing (P3).
   useEffect(() => {
     let cancelled = false
     let made: LiveSessionController | null = null
@@ -148,7 +148,9 @@ function LiveSession({
     return () => {
       cancelled = true
       made?.detach({failureSeen: latest.current.endFailed})
-      void made?.end()
+      // An OS unmount is not the owner ending (Dispatch ruling on 0dcc84ad3
+      // P3): leave the room, keep the session (sign-out still ends it).
+      void made?.leave()
     }
   }, [agentDid, i18n])
 
@@ -210,18 +212,14 @@ function LiveSession({
   // this screen's focus.
   const lockDrawerSwipe = useLockDrawerSwipe()
   useFocusEffect(useCallback(() => lockDrawerSwipe(), [lockDrawerSwipe]))
-  // Anything that still pushes over Live while a session is open (a deep
-  // link, a notification) ends it: no mic left running off-screen. The panel
-  // shows the end when the owner comes back.
-  // While another screen is in front, a /end that gives up is a toast, not
-  // a panel nobody sees (review d8f8f16e H1).
+  // Something pushed over Live (a deep link, a notification) does NOT end
+  // it (Dispatch ruling on 0dcc84ad3 P3): Live keeps running behind, with
+  // audio, as when the app is backgrounded. While another screen is in
+  // front, a /end that gives up is a toast, not a panel nobody sees
+  // (review d8f8f16e H1).
   useEffect(() => {
     const offBlur = navigation.addListener('blur', () => {
       controller?.setOnScreen(false)
-      const p = latest.current.phase
-      if (p !== 'idle' && p !== 'ended' && p !== 'failed') {
-        void controller?.end()
-      }
     })
     const offFocus = navigation.addListener('focus', () => {
       controller?.setOnScreen(true)
@@ -525,6 +523,8 @@ function Finished({
           return l`Live needs a server update that isn’t available yet, so Live stopped on this device. Try again after the update.`
         case 'reconnect_failed':
           return l`Couldn’t reconnect, so the live session has ended.`
+        case 'no_join':
+          return l`Couldn’t reach your agent. Try again later.`
         case 'agent_unavailable':
           return l`Your agent couldn’t start, so the live session has ended. Try again later.`
         case 'consent_incomplete':
@@ -568,6 +568,16 @@ function Finished({
         style={[a.text_md, {color: ON_STAGE_TEXT}]}>
         {message}
       </Text>
+      {state.leftRunning ? (
+        <Text
+          testID="agentLiveLeftRunning"
+          style={[a.text_sm, {color: ON_STAGE_TEXT}]}>
+          <Trans>
+            The live session wasn’t ended: open Live again to end it, or it ends
+            on its own at its time limit.
+          </Trans>
+        </Text>
+      ) : null}
       {state.ending ? (
         <Text
           testID="agentLiveEnding"

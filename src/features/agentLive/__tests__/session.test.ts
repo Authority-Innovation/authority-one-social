@@ -390,7 +390,7 @@ describe('H1: the media connection', () => {
     },
   )
 
-  it('a CLIENT_INITIATED drop we didn’t ask for is FINAL: ended, runtime session ended, no rejoin', async () => {
+  it('a CLIENT_INITIATED drop we didn’t ask for is FINAL: ended here, no rejoin, no /end (P4: not the owner’s action)', async () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/end', 'end')
@@ -400,9 +400,10 @@ describe('H1: the media connection', () => {
       phase: 'ended',
       endReason: 'local',
       micOn: false,
+      leftRunning: true,
     })
     expect(env.rt.to('/live/sessions/:sid/token')).toEqual([])
-    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
   it('USER_REJECTED is FINAL: ended, no rejoin', async () => {
@@ -1324,7 +1325,7 @@ describe('review 679a9d48', () => {
     expect(env.fake.cameraPublishes()).toBe(0)
   })
 
-  it('N2: the agent’s job did not start: no join, “agent unavailable”, session ended', async () => {
+  it('N2: the agent’s job did not start: no join, “agent unavailable”, no /end (P4)', async () => {
     const env = setup()
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentAgentUnavailable')
@@ -1337,7 +1338,8 @@ describe('review 679a9d48', () => {
     })
     expect(env.fake.connects()).toEqual([])
     expect(env.fake.calls.filter(c => c.op === 'mic')).toEqual([])
-    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.last().leftRunning).toBe(true)
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
   it('R1 (563477989): a takeover the holder refuses climbs the ladder, then says it is still open and does NOT /end it', async () => {
@@ -1511,6 +1513,112 @@ describe('review 679a9d48', () => {
         phase: 'failed',
         error: 'reconnect_failed',
       })
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
+  })
+
+  describe('0dcc84ad3 P3/P4: /end only on the owner’s action or an outage', () => {
+    it('leave() (an OS unmount): room left, no /end, kept for sign-out', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.leave()
+      expect(env.fake.calls.at(-1)?.op).toBe('disconnect')
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+      expect(openLiveSessionCount()).toBe(1)
+      endOpenLiveSessions()
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+      expect(openLiveSessionCount()).toBe(0)
+    })
+
+    it('leave() while the start call is out: no /end then, sign-out sends it', async () => {
+      const env = setup()
+      let answer!: () => void
+      const gate = new Promise<void>(r => (answer = r))
+      const fetch = env.rt.fetch
+      ;(globalThis as {fetch: unknown}).fetch = async (
+        u: string,
+        i: RequestInit,
+      ) => {
+        if (new URL(u).pathname === '/live/sessions') await gate
+        return fetch(u, i)
+      }
+      env.rt.on('/live/sessions', 'startAwaitingConsent')
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      const begun = env.c.begin()
+      await flush()
+      await env.c.leave()
+      answer()
+      await begun
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+      endOpenLiveSessions()
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
+
+    it('leave() on a reused session not taken over: not ours, nothing owed to sign-out', async () => {
+      const env = setup({held: true})
+      await toConsent(env, 'startReused')
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.leave()
+      endOpenLiveSessions()
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('P4: server_outdated: no /end, the screen says it wasn’t ended', async () => {
+      const env = setup()
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/join/prove', LEGACY.proveOk)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.last()).toMatchObject({
+        phase: 'failed',
+        error: 'server_outdated',
+        leftRunning: true,
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('P4: consent admitted with no join token: no /end', async () => {
+      const env = setup()
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', {
+        status: 200,
+        body: {...reply('consentAdmitted').body, token: null, expiresAt: null},
+      })
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.last()).toMatchObject({phase: 'failed', error: 'no_join'})
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('P4: a proof needed with no key to sign it: no /end', async () => {
+      const env = setup({key: false})
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.last()).toMatchObject({phase: 'failed', leftRunning: true})
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('an outage on the first proof (503) is an outage: /end', async () => {
+      const env = setup()
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/join/prove', E503)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.last()).toMatchObject({phase: 'failed', error: 'unavailable'})
+      expect(env.last().leftRunning).toBe(false)
       expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
     })
   })
@@ -1945,7 +2053,7 @@ describe('H2: end', () => {
 
 describe('H3: a failed start leaves nothing behind', () => {
   it.each(['connect', 'mic'] as const)(
-    '%s fails: failed, room left, session ended',
+    '%s fails: failed, room left, no /end (P4: not an outage or the owner’s action)',
     async op => {
       const env = setup()
       await toConsent(env)
@@ -1960,11 +2068,12 @@ describe('H3: a failed start leaves nothing behind', () => {
         micOn: false,
       })
       expect(env.fake.calls[env.fake.calls.length - 1].op).toBe('disconnect')
-      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+      expect(env.last().leftRunning).toBe(true)
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
     },
   )
 
-  it('the room factory throws: failed, session ended', async () => {
+  it('the room factory throws: failed, no /end (P4)', async () => {
     const env = setup({
       roomFactory: () => {
         throw new Error('no WebRTC')
@@ -1974,8 +2083,12 @@ describe('H3: a failed start leaves nothing behind', () => {
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/sessions/:sid/end', 'end')
     await env.c.submitConsent({ai_process: true})
-    expect(env.last()).toMatchObject({phase: 'failed', error: 'connect'})
-    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.last()).toMatchObject({
+      phase: 'failed',
+      error: 'connect',
+      leftRunning: true,
+    })
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
   it('a refused proof: no join, and no /end (Dispatch ruling on 7f87024af: never /end on a refusal)', async () => {

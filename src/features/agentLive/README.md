@@ -72,8 +72,12 @@ After any refusal (a refused proof or mint, a consent refusal including
 its own; it says the session was refused and wasn't ended (`refused`,
 `refused_reconnect`). The record is per reconnect ladder: the 16 s give-up is
 an outage, with `/end` on this device's own session, only if no rung of that
-ladder was refused. The owner's own actions (End, the back swipe, Cancel,
-leaving the screen, sign-out) still end a session this device holds.
+ladder was refused. Only the owner's own actions end a session this device
+holds: End, deliberately going back, Cancel, sign-out or an account switch.
+Being covered (a push, a notification), backgrounded or unmounted by the OS
+does not: Live keeps running (an unmount leaves the room, so no mic is live
+with no screen, and the session stays owed to sign-out). Any other failure
+that is not an outage stops here with no `/end` and says so (`leftRunning`).
 
 The camera publishes only after camera access, a
 proven camera token and a rejoin. A session whose `recordPolicy` isn't `off`
