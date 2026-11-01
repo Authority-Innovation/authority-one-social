@@ -7,7 +7,9 @@
  *   fresh token; never a "connected" screen on a dead room;
  * - H2: /end goes out first, with the session account's bearer, and is
  *   retried;
- * - H3: any failure after the session exists leaves the room and ends it;
+ * - H3: any failure after the session exists leaves the room; it is ended
+ *   (/end) only after an outage, never after a refusal or on another
+ *   device's session (Dispatch rulings on 7f87024af and round 347);
  * - M1/M3: tokens are proven with the device key; the camera rejoin is
  *   proven, and recovers without the camera if it fails;
  * - ruling 2: the blind message, owner-only.
@@ -277,17 +279,15 @@ describe('B2: nothing before the owner taps, no media before consent', () => {
     expect(env.last().phase).toBe('consent')
   })
 
-  it('not admitted: failed, and the session is ended', async () => {
+  it('not admitted (admitted: false) is a consent refusal: stopped, no /end (review 0dcc84ad3 P1)', async () => {
     const env = setup()
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentPartial')
     env.rt.on('/live/sessions/:sid/end', 'end')
     await env.c.submitConsent({ai_process: true})
-    expect(env.last()).toMatchObject({
-      phase: 'failed',
-      error: 'consent_incomplete',
-    })
-    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    await flush()
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
     expect(env.fake.calls.filter(x => x.op === 'mic')).toEqual([])
   })
 
@@ -348,7 +348,8 @@ describe('M2: a session already open (reused)', () => {
     await toConsent(env, 'startReused')
     await env.c.end()
     expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
-    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'local'})
+    // Says the session is still open, not "ended" (review 0dcc84ad3 P6).
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'left_open'})
   })
 
   it('opened on another device while live: ended here, the session left running', async () => {
@@ -1514,6 +1515,144 @@ describe('review 679a9d48', () => {
     })
   })
 
+  describe('0dcc84ad3: the refusal record is per ladder (P2), and every refusal path is pinned (P5)', () => {
+    const giveUp = async (env: Env, until: 'ended' | 'failed') => {
+      for (let i = 0; i < 60 && env.last().phase !== until; i++) {
+        await flush(40)
+      }
+      await flush()
+    }
+    const bad = {status: 401, body: {error: 'bad_proof'}}
+
+    it('a3: one refused rung, then outages, in the same ladder: no /end', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on(
+        '/live/sessions/:sid/token',
+        'tokenForJoin',
+        E503,
+        E503,
+        E503,
+        E503,
+      )
+      env.rt.on('/live/join/prove', bad)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.fake.drop('network')
+      await giveUp(env, 'ended')
+      expect(env.last()).toMatchObject({
+        phase: 'ended',
+        endReason: 'refused_reconnect',
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('P2: a refusal that recovered does not taint a later outage-only ladder: /end', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+      env.rt.on('/live/join/prove', bad, 'proveExchange')
+      env.fake.drop('network')
+      await flush(400)
+      expect(env.last().phase).toBe('connected')
+      env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.fake.drop('network')
+      await giveUp(env, 'failed')
+      expect(env.last()).toMatchObject({
+        phase: 'failed',
+        error: 'reconnect_failed',
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
+
+    it('d: a consent call refused with a 4xx: no /end', async () => {
+      const env = setup()
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', {
+        status: 403,
+        body: {error: 'refused'},
+      })
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('e: a refused rejoin (removed within 10 s) is the only refusal, then outages: no /end', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+      env.rt.on('/live/join/prove', 'proveExchange')
+      env.fake.drop('network')
+      await flush(400)
+      expect(env.last().phase).toBe('connected')
+      env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.clock.now += 3
+      env.fake.drop('removed')
+      await giveUp(env, 'ended')
+      expect(env.last()).toMatchObject({
+        phase: 'ended',
+        endReason: 'refused_reconnect',
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('e2: an unbound session’s removal is the only refusal, then outages: no /end', async () => {
+      const env = setup({key: false})
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', {
+        status: 200,
+        body: {...reply('consentAdmitted').body, popRequired: false},
+      })
+      await env.c.submitConsent({ai_process: true})
+      expect(env.last().phase).toBe('connected')
+      env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.clock.now += 60
+      env.fake.drop('removed')
+      await giveUp(env, 'ended')
+      expect(env.last()).toMatchObject({
+        phase: 'ended',
+        endReason: 'refused_reconnect',
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it.each([408, 429])(
+      'b3: %i mints all the way are an outage, not a refusal: “Couldn’t reconnect” with /end',
+      async status => {
+        const env = setup()
+        await toLive(env)
+        const slow = {status, body: {error: 'slow down'}}
+        env.rt.on('/live/sessions/:sid/token', slow, slow, slow, slow, slow)
+        env.rt.on('/live/sessions/:sid/end', 'end')
+        env.fake.drop('network')
+        await giveUp(env, 'failed')
+        expect(env.last()).toMatchObject({
+          phase: 'failed',
+          error: 'reconnect_failed',
+        })
+        expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+      },
+    )
+
+    it('b5: a 401 mint on a new session is a refusal: signed out is said, no /end', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/token', {
+        status: 401,
+        body: {error: 'unauthorized'},
+      })
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.fake.drop('network')
+      await flush(400)
+      expect(env.last()).toMatchObject({phase: 'failed', error: 'signed_out'})
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+  })
+
   describe('7f87024af: a reused session not taken over is never ended on its own', () => {
     const takeOver = async (env: Env, prove: unknown[] = ['proveExchange']) => {
       await toConsent(env, 'startReused')
@@ -1636,6 +1775,8 @@ describe('review 679a9d48', () => {
       await begun
       await flush()
       expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+      // c2: the panel does not open after Cancel.
+      expect(env.last().phase).toBe('ended')
     })
 
     it('N6: a rejoin that connects records the session as held here', async () => {

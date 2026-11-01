@@ -65,7 +65,17 @@ The open-session panel (the server said `reused`; ruling on reviews
 A reused session is the other device's until a join of ours stays up past the
 10 s refused window (`tookOver`). Until then nothing ends it on its own: every
 failure or leave says it is still open and sends no `/end`
-(`still_open_elsewhere`, `left_open`). Only the panel's End does. The camera publishes only after camera access, a
+(`still_open_elsewhere`, `left_open`). Only the panel's End does.
+
+After any refusal (a refused proof or mint, a consent refusal including
+`admitted: false`, a join removed as refused) the client never sends `/end` on
+its own; it says the session was refused and wasn't ended (`refused`,
+`refused_reconnect`). The record is per reconnect ladder: the 16 s give-up is
+an outage, with `/end` on this device's own session, only if no rung of that
+ladder was refused. The owner's own actions (End, the back swipe, Cancel,
+leaving the screen, sign-out) still end a session this device holds.
+
+The camera publishes only after camera access, a
 proven camera token and a rejoin. A session whose `recordPolicy` isn't `off`
 shows a recording indicator, on the sheet and on the stage.
 

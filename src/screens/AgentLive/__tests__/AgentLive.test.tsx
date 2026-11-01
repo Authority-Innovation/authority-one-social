@@ -675,6 +675,33 @@ describe('session screen (flag on)', () => {
     }
   })
 
+  it('m2: every rejoin proof refused: “Couldn’t reconnect… wasn’t ended”, no /end', async () => {
+    const {getByTestId, fake} = await goLive()
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const bad = {status: 401, body: {error: 'bad_proof'}}
+      for (let i = 0; i < 5; i++) {
+        rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+        rt.on('/live/join/prove', bad)
+      }
+      rt.on('/live/sessions/:sid/end', 'end')
+      act(() => fake.drop('network'))
+      await flush()
+      for (const ms of [1000, 2000, 4000, 8000, 16000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+        'Couldn’t reconnect: this device’s joins were refused, so it stopped here. The live session wasn’t ended: open Live again to end it, or it ends on its own at its time limit.',
+      )
+      expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('reconnecting shows on the stage and the controls are off', async () => {
     const {getByTestId, queryByTestId, fake} = await goLive()
     act(() => fake.emit({type: 'reconnecting'}))
@@ -898,6 +925,24 @@ describe('session screen (flag on)', () => {
     expect(mockGoBack).toHaveBeenCalled()
   })
 
+  it('n6: End is on the bound non-holder panel too', async () => {
+    mockHeld.here = false
+    const {getByTestId} = await toSheet('startReused')
+    expect(getByTestId('agentLiveEndOpenButton')).toBeTruthy()
+  })
+
+  it('m3 (P6): pushed over the open-session panel: “left open” copy, no /end', async () => {
+    const {getByTestId} = await toSheet('startReused')
+    act(() => {
+      mockNav.listeners.blur?.()
+    })
+    await flush()
+    expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+      'You left the live session. It’s still open on your other device and wasn’t ended. End it there, or open Live again to end it.',
+    )
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+  })
+
   it('ruling (563477989 R2): unbound, it can’t continue: “Couldn’t reconnect”, no Take over', async () => {
     mockKey.mockReset().mockResolvedValue(null)
     const {getByTestId, queryByTestId} = await toSheet('startReused')
@@ -976,7 +1021,7 @@ describe('session screen (flag on)', () => {
     await press(r.getByTestId('agentLiveConsentSubmit'))
     await flush()
     expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
-      'Live needs a server update that isn’t available yet, so this session was ended. Try again after the update.',
+      'Live needs a server update that isn’t available yet, so Live stopped on this device. Try again after the update.',
     )
   })
 

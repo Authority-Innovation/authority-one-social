@@ -4,7 +4,7 @@
  *
  * FLOW (design r2 §6). Nothing happens until the owner taps:
  *   idle → begin() (a tap) → mic access → POST /live/sessions (a session, no
- *   media) → [reuse: "continue here?"] → consent sheet → POST .../consent →
+ *   media) → [reuse: the open-session panel] → consent sheet → POST .../consent →
  *   proof of possession → join → mic on → connected.
  * The mic publishes only after the owner has decided every consent kind and
  * tapped Go live. A deep link to the screen starts nothing.
@@ -292,7 +292,9 @@ type Session = {
    * The runtime refused something for this session (a proof, a mint, a join:
    * R3's removal or a refused rejoin). Dispatch ruling on review 7f87024af:
    * after any refusal the client never sends /end on its own; only the
-   * owner's explicit End does.
+   * owner's explicit End does. Kept per ladder (PC ruling, round 347): a
+   * fresh ladder after an unrefused drop starts clean, so the 16 s give-up
+   * is an outage (with /end) only if no rung of THAT ladder was refused.
    */
   refused?: boolean
 }
@@ -414,7 +416,10 @@ export function createLiveSessionController({
       everywhere = false,
     }: {
       endRuntime: boolean
-      /** The owner's explicit End (button, or the back swipe that is End). */
+      /**
+       * The owner's explicit action (Dispatch ruling on 0dcc84ad3 P3): End,
+       * the back swipe, Cancel, leaving or covering the screen, sign-out.
+       */
       owner?: boolean
       /** The open-session panel's "End the live session" (every device). */
       everywhere?: boolean
@@ -663,16 +668,14 @@ export function createLiveSessionController({
       ((connFromRejoin && deps.nowS() - connectedAt < REJOIN_REFUSED_GRACE_S) ||
         (session?.reused && phase() === 'connecting'))
     ) {
-      if (session) session.refused = true
-      await rejoin(true)
+      await rejoin(true, true)
       return
     }
     if (e.reason === 'removed' && session && !session.key) {
       // An unbound token (no device key) can't replace the held participant;
       // the runtime removes it until the dead one leaves (R2 v2, up to ~30 s).
       // Keep trying: the next mint says if the session is really over.
-      session.refused = true
-      await rejoin()
+      await rejoin(false, true)
       return
     }
     if (e.reason === 'removed') {
@@ -718,11 +721,16 @@ export function createLiveSessionController({
 
   /**
    * After a drop: a fresh token from the owner's session, proven if bound,
-   * and a new join, with backoff; then give up and end. Never a resume.
+   * and a new join, with backoff; then give up (with /end only after an
+   * outage, never a refusal). Never a resume. `carry`: the same ladder goes
+   * on (a refused rung); otherwise a new ladder, whose refusal record starts
+   * as `refusal` (the drop that started it was a refusal, or not: P2).
    */
-  async function rejoin(carry = false) {
+  async function rejoin(carry = false, refusal = false) {
     const s = session
     if (!s || !room) return
+    if (!carry) s.refused = false
+    if (refusal) s.refused = true
     rejoining = true
     rejoinGen++
     set({phase: 'reconnecting'})
@@ -824,9 +832,10 @@ export function createLiveSessionController({
           rejoinLive = false
         }
       }
-      // Out of budget: "Couldn't reconnect", with /end (R2 rev 4). On a
-      // reused session not taken over, finish() leaves it running instead
-      // and says it is still open (review 563477989 R1, 7f87024af N1/N3).
+      // Out of budget: "Couldn't reconnect", with /end after an outage (R2
+      // rev 4). finish() reads this ladder's refusal record: after a refused
+      // rung, no /end and "refused_reconnect"; on a reused session not taken
+      // over, no /end and "still open" (563477989 R1, 7f87024af N1/N3).
       await fail('reconnect_failed')
     } finally {
       rejoining = false
@@ -1004,6 +1013,8 @@ export function createLiveSessionController({
         return
       }
       if (!res.data.admitted) {
+        // A consent refusal too (review 0dcc84ad3 P1): no /end.
+        s.refused = true
         await fail('consent_incomplete')
         return
       }
@@ -1127,11 +1138,12 @@ export function createLiveSessionController({
         return
       }
       // A session not created yet: `begin` ends it when the runtime answers.
-      // Declining "continue here?" leaves the open session alone: it may be
-      // live on the owner's other device.
+      // Leaving the open-session panel leaves the session alone: it may be
+      // live on the owner's other device (and says so, P6).
+      const onPanel = phase() === 'reuse'
       await finish(
-        {phase: 'ended', endReason: 'local'},
-        {endRuntime: phase() !== 'reuse', owner: true},
+        {phase: 'ended', endReason: onPanel ? 'left_open' : 'local'},
+        {endRuntime: !onPanel, owner: true},
       )
     },
 

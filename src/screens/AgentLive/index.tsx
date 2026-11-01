@@ -522,7 +522,7 @@ function Finished({
         case 'not_found':
           return l`Live isn’t available for this agent.`
         case 'server_outdated':
-          return l`Live needs a server update that isn’t available yet, so this session was ended. Try again after the update.`
+          return l`Live needs a server update that isn’t available yet, so Live stopped on this device. Try again after the update.`
         case 'reconnect_failed':
           return l`Couldn’t reconnect, so the live session has ended.`
         case 'agent_unavailable':
