@@ -17,12 +17,16 @@
  *
  * Not here yet: edge sources (step 6), playback (step 9), inviting guests.
  */
-import {useEffect, useRef, useState} from 'react'
+import {useCallback, useEffect, useRef, useState} from 'react'
 import {ActivityIndicator, Linking, View} from 'react-native'
 import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {msg} from '@lingui/core/macro'
 import {Trans, useLingui} from '@lingui/react/macro'
-import {useNavigation, usePreventRemove} from '@react-navigation/native'
+import {
+  useFocusEffect,
+  useNavigation,
+  usePreventRemove,
+} from '@react-navigation/native'
 
 import {
   type CommonNavigatorParams,
@@ -30,6 +34,10 @@ import {
   type NavigationProp,
 } from '#/lib/routes/types'
 import {useOwnedAgent, useOwnerAgentsQuery} from '#/state/queries/agents'
+import {
+  useEnableMinimalShellModeForScreen,
+  useSetDrawerSwipeDisabled,
+} from '#/state/shell'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {Camera_Stroke2_Corner0_Rounded as CameraIcon} from '#/components/icons/Camera'
@@ -174,6 +182,33 @@ function LiveSession({
   usePreventRemove(open || state.ending, () => {
     if (open) onEnd()
   })
+
+  // Live is immersive (review f2caccaa F1, found on the simulator): the
+  // app's drawer swipe won the back gesture and, like the tab bar, let the
+  // owner walk away from a running session with the mic on. With both off,
+  // the only way back is the native back swipe, which usePreventRemove turns
+  // into End.
+  useEnableMinimalShellModeForScreen()
+  const setDrawerSwipeDisabled = useSetDrawerSwipeDisabled()
+  useFocusEffect(
+    useCallback(() => {
+      setDrawerSwipeDisabled(true)
+      return () => setDrawerSwipeDisabled(false)
+    }, [setDrawerSwipeDisabled]),
+  )
+  // Anything that still pushes over Live while a session is open (a deep
+  // link, a notification) ends it: no mic left running off-screen. The panel
+  // shows the end when the owner comes back.
+  useEffect(
+    () =>
+      navigation.addListener('blur', () => {
+        const p = latest.current.phase
+        if (p !== 'idle' && p !== 'ended' && p !== 'failed') {
+          void controller?.end()
+        }
+      }),
+    [navigation, controller],
+  )
 
   if (loadFailed) {
     return (

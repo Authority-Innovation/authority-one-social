@@ -162,14 +162,35 @@ const mockNav: {
   canGoBack: boolean
   prevent: boolean
   onPrevented: () => void
-} = {canGoBack: true, prevent: false, onPrevented: () => {}}
+  listeners: Record<string, () => void>
+} = {canGoBack: true, prevent: false, onPrevented: () => {}, listeners: {}}
+const mockNavObject = {
+  navigate: (...args: unknown[]) => mockNavigate(...args),
+  goBack: () => mockGoBack(),
+  canGoBack: () => mockNav.canGoBack,
+  addListener: (event: string, handler: () => void) => {
+    mockNav.listeners[event] = handler
+    return () => {
+      delete mockNav.listeners[event]
+    }
+  },
+}
+const mockShell = {minimal: jest.fn(), drawerSwipeDisabled: [] as boolean[]}
+jest.mock('#/state/shell', () => ({
+  useEnableMinimalShellModeForScreen: () => mockShell.minimal(),
+  useSetDrawerSwipeDisabled: () => (v: boolean) =>
+    mockShell.drawerSwipeDisabled.push(v),
+}))
 const mockGoBack = jest.fn()
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: mockNavigate,
-    goBack: mockGoBack,
-    canGoBack: () => mockNav.canGoBack,
-  }),
+  useNavigation: () => mockNavObject,
+  // Runs like an effect: the screen is focused while mounted in these tests.
+  useFocusEffect: (cb: () => void | (() => void)) =>
+    jest
+      .requireActual<{
+        useEffect: (f: () => void | (() => void), deps: unknown[]) => void
+      }>('react')
+      .useEffect(cb, [cb]),
   // The latest usePreventRemove call, so a test can swipe back.
   usePreventRemove: (prevent: boolean, cb: () => void) => {
     mockNav.prevent = prevent
@@ -274,6 +295,9 @@ beforeEach(() => {
   mockOwned.agent = OWNED
   mockOwned.loading = false
   mockNav.canGoBack = true
+  mockNav.listeners = {}
+  mockShell.minimal.mockReset()
+  mockShell.drawerSwipeDisabled.length = 0
   mockNavigate.mockReset()
   mockGoBack.mockReset()
   mockToastShow.mockReset()
@@ -827,6 +851,38 @@ describe('session screen (flag on)', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+
+  it('F1: Live is immersive - minimal shell, drawer swipe off while focused, back on when it goes', async () => {
+    const {unmount} = await goLive()
+    expect(mockShell.minimal).toHaveBeenCalled()
+    expect(mockShell.drawerSwipeDisabled[0]).toBe(true)
+    rt.on('/live/sessions/:sid/end', 'end')
+    unmount()
+    await flush()
+    expect(
+      mockShell.drawerSwipeDisabled[mockShell.drawerSwipeDisabled.length - 1],
+    ).toBe(false)
+  })
+
+  it('F1: something pushed over a live session (blur) ends it; the panel shows it on return', async () => {
+    const {getByTestId} = await goLive()
+    rt.on('/live/sessions/:sid/end', 'end')
+    act(() => {
+      mockNav.listeners.blur?.()
+    })
+    await flush()
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(getByTestId('agentLiveEnded')).toBeTruthy()
+    expect(mockGoBack).not.toHaveBeenCalled()
+  })
+
+  it('F1: a blur before any session starts nothing', async () => {
+    await open()
+    act(() => {
+      mockNav.listeners.blur?.()
+    })
+    expect(rt.sent).toEqual([])
   })
 
   it('End with nothing to go back to opens the agent’s hub', async () => {
