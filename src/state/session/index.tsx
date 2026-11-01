@@ -27,6 +27,7 @@ import {
 } from './agent'
 import {type Action, getInitialState, reducer, type State} from './reducer'
 export {isSignupQueued} from './util'
+import {endOpenLiveSessions} from '#/features/agentLive/registry'
 import {addSessionDebugLog} from './logging'
 export type {SessionAccount} from '#/state/session/types'
 
@@ -157,6 +158,9 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   const login = useCallback<SessionApiContext['login']>(
     async (params, logContext) => {
       addSessionDebugLog({type: 'method:start', method: 'login'})
+      // Agent Live: start ending any open live session while this account's
+      // bearer is still current (no-op when none is open, or Live is dark).
+      endOpenLiveSessions()
       const signal = cancelPendingTask()
       const {agent, account} = await createAgentAndLogin(
         params,
@@ -186,6 +190,9 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   >(
     logContext => {
       addSessionDebugLog({type: 'method:start', method: 'logout'})
+      // Agent Live: start ending any open live session while this account's
+      // bearer is still current (no-op when none is open, or Live is dark).
+      endOpenLiveSessions()
       cancelPendingTask()
       const prevState = store.getState()
       store.dispatch({
@@ -222,6 +229,9 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   >(
     logContext => {
       addSessionDebugLog({type: 'method:start', method: 'logout'})
+      // Agent Live: start ending any open live session while this account's
+      // bearer is still current (no-op when none is open, or Live is dark).
+      endOpenLiveSessions()
       cancelPendingTask()
       const prevState = store.getState()
       store.dispatch({
@@ -258,6 +268,10 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         method: 'resumeSession',
         account: storedAccount,
       })
+      if (isSwitchingAccounts) {
+        // Agent Live: as on logout, end the old account's live session first.
+        endOpenLiveSessions()
+      }
       const signal = cancelPendingTask()
       const {agent, account} = await createAgentAndResume(
         storedAccount,

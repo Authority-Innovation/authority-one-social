@@ -41,6 +41,9 @@ const gate = require(path.join(ROOT, 'plugins/agentLive')) as {
   ): Record<string, unknown>
   addPodfileExclude(src: string): string
   addSettingsGradleExclude(src: string): string
+  addLiveUsageStrings(
+    infoPlist: Record<string, unknown>,
+  ): Record<string, unknown>
 }
 
 const ON = {EXPO_PUBLIC_AGENT_LIVE_ENABLED: 'true'}
@@ -97,12 +100,21 @@ describe('native build gate', () => {
     ])
   })
 
-  it('on: the LiveKit Expo plugin, the WebRTC config plugin and background audio', () => {
+  it('on: the LiveKit Expo plugin, the WebRTC config plugin, background audio and the live usage strings', () => {
     expect(gate.agentLivePlugins(ON)).toEqual([
       '@livekit/react-native-expo-plugin',
       '@config-plugins/react-native-webrtc',
       './plugins/agentLive/withAgentLiveBackgroundAudio.js',
+      './plugins/agentLive/withAgentLiveUsageStrings.js',
     ])
+  })
+
+  it('L6: the on-build camera and mic strings say what a live session does; other keys kept', () => {
+    const out = gate.addLiveUsageStrings({UIBackgroundModes: ['audio'], X: 1})
+    expect(out.NSCameraUsageDescription).toMatch(/live session/)
+    expect(out.NSCameraUsageDescription).toMatch(/agent see you/)
+    expect(out.NSMicrophoneUsageDescription).toMatch(/live sessions/)
+    expect(out).toMatchObject({UIBackgroundModes: ['audio'], X: 1})
   })
 
   it('off: every native LiveKit package is unlinked on both platforms', () => {

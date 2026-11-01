@@ -2,7 +2,7 @@
   "source": {
     "repo": "authority-one-runtime",
     "ref": "origin/agent-live/integration",
-    "commit": "3dd4ac1"
+    "commit": "4b08847"
   },
   "device": {
     "seedHex": "0707070707070707070707070707070707070707070707070707070707070707",
@@ -181,6 +181,18 @@
       "status": 404,
       "body": {
         "error": "not found"
+      }
+    },
+    "consentAgentUnavailable": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "admitted": true,
+        "missing": [],
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJBUEl0ZXN0cmVnaW9ua2V5Iiwic3ViIjoib3duZXI6bHNfMDFNNkE2RlQzS1JTVFZXWFlaMDEyMzQ1Njc6dXZ3eHl6MjM0NTY3YWJjZGVmZ2hpamtsbW4iLCJuYmYiOjE3OTM0OTEyMDAsImV4cCI6MTc5MzQ5MTI2MCwianRpIjoiMDFNNkE2RlQzVldYWVowMTIzNDU2Nzg5QUIiLCJ2aWRlbyI6eyJyb29tIjoibHZfdmdycW00NmwzcjcyYzZhdHg1aTJ4bDJiazRfaWprbG1ub3BxcnN0dXZ3eCIsInJvb21Kb2luIjp0cnVlLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoU291cmNlcyI6WyJtaWNyb3Bob25lIl0sImNhblN1YnNjcmliZSI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImhpZGRlbiI6ZmFsc2UsInJvb21DcmVhdGUiOmZhbHNlLCJyb29tTGlzdCI6ZmFsc2UsInJvb21BZG1pbiI6ZmFsc2UsInJvb21SZWNvcmQiOmZhbHNlLCJpbmdyZXNzQWRtaW4iOmZhbHNlfSwibWV0YWRhdGEiOiJ7XCJ2XCI6MSxcInNpZFwiOlwibHNfMDFNNkE2RlQzS1JTVFZXWFlaMDEyMzQ1NjdcIixcInJvbGVcIjpcIm93bmVyXCIsXCJqdGlcIjpcIjAxTTZBNkZUM1ZXWFlaMDEyMzQ1Njc4OUFCXCIsXCJjbmZcIjpcIjNhZTkwOTA1OWRiZmFlYjNmMjUwOWJlZTU5NzZiZjgwXCJ9IiwiYXR0cmlidXRlcyI6eyJhby5yb2xlIjoib3duZXIifX0.-wTy10uHjePh_Db6osyBzgz2CSm_9Sxd4k48oYABq04",
+        "expiresAt": 1793491260,
+        "popRequired": true,
+        "agent": "unavailable"
       }
     }
   },

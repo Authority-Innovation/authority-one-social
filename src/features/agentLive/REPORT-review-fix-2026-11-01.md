@@ -106,3 +106,29 @@ did not ask for now ends the session (it rejoined before), and USER_REJECTED
 ends it (it was treated as a network drop). The SDK's give-up under the
 no-retry policy carries no reason (livekit-client esm.mjs ~25360/35782), so it
 still rejoins. The binding names reasons through the real protocol enum.
+
+## Fix pass for review 679a9d48 (PC, on 44f69af93: NOT CLEAN)
+
+Report: `docs/REVIEW-ONE-APP-LIVE-44f69af93.md` on `review/44f69af93-one-live-r325`
+(28c7aa21c). Each fix has a test that fails on 95b57da75 (13 of 14 new
+controller tests fail there; the 14th passes trivially).
+
+| Finding | Fix |
+| --- | --- |
+| **H2** item 1, End leaves before `/end` | End keeps the screen on "Ending…" until `/end` answers, then goes back (`AgentLive/index.tsx`, `leaveWhenEnded`) |
+| H2 item 2, silent give-up | `endFailed` in state: "Couldn't end the session, so your agent may still be live", **Try again** (`retryEnd`) and **Leave anyway** |
+| H2 item 3, 401 / stale pinned bearer | The pinned bearer is refreshed on every call while its account is current (`api.ts` `bearerFor`), so after a sign-out the newest one goes out; a 401 is a visible failure, not a silent break; `not_found` counts as ended |
+| H2 item 4, no sign-out/switch hook | `registry.ts`: every started session registers; `state/session` calls `endOpenLiveSessions()` first in `logoutCurrentAccount`, `logoutEveryAccount`, `login` and an account-switch `resumeSession` (the bearer is read synchronously before tokens go). Source-order test `sessionHook.test.ts` |
+| **N1** final drop swallowed during a rejoin | While a rejoin finishes (mic, camera, blind), a drop of the NEW connection is kept and acted on (end on a FINAL reason, rejoin again on network), never ignored; also on the camera rejoin, which clears `cameraPending` |
+| **N2** consent `agent` ignored | `readConsent` keeps `agent`; anything but `started`/`running` fails with `agent_unavailable` ("Your agent couldn't start…"), no join, `/end` sent. Real reply in `live.json` (`consentAgentUnavailable`, a world whose job launcher refuses) |
+| **M2** "Continue here" promised a move | Copy no longer promises it; a continued session that is then removed reads "still open on your other device. End it there, then try again here" (`still_open_elsewhere`). The runtime side (`mayReplace` across device keys) is a runtime/product decision, not changed here |
+| **L6** camera string | On the Live build only, a new on-build plugin `withAgentLiveUsageStrings` sets camera and mic strings that say what a live session does; every other build keeps app.config.js's strings exactly (brand golden unchanged) |
+| LOW blind after rejoin | Re-sent on the new connection when on |
+| LOW `setCamera` after end | No token is minted once the session is over |
+
+Not changed: unbound-rejoin wait (LOW: no device key ⇒ `duplicate_identity`
+until `participant_left`; the app ends with "removed"), mid-session consent
+withdrawal (no control), L1, L2. Fixtures regenerated at runtime
+agent-live/integration 4b08847 (replies byte-identical to 3dd4ac1, plus the
+new N2 case). Prebuild gate re-run on the Mac (flag off: exclude, no source, no
+audio, original strings; flag on: source, audio, the live strings).

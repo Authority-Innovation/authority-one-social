@@ -53,8 +53,13 @@ export type LiveError =
 
 export type LiveResult<T> = {ok: true; data: T} | {ok: false; error: LiveError}
 
-/** The account a session belongs to, pinned when it starts. Memory only. */
-export type LiveAuth = {readonly ownerDid: string; readonly bearer: string}
+/**
+ * The account a session belongs to, pinned when it starts. Memory only. The
+ * bearer is refreshed on every call while that account is still the signed-in
+ * one, so after a sign-out or switch the last good one is used (review
+ * 679a9d48 H2 item 3).
+ */
+export type LiveAuth = {readonly ownerDid: string; bearer: string}
 
 /** A LiveKit join token for the owner (at most 60 s, single use). */
 export type LiveJoin = {
@@ -82,6 +87,12 @@ export type LiveConsentResult = {
   admitted: boolean
   missing: string[]
   join: LiveJoin | null
+  /**
+   * The agent's job: 'started' or 'running', else why it isn't
+   * ('not_started', 'not_configured', 'not_found', 'unavailable',
+   * 'no_consent'); null if the reply has none.
+   */
+  agent: string | null
 }
 
 export type LiveDecision = 'given' | 'refused'
@@ -254,7 +265,9 @@ function pubKeyOrNull(
 async function bearerFor(auth: LiveAuth): Promise<string> {
   try {
     if (persisted.get('session')?.currentAccount?.did === auth.ownerDid) {
-      return (await getAgentRuntimeAccessToken()) || auth.bearer
+      const current = await getAgentRuntimeAccessToken()
+      if (current) auth.bearer = current
+      return auth.bearer
     }
   } catch {}
   return auth.bearer
@@ -387,5 +400,6 @@ function readConsent(x: unknown): LiveConsentResult | null {
     admitted: x.admitted,
     missing: x.missing,
     join: x.admitted ? join : null,
+    agent: typeof x.agent === 'string' ? x.agent : null,
   }
 }

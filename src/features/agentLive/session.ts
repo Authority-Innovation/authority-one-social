@@ -56,6 +56,7 @@ import {
   requestMicAccess,
 } from './permissions'
 import {type DeviceKey, joinProof} from './pop'
+import {registerLiveSession} from './registry'
 import {REJOIN_BACKOFF_MS} from './rejoin'
 import {
   type LiveConnectionEvent,
@@ -81,6 +82,7 @@ export type LiveFailure =
   | 'consent_incomplete'
   | 'connect'
   | 'reconnect_failed'
+  | 'agent_unavailable'
 
 /** Why a session ended (the screen words it). */
 export type LiveEndReason =
@@ -89,6 +91,7 @@ export type LiveEndReason =
   | 'removed'
   | 'other_device'
   | 'consent_withdrawn'
+  | 'still_open_elsewhere'
 
 /** Something that went wrong without ending the session. */
 export type LiveNotice = 'camera_denied' | 'camera_failed' | 'action_failed'
@@ -112,6 +115,11 @@ export type LiveSessionState = {
   stage: StageRef | null
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
+  /**
+   * The runtime's /end gave up (review 679a9d48 H2): the agent may still be in
+   * the room. The screen says so and offers `retryEnd`.
+   */
+  endFailed: boolean
 }
 
 export const initialLiveSessionState: LiveSessionState = {
@@ -127,6 +135,7 @@ export const initialLiveSessionState: LiveSessionState = {
   blindOn: false,
   stage: null,
   ending: false,
+  endFailed: false,
 }
 
 export type LiveApi = {
@@ -190,6 +199,8 @@ export type LiveSessionController = {
   setBlind(on: boolean, src?: string): Promise<boolean>
   setCamera(on: boolean): Promise<void>
   end(): Promise<void>
+  /** Send the runtime's /end again after it gave up (`endFailed`). */
+  retryEnd(): Promise<void>
   /** The room, once joining (the screen renders its StageVideo). */
   room(): LiveRoom | null
 }
@@ -200,6 +211,8 @@ type Session = {
   auth: LiveAuth
   key: DeviceKey | null
   join: LiveJoin | null
+  /** The owner had it open already (maybe on another device). */
+  reused: boolean
 }
 
 export function createLiveSessionController({
@@ -223,6 +236,14 @@ export function createLiveSessionController({
   // A disconnect we asked for (end, the camera rejoin): not a drop.
   let leaving = false
   let rejoining = false
+  // A drop of the NEW connection while a rejoin is still finishing (mic,
+  // camera): kept, then acted on (review 679a9d48 N1), never swallowed.
+  let rejoinLive = false
+  let rejoinDrop: LiveConnectionEvent | null = null
+  // The session whose /end gave up, for retryEnd.
+  let endPending: Session | null = null
+  // The session ended or left: unregister from the sign-out hook.
+  let unregister: (() => void) | null = null
 
   const set = (patch: Partial<LiveSessionState>) => {
     state = {...state, ...patch}
@@ -236,22 +257,24 @@ export function createLiveSessionController({
 
   /** The runtime's /end, retried; the session is the account's that started it. */
   async function endOnRuntime(s: Session) {
-    set({ending: true})
+    set({ending: true, endFailed: false})
+    let ok = false
     for (let attempt = 0; ; attempt++) {
       const res = await api.endLiveSession({sid: s.sid, auth: s.auth})
-      // not_found: already gone (or never ours); signed_out: the runtime no
-      // longer accepts this account's bearer. Neither improves with a retry.
-      if (
-        res.ok ||
-        ['not_found', 'signed_out', 'invalid_argument'].includes(res.error.kind)
-      ) {
+      // not_found: already gone (or never ours), so it is ended. Anything
+      // else that won't improve with a retry is a failure the owner sees.
+      if (res.ok || res.error.kind === 'not_found') {
+        ok = true
         break
       }
+      if (['signed_out', 'invalid_argument'].includes(res.error.kind)) break
       const wait = END_RETRY_DELAYS_MS[attempt]
       if (wait === undefined) break
       await deps.sleep(wait)
     }
-    set({ending: false})
+    endPending = ok ? null : s
+    set({ending: false, endFailed: !ok})
+    if (ok) unregister?.()
   }
 
   /** Leave the room (if any) and stop listening to it. */
@@ -282,6 +305,7 @@ export function createLiveSessionController({
       stage: null,
       ...patch,
     })
+    if (!endRuntime || !s) unregister?.()
     // /end first: its bearer is read now, before any await.
     const runtime = endRuntime && s ? endOnRuntime(s) : Promise.resolve()
     ending = Promise.all([runtime, leaveRoom()]).then(() => {})
@@ -356,7 +380,13 @@ export function createLiveSessionController({
   }
 
   async function onConnection(e: LiveConnectionEvent) {
-    if (over() || rejoining) return
+    if (over()) return
+    if (rejoining) {
+      // Only the rejoin's own new connection counts; the old one's events
+      // (and our own leave in the swap) are expected.
+      if (rejoinLive && e.type === 'disconnected') rejoinDrop = e
+      return
+    }
     if (e.type === 'reconnecting') {
       if (phase() === 'connected') set({phase: 'reconnecting'})
       return
@@ -394,11 +424,34 @@ export function createLiveSessionController({
     }
     if (e.reason === 'removed') {
       // The runtime removed us (withdrawn consent, a revoked or refused token):
-      // it owns the session's state now.
-      await finish({phase: 'ended', endReason: 'removed'}, {endRuntime: false})
+      // it owns the session's state now. On a session continued from another
+      // device, the usual cause is that device still holding it (review
+      // 679a9d48 M2: a different device key can't replace it).
+      await finish(
+        {
+          phase: 'ended',
+          endReason: session?.reused ? 'still_open_elsewhere' : 'removed',
+        },
+        {endRuntime: false},
+      )
       return
     }
     await rejoin()
+  }
+
+  /**
+   * The new connection dropped while the rejoin was finishing: act on that
+   * drop now (end, or rejoin again). True when there was one.
+   */
+  async function takeRejoinDrop(): Promise<boolean> {
+    const d = rejoinDrop
+    if (!d) return false
+    rejoinDrop = null
+    rejoinLive = false
+    rejoining = false
+    if (state.cameraPending) set({cameraPending: false})
+    await onConnection(d)
+    return true
   }
 
   /**
@@ -442,18 +495,28 @@ export function createLiveSessionController({
         // A fresh token, never the one in hand: a join token is single use.
         try {
           await swap(s, t.data)
-          if (over()) return
+          rejoinLive = true
+          if (over() || (await takeRejoinDrop())) return
           await room.setMicrophoneEnabled(state.micOn)
+          if (over() || (await takeRejoinDrop())) return
           if (wantCamera) await room.setCameraEnabled(true)
+          if (over() || (await takeRejoinDrop())) return
+          await resendBlind()
+          if (over() || (await takeRejoinDrop())) return
+          rejoinLive = false
           set({phase: 'connected'})
           return
         } catch {
           leaving = false
+          if (over() || (await takeRejoinDrop())) return
+          rejoinLive = false
         }
       }
       await fail('reconnect_failed')
     } finally {
       rejoining = false
+      rejoinLive = false
+      rejoinDrop = null
     }
   }
 
@@ -485,6 +548,19 @@ export function createLiveSessionController({
     set({phase: 'connected', micOn: true})
   }
 
+  /** A new connection carries no state: blind again if the owner had it on. */
+  async function resendBlind() {
+    if (!state.blindOn || !room) return
+    const msg = blindMessage(true, ALL_SOURCES)
+    if (!msg) return
+    await room
+      .publishData(encodeBlindMessage(msg), {
+        topic: BLIND_TOPIC,
+        reliable: true,
+      })
+      .catch(() => set({notice: 'action_failed'}))
+  }
+
   async function afterStart() {
     const s = session
     if (!s) return
@@ -501,7 +577,7 @@ export function createLiveSessionController({
     await rejoin()
   }
 
-  return {
+  const controller: LiveSessionController = {
     async begin() {
       if (phase() !== 'idle') return
       set({phase: 'starting', error: null})
@@ -537,7 +613,8 @@ export function createLiveSessionController({
         recordPolicy,
         reused,
       } = res.data
-      session = {sid, wsUrl, auth, key, join: j}
+      session = {sid, wsUrl, auth, key, join: j, reused}
+      unregister = registerLiveSession(() => controller.end())
       // Left before the runtime answered: end the session it just made (not a
       // reused one, which may be live on another device).
       if (phase() !== 'starting') {
@@ -582,6 +659,12 @@ export function createLiveSessionController({
       }
       if (!res.data.join) {
         await fail('unavailable')
+        return
+      }
+      // The agent's job didn't start (review 679a9d48 N2): don't join an
+      // agentless room and wait for a stage that never comes.
+      if (res.data.agent !== 'started' && res.data.agent !== 'running') {
+        await fail('agent_unavailable')
         return
       }
       s.join = res.data.join
@@ -633,8 +716,8 @@ export function createLiveSessionController({
         if (!over()) set({cameraPending: false, notice: 'camera_denied'})
         return
       }
-      if (!live() && !over()) {
-        set({cameraPending: false})
+      if (!live()) {
+        if (!over()) set({cameraPending: false})
         return
       }
       const res = await freshJoin(s, true)
@@ -656,14 +739,20 @@ export function createLiveSessionController({
       rejoining = true
       try {
         await swap(s, res.data)
-        if (over()) return
+        rejoinLive = true
+        if (over() || (await takeRejoinDrop())) return
         await r.setMicrophoneEnabled(state.micOn)
-        if (over()) return
+        if (over() || (await takeRejoinDrop())) return
         await r.setCameraEnabled(true)
+        if (over() || (await takeRejoinDrop())) return
+        await resendBlind()
+        if (over() || (await takeRejoinDrop())) return
+        rejoinLive = false
       } catch {
         leaving = false
+        if (over() || (await takeRejoinDrop())) return
+        rejoinLive = false
         rejoining = false
-        if (over()) return
         set({cameraPending: false, notice: 'camera_failed'})
         // Back without the camera; this ends the session if it can't.
         await rejoinWithoutCamera()
@@ -688,8 +777,15 @@ export function createLiveSessionController({
       )
     },
 
+    async retryEnd() {
+      const s = endPending
+      if (!s || state.ending) return
+      await endOnRuntime(s)
+    },
+
     room: () => room,
   }
+  return controller
 }
 
 class JoinError extends Error {
