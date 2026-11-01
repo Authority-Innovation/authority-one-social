@@ -110,6 +110,30 @@ function withAgentLiveBackgroundAudio(config) {
   return config
 }
 
+/**
+ * The camera and microphone strings say what a live session does with them
+ * (review L6; App Review 5.1.1 for a TestFlight build with Live on). On-build
+ * only: other builds keep app.config.js's strings exactly.
+ */
+const LIVE_CAMERA_USAGE =
+  'Used for profile pictures, posts and other content, and, when you turn it on in a live session, to let your agent see you.'
+const LIVE_MICROPHONE_USAGE =
+  'Used to talk to your agent by voice, including in live sessions, and for posts and other kinds of content.'
+
+function addLiveUsageStrings(infoPlist = {}) {
+  return {
+    ...infoPlist,
+    NSCameraUsageDescription: LIVE_CAMERA_USAGE,
+    NSMicrophoneUsageDescription: LIVE_MICROPHONE_USAGE,
+  }
+}
+
+function withAgentLiveUsageStrings(config) {
+  config.ios = config.ios ?? {}
+  config.ios.infoPlist = addLiveUsageStrings(config.ios.infoPlist)
+  return config
+}
+
 /** The app.config.js plugin entries for this build. */
 function agentLivePlugins(env = process.env) {
   if (!isAgentLiveEnabled(env)) {
@@ -121,6 +145,7 @@ function agentLivePlugins(env = process.env) {
     // keeps existing ones); Android gets CAMERA, RECORD_AUDIO and the rest.
     '@config-plugins/react-native-webrtc',
     './plugins/agentLive/withAgentLiveBackgroundAudio.js',
+    './plugins/agentLive/withAgentLiveUsageStrings.js',
   ]
 }
 
@@ -141,7 +166,11 @@ module.exports = {
   agentLiveRNDependencies,
   withAgentLiveExcluded,
   withAgentLiveBackgroundAudio,
+  withAgentLiveUsageStrings,
   addBackgroundAudioMode,
+  addLiveUsageStrings,
+  LIVE_CAMERA_USAGE,
+  LIVE_MICROPHONE_USAGE,
   addPodfileExclude,
   addSettingsGradleExclude,
 }
