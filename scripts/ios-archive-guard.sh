@@ -26,6 +26,14 @@
 # Required keys default to EXPO_PUBLIC_DISABLE_AGE_ASSURANCE and EXPO_PUBLIC_ENV;
 # override with AO_ARCHIVE_REQUIRED_KEYS="KEY_A KEY_B".
 #
+# Agent Live (pre): the LiveKit SDK and the iOS 'audio' background mode ship
+# only in a build with EXPO_PUBLIC_AGENT_LIVE_ENABLED=true (plugins/agentLive).
+# `pre` refuses an archive whose ios/ was prebuilt with the flag on (an 'audio'
+# background mode, LiveKit pods, or no LiveKit autolinking exclude) while the
+# flag for this archive (the environment, else .env) is not exactly 'true'.
+# An archive WITH the flag on is refused too, unless
+# AO_ARCHIVE_ALLOW_AGENT_LIVE=1 says it is meant to be a Live build.
+#
 # Only key NAMES are ever printed - never values.
 #
 # Exit codes: 0 ok, 1 refused, 2 usage error.
@@ -38,7 +46,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
 usage() {
-  sed -n '3,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -70,6 +78,66 @@ key_state() {
   ' "$file"
 }
 
+# The value of KEY in the env file, for comparisons only. Never printed.
+key_value() {
+  local file="$1" key="$2"
+  awk -v key="$key" '
+    {
+      line = $0
+      sub(/^[ \t]*export[ \t]+/, "", line)
+      if (line ~ /^[ \t]*#/) next
+      eq = index(line, "=")
+      if (eq == 0) next
+      k = substr(line, 1, eq - 1)
+      gsub(/[ \t]/, "", k)
+      if (k != key) next
+      v = substr(line, eq + 1)
+      sub(/[ \t]+#.*$/, "", v)
+      gsub(/^[ \t"'\'']+|[ \t"'\'']+$/, "", v)
+      out = v
+    }
+    END { print out }
+  ' "$file"
+}
+
+# Agent Live: the native project must match the flag this archive is built with.
+check_agent_live() {
+  local dir="$1" env_file="$2"
+  local flag="${EXPO_PUBLIC_AGENT_LIVE_ENABLED-}"
+  [[ -n "$flag" ]] || flag="$(key_value "$env_file" EXPO_PUBLIC_AGENT_LIVE_ENABLED)"
+
+  if [[ "$flag" == "true" ]]; then
+    [[ "${AO_ARCHIVE_ALLOW_AGENT_LIVE:-}" == "1" ]] ||
+      refuse "EXPO_PUBLIC_AGENT_LIVE_ENABLED is true for this archive. Agent Live is a development-live build only; set AO_ARCHIVE_ALLOW_AGENT_LIVE=1 if this archive is meant to be one."
+    return 0
+  fi
+
+  local ios="$dir/ios"
+  [[ -d "$ios" ]] || return 0
+  local problems=()
+  local plist
+  for plist in "$ios"/*/Info.plist; do
+    [[ -f "$plist" ]] || continue
+    # The <array> after the UIBackgroundModes key (XML plist, as prebuild writes it).
+    if awk '
+      /<key>UIBackgroundModes<\/key>/ { inmodes = 1; next }
+      inmodes && /<\/array>/ { inmodes = 0 }
+      inmodes && /<string>audio<\/string>/ { found = 1 }
+      END { exit found ? 0 : 1 }
+    ' "$plist"; then
+      problems+=("${plist#$dir/} declares the 'audio' background mode")
+    fi
+  done
+  if [[ -f "$ios/Podfile" ]] && ! grep -q "use_expo_modules!(exclude: \[.*@livekit/react-native" "$ios/Podfile"; then
+    problems+=("ios/Podfile has no LiveKit autolinking exclude")
+  fi
+  if [[ -f "$ios/Podfile.lock" ]] && grep -Eq 'LiveKitWebRTC|livekit-react-native' "$ios/Podfile.lock"; then
+    problems+=("ios/Podfile.lock links LiveKit")
+  fi
+  ((${#problems[@]} == 0)) ||
+    refuse "ios/ was prebuilt for Agent Live but this archive has it off: $(IFS='; '; echo "${problems[*]}"). Re-run prebuild (--clean) and pod install with the flag off."
+}
+
 cmd_pre() {
   local dir="${1:-$repo_root}"
   local env_file="$dir/.env"
@@ -87,7 +155,9 @@ cmd_pre() {
   ((${#missing[@]} == 0)) || refuse ".env lacks: ${missing[*]}"
   ((${#empty[@]} == 0)) || refuse ".env has empty values for: ${empty[*]}"
 
-  echo "ios-archive-guard: pre OK - $env_file sets ${REQUIRED_KEYS[*]}"
+  check_agent_live "$dir" "$env_file"
+
+  echo "ios-archive-guard: pre OK - $env_file sets ${REQUIRED_KEYS[*]}; Agent Live native state matches the flag"
 }
 
 cmd_post() {
