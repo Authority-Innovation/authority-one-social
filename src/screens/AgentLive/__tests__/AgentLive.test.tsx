@@ -163,11 +163,21 @@ const mockNav: {
   prevent: boolean
   onPrevented: () => void
   listeners: Record<string, () => void>
-} = {canGoBack: true, prevent: false, onPrevented: () => {}, listeners: {}}
+  gesture: boolean[]
+} = {
+  canGoBack: true,
+  prevent: false,
+  onPrevented: () => {},
+  listeners: {},
+  gesture: [],
+}
 const mockNavObject = {
   navigate: (...args: unknown[]) => mockNavigate(...args),
   goBack: () => mockGoBack(),
   canGoBack: () => mockNav.canGoBack,
+  setOptions: (o: {gestureEnabled?: boolean}) => {
+    if (o.gestureEnabled !== undefined) mockNav.gesture.push(o.gestureEnabled)
+  },
   addListener: (event: string, handler: () => void) => {
     mockNav.listeners[event] = handler
     return () => {
@@ -296,6 +306,7 @@ beforeEach(() => {
   mockOwned.loading = false
   mockNav.canGoBack = true
   mockNav.listeners = {}
+  mockNav.gesture = []
   mockShell.minimal.mockReset()
   mockShell.drawerSwipeDisabled.length = 0
   mockNavigate.mockReset()
@@ -851,6 +862,32 @@ describe('session screen (flag on)', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+
+  it('F1: the back swipe is off while a session is open or ending, on again after', async () => {
+    const r = await open()
+    expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(true)
+    rt.on('/live/sessions', 'startAwaitingConsent')
+    await press(r.getByTestId('agentLiveBeginButton'))
+    expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(false)
+    let release!: () => void
+    const gate = new Promise<void>(res => (release = res))
+    const real = rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname.endsWith('/end')) await gate
+      return real(u, i)
+    }
+    rt.on('/live/sessions/:sid/end', 'end')
+    mockNav.canGoBack = false
+    await press(r.getByTestId('agentLiveConsentCancel'))
+    expect(r.getByTestId('agentLiveEnding')).toBeTruthy()
+    expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(false)
+    release()
+    await flush()
+    expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(true)
   })
 
   it('F1: Live is immersive - minimal shell, drawer swipe off while focused, back on when it goes', async () => {

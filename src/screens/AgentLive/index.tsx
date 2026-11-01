@@ -182,6 +182,14 @@ function LiveSession({
   usePreventRemove(open || state.ending, () => {
     if (open) onEnd()
   })
+  // The back swipe itself is off while a session is open or ending: on iOS 26
+  // the native content-pop gesture is not stopped by usePreventRemove's
+  // preventNativeDismiss (seen on the simulator: the swipe left the screen and
+  // /end only went out from the unmount). End is the visible way out.
+  const blockGesture = open || state.ending
+  useEffect(() => {
+    navigation.setOptions({gestureEnabled: !blockGesture})
+  }, [navigation, blockGesture])
 
   // Live is immersive (review f2caccaa F1, found on the simulator): the
   // app's drawer swipe won the back gesture and, like the tab bar, let the
