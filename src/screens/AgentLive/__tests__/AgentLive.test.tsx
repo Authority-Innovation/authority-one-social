@@ -554,6 +554,33 @@ describe('session screen (flag on)', () => {
     expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(text)
   })
 
+  it('a drop it can’t recover from: “Reconnecting”, then “reconnect failed” after the backoff', async () => {
+    const {getByTestId, queryByTestId, fake} = await goLive()
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/token', e503, e503, e503, e503)
+      rt.on('/live/sessions/:sid/end', 'end')
+      act(() => fake.drop('network'))
+      await flush()
+      expect(getByTestId('agentLiveReconnecting')).toBeTruthy()
+      expect(queryByTestId('agentLiveMicIndicator')).toBeNull()
+      for (const ms of [1000, 2000, 4000, 8000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveFailed')).toBeTruthy()
+      expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+        'Couldn’t reconnect, so the live session has ended.',
+      )
+      expect(rt.to('/live/sessions/:sid/token')).toHaveLength(4)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('reconnecting shows on the stage and the controls are off', async () => {
     const {getByTestId, queryByTestId, fake} = await goLive()
     act(() => fake.emit({type: 'reconnecting'}))

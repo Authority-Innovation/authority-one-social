@@ -341,6 +341,8 @@ function Finished({
           return l`You’re signed out. Sign in again to go live.`
         case 'not_found':
           return l`Live isn’t available for this agent.`
+        case 'reconnect_failed':
+          return l`Couldn’t reconnect, so the live session has ended.`
         case 'consent_incomplete':
         case 'consent_required':
           return l`Your agent can’t join until every choice is made.`

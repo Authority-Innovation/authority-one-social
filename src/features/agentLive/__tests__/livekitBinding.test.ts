@@ -45,7 +45,9 @@ class MockRoom {
     unpublishTrack: jest.fn(() => Promise.resolve()),
     publishData: jest.fn(() => Promise.resolve()),
   }
-  constructor() {
+  options: {reconnectPolicy?: {nextRetryDelayInMs(c: object): number | null}}
+  constructor(options: MockRoom['options']) {
+    this.options = options
     mockRooms.push(this)
   }
   on(e: string, h: Handler) {
@@ -93,7 +95,11 @@ jest.mock('livekit-client', () => ({
 }))
 
 import {type LiveConnectionEvent} from '../room'
-import {createLiveKitRoom, disconnectReasonOf} from '../room/livekit'
+import {
+  createLiveKitRoom,
+  disconnectReasonOf,
+  NO_SDK_RECONNECT,
+} from '../room/livekit'
 
 const SID = 'ls_01JBX8M4Q2T7V9WZ3K5N6P8R0S'
 
@@ -180,6 +186,16 @@ describe('subscriptions [L6]', () => {
 })
 
 describe('connection', () => {
+  it('the SDK never resumes or reconnects on its own (join gate R1/R2)', () => {
+    const {room} = make()
+    expect(room.options.reconnectPolicy).toBe(NO_SDK_RECONNECT)
+    for (const retryCount of [0, 1, 5]) {
+      expect(
+        NO_SDK_RECONNECT.nextRetryDelayInMs({retryCount, elapsedMs: 0}),
+      ).toBeNull()
+    }
+  })
+
   it.each([
     [1, 'client'],
     [2, 'duplicate_identity'],

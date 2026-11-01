@@ -71,3 +71,26 @@ the room). It is now read with the stage.
 - LOW findings not in scope: Sentry breadcrumb scrub (L1), usage strings (L6).
   L3 (End with no back stack opens the agent's hub), L4 (notices shown) and L5
   (stale 5 min comments) are fixed along the way.
+
+## Addendum (2026-11-02): join gate R2
+
+Dispatch: the revised join gate (runtime `docs/agent-live-join-gate-revised` @
+adeeadb, R1) refuses LiveKit resumes and answers `/rtc/v1` with 404. Built to
+R2 in that design doc; the exact contract promised from session local_9cc13bda
+was not yet in AUTONOMOUS-LOG and that session could not be reached, so this
+follows the doc and must be re-checked against it when it lands.
+
+- `room/livekit.tsx`: `reconnectPolicy` = `NO_SDK_RECONNECT` (always null), so
+  the SDK never sends `reconnect=1` and never re-uses the single-use token for
+  a full reconnect; a loss is Disconnected at once.
+- `session.ts`: every rejoin mints a fresh token (`mintJoin`, never the token
+  in hand), proves it if bound, joins; backoff `REJOIN_BACKOFF_MS` = 1, 2, 4,
+  8 s, then `reconnect_failed` ("Couldn't reconnect, so the live session has
+  ended."), the room left and `/end` sent.
+- `/rtc/v1` 404: handled by livekit-client 2.23.0 itself (ServiceNotFound from
+  `/rtc/v1/validate` → the same join on `/rtc`), as long as the 404 body doesn't
+  say "requested room does not exist" (R1 item 3). `sdkContract.test.ts` pins
+  that and the null-policy behaviour to the installed SDK.
+- Not verified: the real SDK against an R1 edge on a device (the design's own
+  open item). R3 (same-session identity replacement) is not needed by this app,
+  because its rejoin tokens are bound and proven with the same key.
