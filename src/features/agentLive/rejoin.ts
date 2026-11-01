@@ -18,7 +18,13 @@
  */
 import {type LiveDisconnectReason} from './room/types'
 
-/** LiveKit's departure_timeout (livekit-server 1.9.1 default, seconds): how long a dead participant is held. */
+/**
+ * The room's departure_timeout the runtime sets (seconds). Measured by the
+ * runtime on livekit-server 1.9.1 (live-agent/src/rejoin.js @ 9fc23bd): it is
+ * room-level (the room closes this long after its last participant leaves),
+ * not a per-participant hold; how long an active participant is held is not
+ * measured. The backoff still outlasts it.
+ */
 export const LIVEKIT_DEPARTURE_TIMEOUT_S = 30
 
 /**

@@ -12,6 +12,7 @@ export {useSetThemePrefs, useThemePrefs} from './color-mode'
 export {useIsDrawerOpen, useSetDrawerOpen} from './drawer-open'
 export {
   useIsDrawerSwipeDisabled,
+  useLockDrawerSwipe,
   useSetDrawerSwipeDisabled,
 } from './drawer-swipe-disabled'
 export {

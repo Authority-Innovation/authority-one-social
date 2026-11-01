@@ -36,7 +36,7 @@ import {
 import {useOwnedAgent, useOwnerAgentsQuery} from '#/state/queries/agents'
 import {
   useEnableMinimalShellModeForScreen,
-  useSetDrawerSwipeDisabled,
+  useLockDrawerSwipe,
 } from '#/state/shell'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
@@ -193,19 +193,23 @@ function LiveSession({
   useEffect(() => {
     navigation.setOptions({gestureEnabled: !blockGesture})
   }, [navigation, blockGesture])
+  // Never leave the swipe off behind us (review d8f8f16e H4): the route can
+  // outlive the session view.
+  useEffect(
+    () => () => navigation.setOptions({gestureEnabled: true}),
+    [navigation],
+  )
 
   // Live is immersive (review f2caccaa F1, found on the simulator): the
   // app's drawer swipe won the back gesture and, like the tab bar, let the
   // owner walk away from a running session with the mic on. With both off
   // and the back swipe off (above), End is the way out.
   useEnableMinimalShellModeForScreen()
-  const setDrawerSwipeDisabled = useSetDrawerSwipeDisabled()
-  useFocusEffect(
-    useCallback(() => {
-      setDrawerSwipeDisabled(true)
-      return () => setDrawerSwipeDisabled(false)
-    }, [setDrawerSwipeDisabled]),
-  )
+  // A counted lock, not the plain flag (review d8f8f16e H3): a Pager screen
+  // underneath clears the flag in its blur cleanup, which can land after
+  // this screen's focus.
+  const lockDrawerSwipe = useLockDrawerSwipe()
+  useFocusEffect(useCallback(() => lockDrawerSwipe(), [lockDrawerSwipe]))
   // Anything that still pushes over Live while a session is open (a deep
   // link, a notification) ends it: no mic left running off-screen. The panel
   // shows the end when the owner comes back.
@@ -252,6 +256,7 @@ function LiveSession({
       return (
         <Reuse
           displayName={displayName}
+          canTakeOver={state.canTakeOver}
           onContinue={() => void controller?.continueHere()}
           onCancel={onEnd}
         />
@@ -393,12 +398,21 @@ function Intro({
   )
 }
 
+/**
+ * The server says a session with this agent is open (the start reply's
+ * `reused`). Ruling (review 7919b5692 item 8): "Still open on your other
+ * device", with "Take over here" only where R3 allows it (a device key: the
+ * same key, proven, replaces the held participant). Without a key nothing
+ * here can replace it, so the owner ends it there.
+ */
 function Reuse({
   displayName,
+  canTakeOver = false,
   onContinue,
   onCancel,
 }: {
   displayName: string
+  canTakeOver?: boolean
   onContinue: () => void
   onCancel: () => void
 }) {
@@ -406,23 +420,37 @@ function Reuse({
   return (
     <Panel testID="agentLiveReuse">
       <AgentName displayName={displayName} />
-      <Text style={[a.text_md, {color: ON_STAGE_TEXT}]}>
-        <Trans>
-          A live session with this agent is already open, maybe on another
-          device. You can continue it here once it’s closed there; if it’s still
-          open on the other device, end it there first.
-        </Trans>
+      <Text
+        testID="agentLiveStillOpen"
+        style={[a.text_md, a.font_bold, {color: ON_STAGE_TEXT}]}>
+        <Trans>Still open on your other device</Trans>
       </Text>
-      <Button
-        testID="agentLiveContinueHereButton"
-        label={l`Continue the live session here`}
-        color="primary"
-        size="large"
-        onPress={onContinue}>
-        <ButtonText>
-          <Trans>Continue here</Trans>
-        </ButtonText>
-      </Button>
+      <Text style={[a.text_md, {color: ON_STAGE_TEXT}]}>
+        {canTakeOver ? (
+          <Trans>
+            A live session with this agent is open. Take it over here, or end it
+            on the other device first. If that device is still connected, taking
+            over may not work.
+          </Trans>
+        ) : (
+          <Trans>
+            A live session with this agent is open. End it on the other device,
+            then try again here.
+          </Trans>
+        )}
+      </Text>
+      {canTakeOver ? (
+        <Button
+          testID="agentLiveContinueHereButton"
+          label={l`Take the live session over here`}
+          color="primary"
+          size="large"
+          onPress={onContinue}>
+          <ButtonText>
+            <Trans>Take over here</Trans>
+          </ButtonText>
+        </Button>
+      ) : null}
       <Button
         testID="agentLiveNotNowButton"
         label={l`Leave the open session where it is`}
@@ -430,7 +458,7 @@ function Reuse({
         size="large"
         onPress={onCancel}>
         <ButtonText>
-          <Trans>Not now</Trans>
+          {canTakeOver ? <Trans>Not now</Trans> : <Trans>Done</Trans>}
         </ButtonText>
       </Button>
     </Panel>
@@ -481,8 +509,6 @@ function Finished({
         return l`You were removed from the live session.`
       case 'other_device':
         return l`This live session moved to another device.`
-      case 'still_open_elsewhere':
-        return l`This live session is still open on your other device. End it there, then try again here.`
       case 'consent_withdrawn':
         return l`The live session stopped because consent was withdrawn.`
       case 'ended_elsewhere':

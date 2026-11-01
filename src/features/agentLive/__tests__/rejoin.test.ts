@@ -1,6 +1,6 @@
 /**
  * The One app's rejoin rule is the runtime workers' rule
- * (live-agent/src/rejoin.js, feat/agent-live-r2-workers-v2 @ ac11bd0): the same
+ * (live-agent/src/rejoin.js, feat/agent-live-r2-workers-v2 @ 9fc23bd): the same
  * backoff and the same FINAL reasons. Change both together.
  */
 import {describe, expect, it, jest} from '@jest/globals'
@@ -20,7 +20,7 @@ const DisconnectReason = jest.requireActual<{
 }>('@livekit/protocol').DisconnectReason
 const ENUM = DisconnectReason as Record<number, string>
 
-describe('the runtime workers’ rule (R2 v2, ac11bd0)', () => {
+describe('the runtime workers’ rule (R2 rev 4, 9fc23bd)', () => {
   it('backoff 1, 2, 4, 8, 16 s: 31 s, longer than LiveKit’s 30 s departure timeout', () => {
     expect(REJOIN_BACKOFF_MS).toEqual([1000, 2000, 4000, 8000, 16000])
     expect(REJOIN_BACKOFF_MS.reduce((a, b) => a + b, 0) / 1000).toBeGreaterThan(

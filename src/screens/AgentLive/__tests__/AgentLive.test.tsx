@@ -185,11 +185,20 @@ const mockNavObject = {
     }
   },
 }
-const mockShell = {minimal: jest.fn(), drawerSwipeDisabled: [] as boolean[]}
+const mockShell = {
+  minimal: jest.fn(),
+  drawerSwipeDisabled: [] as boolean[],
+  // Stable, like the real context value: a lock pushes true, its release false.
+  lock: () => {
+    mockShell.drawerSwipeDisabled.push(true)
+    return () => {
+      mockShell.drawerSwipeDisabled.push(false)
+    }
+  },
+}
 jest.mock('#/state/shell', () => ({
   useEnableMinimalShellModeForScreen: () => mockShell.minimal(),
-  useSetDrawerSwipeDisabled: () => (v: boolean) =>
-    mockShell.drawerSwipeDisabled.push(v),
+  useLockDrawerSwipe: () => mockShell.lock,
 }))
 const mockGoBack = jest.fn()
 jest.mock('@react-navigation/native', () => ({
@@ -250,6 +259,7 @@ import {
   reply,
   tokenOf,
 } from '#/features/agentLive/__fixtures__/runtimeLive'
+import LEGACY from '#/features/agentLive/__fixtures__/legacy-ac11bd0.json'
 import {getDeviceKey} from '#/features/agentLive/deviceKey'
 import {GoLiveButton} from '#/features/agentLive/GoLiveButton'
 import {
@@ -858,22 +868,42 @@ describe('session screen (flag on)', () => {
     expect(fake.connects()).toEqual([])
   })
 
-  it('M2: a continued session still open on the other device says so', async () => {
+  it('ruling 7919b5692: the server says it is open: “Still open on your other device”, with Take over here', async () => {
+    const {getByTestId} = await toSheet('startReused')
+    expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
+      'Still open on your other device',
+    )
+    expect(getByTestId('agentLiveContinueHereButton')).toHaveProp(
+      'accessibilityLabel',
+      'Take the live session over here',
+    )
+  })
+
+  it('ruling 7919b5692: without a device key there is no Take over here (R3); Done leaves it running', async () => {
+    mockKey.mockReset().mockResolvedValue(null)
+    const {getByTestId, queryByTestId} = await toSheet('startReused')
+    expect(getByTestId('agentLiveStillOpen')).toBeTruthy()
+    expect(queryByTestId('agentLiveContinueHereButton')).toBeNull()
+    await press(getByTestId('agentLiveNotNowButton'))
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    expect(mockGoBack).toHaveBeenCalled()
+  })
+
+  it('J9: an old server shows the “needs a server update” copy', async () => {
     const fake = createFakeRoom()
     mockLoad.mockResolvedValue(() => fake.room)
     const r = screen()
     await flush()
-    rt.on('/live/sessions', 'startReused')
+    rt.on('/live/sessions', 'startAwaitingConsent')
     await press(r.getByTestId('agentLiveBeginButton'))
-    await press(r.getByTestId('agentLiveContinueHereButton'))
     rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-    rt.on('/live/join/prove', 'proveExchange')
+    rt.on('/live/join/prove', LEGACY.proveOk)
+    rt.on('/live/sessions/:sid/end', 'end')
     await press(r.getByTestId('agentLiveConsent-ai_process'))
     await press(r.getByTestId('agentLiveConsentSubmit'))
-    act(() => fake.drop('removed'))
     await flush()
     expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
-      'This live session is still open on your other device. End it there, then try again here.',
+      'Live needs a server update that isn’t available yet, so this session was ended. Try again after the update.',
     )
   })
 
@@ -1019,6 +1049,14 @@ describe('session screen (flag on)', () => {
     expect(
       mockShell.drawerSwipeDisabled[mockShell.drawerSwipeDisabled.length - 1],
     ).toBe(false)
+  })
+
+  it('H4: the back swipe is on again when the screen goes, even mid-session', async () => {
+    const {unmount} = await goLive()
+    expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(false)
+    rt.on('/live/sessions/:sid/end', 'end')
+    unmount()
+    expect(mockNav.gesture[mockNav.gesture.length - 1]).toBe(true)
   })
 
   it('F1: something pushed over a live session (blur) ends it; the panel shows it on return', async () => {

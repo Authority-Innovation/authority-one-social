@@ -52,6 +52,7 @@ import {
   SID,
   tokenOf,
 } from '../__fixtures__/runtimeLive'
+import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {
   b64urlDecode,
   deviceKeyFromSeed,
@@ -493,7 +494,7 @@ describe('H1: the media connection', () => {
     const env = setup()
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', LEGACY.proveOk)
     env.rt.on('/live/sessions/:sid/end', 'end')
     await env.c.submitConsent({ai_process: true, transcribe: true})
     await flush()
@@ -508,7 +509,7 @@ describe('H1: the media connection', () => {
     const env = setup()
     await toLive(env)
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
-    env.rt.on('/live/join/prove', 'proveOk')
+    env.rt.on('/live/join/prove', LEGACY.proveOk)
     env.rt.on('/live/sessions/:sid/end', 'end')
     env.fake.drop('network')
     await flush(400)
@@ -605,10 +606,12 @@ describe('review f2caccaa', () => {
   }
 
   it.each<[string, string, Record<string, unknown>]>([
+    // Ruling (review 7919b5692 item 8): no guessing "still open" from
+    // removals; a continued session runs out like a new one.
     [
       'startReused',
       'a continued session',
-      {phase: 'ended', endReason: 'still_open_elsewhere'},
+      {phase: 'failed', error: 'reconnect_failed'},
     ],
     [
       'startAwaitingConsent',
@@ -840,25 +843,54 @@ describe('review f2caccaa', () => {
     expect(env.last()).toMatchObject({phase: 'ended', endReason: 'removed'})
   })
 
-  it('G2: a removal during the first join of a continued session is “still open”', async () => {
+  it('a removal during the first join of a continued session is a refused rejoin: the ladder, not “removed” (ruling 7919b5692)', async () => {
     const env = setup()
     await toConsent(env, 'startReused')
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
-    env.rt.on('/live/join/prove', 'proveExchange')
-    // The runtime refuses before connect() resolves.
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    // The runtime refuses before connect() resolves (the other device holds it).
     const connect = env.fake.room.connect
+    let refuse = true
     env.fake.room.connect = async args => {
-      env.clock.now += 120
-      env.fake.drop('removed')
+      if (refuse) {
+        refuse = false
+        env.fake.drop('removed')
+      }
       await connect(args)
     }
     await env.c.submitConsent({ai_process: true})
-    await flush()
-    expect(env.last()).toMatchObject({
-      phase: 'ended',
-      endReason: 'still_open_elsewhere',
+    await flush(400)
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
+      1000,
+    ])
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
+  })
+
+  it('G4: a drop during the first connect still ends live with the mic on, and the stage wait armed', async () => {
+    const env = setup()
+    await toConsent(env)
+    env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    const connect = env.fake.room.connect
+    let drop = true
+    env.fake.room.connect = async args => {
+      await connect(args)
+      if (drop) {
+        drop = false
+        env.fake.drop('network')
+      }
+    }
+    await env.c.submitConsent({ai_process: true})
+    await flush(400)
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
+    expect(env.fake.calls.filter(c => c.op === 'mic').at(-1)).toMatchObject({
+      on: true,
     })
+    expect(env.timers.filter(t => t.ms === STAGE_WAIT_MS)).toHaveLength(1)
   })
 
   it('G3: an unbound continued session in a plain outage fails as a reconnect, with /end', async () => {
@@ -920,7 +952,7 @@ describe('review f2caccaa', () => {
   })
 })
 
-describe('R2 v2: the proof exchange and the unbound wait (ac11bd0)', () => {
+describe('R2 rev 4: the proof exchange and the unbound wait (9fc23bd)', () => {
   it('the runtime refuses the traded token and admits the exchanged one (live.json media)', () => {
     expect(LIVE.media.joinTradedToken).toMatchObject({ok: false})
     expect(LIVE.media.joinExchangedToken).toMatchObject({ok: true})
@@ -1065,6 +1097,7 @@ describe('R2 v2: the proof exchange and the unbound wait (ac11bd0)', () => {
         status,
         body: {error: 'refused'},
       })
+      env.rt.on('/live/sessions/:sid/end', 'end')
       env.fake.drop('network')
       await flush(400)
       expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
@@ -1072,6 +1105,29 @@ describe('R2 v2: the proof exchange and the unbound wait (ac11bd0)', () => {
         phase: 'ended',
         endReason: 'ended_elsewhere',
       })
+      // J1: /end too, so the agent doesn't stay up.
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    },
+  )
+
+  it.each([408, 429])(
+    'J2: a %i mint during a rejoin is an outage: retried, then connected',
+    async status => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on(
+        '/live/sessions/:sid/token',
+        {status, body: {error: 'slow down'}},
+        'tokenForJoin',
+      )
+      env.rt.on('/live/join/prove', 'proveExchange')
+      env.fake.drop('network')
+      for (let i = 0; i < 20 && env.last().phase !== 'connected'; i++) {
+        await flush(40)
+      }
+      expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(2)
+      expect(env.last().phase).toBe('connected')
     },
   )
 
@@ -1295,20 +1351,46 @@ describe('review 679a9d48', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
   })
 
-  it('M2: a continued (reused) session the other device still holds says so', async () => {
+  it('M2 (ruling 7919b5692): a continued session removed right after it joined is refused; one that never gets in fails as a reconnect, with /end', async () => {
     const env = setup()
     await toConsent(env, 'startReused')
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', 'proveExchange')
     await env.c.submitConsent({ai_process: true})
+    for (let i = 0; i < 5; i++) {
+      env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+      env.rt.on('/live/join/prove', 'proveExchange')
+    }
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    // The other device holds it: every join is removed as it connects.
+    const connect = env.fake.room.connect
+    env.fake.room.connect = async args => {
+      await connect(args)
+      env.fake.drop('removed')
+    }
     env.fake.drop('removed')
+    for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
+      await flush(40)
+    }
     await flush()
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
+      1000, 2000, 4000, 8000, 16000,
+    ])
     expect(env.last()).toMatchObject({
-      phase: 'ended',
-      endReason: 'still_open_elsewhere',
+      phase: 'failed',
+      error: 'reconnect_failed',
     })
-    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+  })
+
+  it('reuse: only a device with a key may take over (R3); the server’s `reused` is what says it is open', async () => {
+    const bound = setup()
+    await toConsent(bound, 'startReused')
+    expect(bound.last()).toMatchObject({phase: 'reuse', canTakeOver: true})
+    const unbound = setup({key: false})
+    await toConsent(unbound, 'startReused')
+    expect(unbound.last()).toMatchObject({phase: 'reuse', canTakeOver: false})
   })
 
   it('LOW: blind is sent again on the new connection after a rejoin', async () => {

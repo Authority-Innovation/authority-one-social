@@ -21,10 +21,10 @@ import {pathToFileURL} from 'node:url'
 
 import {ed25519} from '@noble/curves/ed25519'
 
-// feat/agent-live-r2-workers-v2 at ac11bd0 (R2 v2, review bfc09869: the proof
-// exchange). It contains agent-live/integration; the replies are byte-identical
-// to 4b08847's, plus the exchange and the agent-job failure below.
-const SOURCE_COMMIT = 'ac11bd0'
+// feat/agent-live-r2-workers-v2 at 9fc23bd (R2 contract rev 4: /prove always
+// trades, `exchange` is ignored; earlier: ac11bd0, R2 v2, review bfc09869). It
+// contains agent-live/integration.
+const SOURCE_COMMIT = '9fc23bd'
 const SOURCE_REF = 'origin/feat/agent-live-r2-workers-v2'
 
 // Ids, room names and jtis end in random bytes, and every token carries the
@@ -166,7 +166,8 @@ out.proofs.tokenForJoin = sign(goodToken)
 r.proveOk = await call('/live/join/prove', {
   body: {token: goodToken, sig: out.proofs.tokenForJoin},
 })
-out.media.joinAfterProof = await w.media.join(goodToken, room)
+// Rev 4: /prove always trades, so the RETURNED token is the one that joins.
+out.media.joinAfterProof = await w.media.join(r.proveOk.body.token, room)
 
 // The camera opt-in: a fresh token with CAMERA, proven by the same key, replaces the
 // connected owner (the REPLACED rule) without waiting for participant_left.
@@ -179,7 +180,10 @@ out.proofs.tokenCamera = sign(cameraToken)
 r.proveCamera = await call('/live/join/prove', {
   body: {token: cameraToken, sig: out.proofs.tokenCamera},
 })
-out.media.cameraRejoinWhileHeld = await w.media.join(cameraToken, room)
+out.media.cameraRejoinWhileHeld = await w.media.join(
+  r.proveCamera.body.token,
+  room,
+)
 // Without a device key the same rejoin is a duplicate identity.
 r.tokenUnbound = await call(`/live/sessions/${sid}/token`, {
   bearer: TA.bearer,
@@ -190,8 +194,8 @@ out.media.unboundRejoinWhileHeld = await w.media.join(
   room,
 )
 
-// The proof EXCHANGE (R2 v2, review bfc09869 M-B(b)): proving with exchange
-// trades the proven token for a fresh, proven one returned only to the prover.
+// The proof EXCHANGE (R2 v2, review bfc09869 M-B(b); always on since rev 4):
+// proving trades the proven token for a fresh, proven one returned only to the prover.
 // The client joins with the RETURNED token; the traded one never joins.
 r.tokenForExchange = await call(`/live/sessions/${sid}/token`, {
   bearer: TA.bearer,
@@ -200,7 +204,7 @@ r.tokenForExchange = await call(`/live/sessions/${sid}/token`, {
 const traded = r.tokenForExchange.body.token
 out.proofs.tokenForExchange = sign(traded)
 r.proveExchange = await call('/live/join/prove', {
-  body: {token: traded, sig: out.proofs.tokenForExchange, exchange: true},
+  body: {token: traded, sig: out.proofs.tokenForExchange},
 })
 out.media.joinTradedToken = await w.media.join(traded, room)
 out.media.joinExchangedToken = await w.media.join(

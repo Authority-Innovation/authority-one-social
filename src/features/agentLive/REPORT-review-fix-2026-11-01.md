@@ -136,7 +136,7 @@ agent-live/integration 4b08847 (replies byte-identical to 3dd4ac1, plus the
 new N2 case). Prebuild gate re-run on the Mac (flag off: exclude, no source, no
 audio, original strings; flag on: source, audio, the live strings).
 
-## R2 v2 contract (2026-11-02, runtime feat/agent-live-r2-workers-v2 @ ac11bd0)
+## R2 v2 contract (2026-11-02, runtime feat/agent-live-r2-workers-v2 @ ac11bd0) [superseded by rev 4 @ 9fc23bd: /prove always trades and the app sends `{token, sig}`; a removal within 10 s of a rejoin's connect is a refused rejoin (next rung, no reset); a refused mint is final, with /end; fixtures regenerated at 9fc23bd, the pre-rev-4 prove reply kept as `__fixtures__/legacy-ac11bd0.json`]
 
 Contract updates in AUTONOMOUS-LOG for session local_b97286ac (review
 bfc09869 M-B(b) and the workers' review):
@@ -168,7 +168,7 @@ Report `docs/REVIEW-ONE-APP-LIVE-8c01c1e11.md` on `review/8c01c1e11-one-live-r33
 | Finding | Fix |
 | --- | --- |
 | **F1 HIGH** swipe-back / Done-while-ending / Cancel-while-starting skip `/end`; a give-up after the screen is gone is silent | `usePreventRemove` while a session is open or `/end` is out: a swipe-back or header back becomes End (or waits for it). No Done while "Ending…" shows. Cancel during `starting` ends the session first. The screen `detach()`es on unmount, and a `/end` that then gives up shows a toast ("Couldn't end your live session, so your agent may still be live…"), not twice if the owner already saw it on screen |
-| **F2 MED** an unbound rejoin can loop for ever | The backoff budget carries across unbound removals that land within LiveKit's 30 s departure timeout of the last connect, so a session that is never admitted runs out: "still open on your other device" for a continued session, else "Couldn't reconnect" |
+| **F2 MED** an unbound rejoin can loop for ever | The backoff budget carries across unbound removals that land within LiveKit's 30 s departure timeout of the last connect, so a session that is never admitted runs out: "still open on your other device" for a continued session, else "Couldn't reconnect" [superseded: rev 4's 10 s refused-rejoin rule carries the budget for bound and unbound alike, and per the ruling on review 7919b5692 running out is always "Couldn't reconnect" with /end; "Still open on your other device" is only shown when the server says so (the start reply's `reused`)] |
 | **F3 MED** a drop during the first join shows "connected" | `connect()` never marks connected once a rejoin has started (the rejoin decides); the mic intent is recorded first so the rejoin restores it |
 | F4 camera swap alongside a rejoin | A rejoin generation counter: a camera request that saw a rejoin start while its token was minted is dropped ("Couldn't turn the camera on") |
 | F5 a failed `/end` left the registry | It stays registered and sign-out/switch re-sends it (`retryEnd`); a reused session left while starting unregisters |

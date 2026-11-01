@@ -1,7 +1,7 @@
 /**
  * Agent Live client: the owner's /live calls on the agent runtime.
  *
- * CONTRACT. feat/agent-live-r2-workers-v2 @ ac11bd0 (contains
+ * CONTRACT. feat/agent-live-r2-workers-v2 @ 9fc23bd, R2 contract rev 4 (contains
  * agent-live/integration), src/live/tenant/live-routes.js and
  * live-consent-routes.js. The response shapes in __fixtures__/live.json are
  * what those routes answered (scripts/agentLive/generateLiveFixtures.mjs), not

@@ -1,0 +1,14 @@
+{
+  "note": "Recorded at a runtime before R2 contract rev 4 (the prove reply had no exchanged token). Kept to stand for an old runtime: a current one (9fc23bd+) always trades. From live.json at ac11bd0, not hand-written.",
+  "source": {
+    "repo": "authority-one-runtime",
+    "ref": "origin/feat/agent-live-r2-workers-v2",
+    "commit": "ac11bd0"
+  },
+  "proveOk": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  }
+}

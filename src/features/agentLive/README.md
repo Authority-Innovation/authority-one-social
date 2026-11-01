@@ -30,7 +30,7 @@ Built to `authority-one-runtime` `agent-live/integration` @ 3dd4ac1
 | --- | --- | --- |
 | `POST /live/sessions` | `{agentDid, devicePubKey?}` | `{sid, region, wsUrl, token: null, expiresAt: null, popRequired, consentRequired, recordPolicy, reused, consentMissing: true}` before consent |
 | `POST /live/sessions/:sid/consent` | `{decisions, textVersion, devicePubKey?}` | `{admitted, missing, token, expiresAt, popRequired, agent}` |
-| `POST /live/join/prove` | `{token, sig, exchange: true}` (no bearer) | `{ok, token, expiresAt}`: join with THIS token, the proven one is traded and never joins (R2 v2); 401 `bad_proof` |
+| `POST /live/join/prove` | `{token, sig}` (no bearer) | `{ok, token, expiresAt}`: join with THIS token, the proven one is always traded and never joins (R2 rev 4); a plain `{ok: true}` is a runtime before R2 v2 (`server_outdated`); 401 `bad_proof` |
 | `POST /live/sessions/:sid/token` | `{camera, devicePubKey?}` | `{token, expiresAt, popRequired}`; 403 `consent_required` |
 | `POST /live/sessions/:sid/end` | none | `{ok}` (idempotent) |
 

@@ -93,7 +93,6 @@ export type LiveEndReason =
   | 'removed'
   | 'other_device'
   | 'consent_withdrawn'
-  | 'still_open_elsewhere'
 
 /** Something that went wrong without ending the session. */
 export type LiveNotice =
@@ -120,6 +119,11 @@ export type LiveSessionState = {
   /** Blind on for all sources. */
   blindOn: boolean
   stage: StageRef | null
+  /**
+   * On `reuse` (the server says the session is open, maybe on another
+   * device): this device can try to take it over (it has a device key).
+   */
+  canTakeOver: boolean
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
   /**
@@ -147,6 +151,7 @@ export const initialLiveSessionState: LiveSessionState = {
   cameraPending: false,
   blindOn: false,
   stage: null,
+  canTakeOver: false,
   ending: false,
   endSlow: false,
   endFailed: false,
@@ -201,12 +206,6 @@ const defaultDeps: LiveDeps = {
 
 /** No stage this long after connecting: tell the owner (review f2caccaa F8). */
 export const STAGE_WAIT_MS = 45_000
-/**
- * A removal this soon after a continued (reused) session joined is read as
- * the other device still holding it (M2); later, as a plain removal (F6).
- */
-export const STILL_OPEN_WINDOW_S = 15
-
 /** Waits between /end attempts (the route is idempotent). */
 export const END_RETRY_DELAYS_MS = [1000, 3000, 7000]
 /** /end out this long with no answer: offer "Leave anyway" (d8f8f16e H2). */
@@ -261,7 +260,6 @@ type Session = {
   /** The owner had it open already (maybe on another device). */
   reused: boolean
   /** When the first join of this session went through (seconds). */
-  firstConnectedAt?: number
 }
 
 export function createLiveSessionController({
@@ -309,6 +307,8 @@ export function createLiveSessionController({
   let connectedAt = 0
   // The current connection was made by a rejoin (connectedAt is its time).
   let connFromRejoin = false
+  // The mic as the owner last set it: what a rejoin publishes (G4).
+  let wantMic = true
   let cancelStageWait: (() => void) | null = null
   // Bumped by every rejoin: a camera request that saw a rejoin start while
   // its token was minted is dropped (review f2caccaa F4).
@@ -423,9 +423,9 @@ export function createLiveSessionController({
   }
 
   /**
-   * The token to join with. A bound token is proven with the exchange and
-   * the RETURNED token is the one that joins (R2 v2): the proven one never
-   * does. An unbound token joins as minted. Throws on failure.
+   * The token to join with. A bound token is proven, which always trades it
+   * (R2 rev 4), and the RETURNED token is the one that joins: the proven one
+   * never does. An unbound token joins as minted. Throws on failure.
    */
   async function prove(s: Session, j: LiveJoin): Promise<string> {
     if (!j.popRequired) return j.token
@@ -516,12 +516,15 @@ export function createLiveSessionController({
       )
       return
     }
+    // A refused rejoin (R2 rev 4): the next rung, no ladder reset. The first
+    // join of a continued session is a rejoin of the held one: its removal,
+    // even before connect() resolves, is refused the same way (the other
+    // device may still hold it; ruling, review 7919b5692 item 8).
     if (
       e.reason === 'removed' &&
-      connFromRejoin &&
-      deps.nowS() - connectedAt < REJOIN_REFUSED_GRACE_S
+      ((connFromRejoin && deps.nowS() - connectedAt < REJOIN_REFUSED_GRACE_S) ||
+        (session?.reused && phase() === 'connecting'))
     ) {
-      // A refused rejoin (R2 rev 4): the next rung, no ladder reset.
       await rejoin(true, true)
       return
     }
@@ -534,23 +537,8 @@ export function createLiveSessionController({
     }
     if (e.reason === 'removed') {
       // The runtime removed us (withdrawn consent, a revoked or refused token):
-      // it owns the session's state now. On a session continued from another
-      // device, the usual cause is that device still holding it (review
-      // 679a9d48 M2: a different device key can't replace it).
-      await finish(
-        {
-          phase: 'ended',
-          // Before the first join resolved counts as soon (review 30f293f4
-          // G2): the runtime can refuse before connect() returns.
-          endReason:
-            session?.reused &&
-            (session.firstConnectedAt === undefined ||
-              deps.nowS() - session.firstConnectedAt < STILL_OPEN_WINDOW_S)
-              ? 'still_open_elsewhere'
-              : 'removed',
-        },
-        {endRuntime: false},
-      )
+      // it owns the session's state now.
+      await finish({phase: 'ended', endReason: 'removed'}, {endRuntime: false})
       return
     }
     await rejoin()
@@ -637,9 +625,12 @@ export function createLiveSessionController({
               t.error.status !== 408 &&
               t.error.status !== 429)
           ) {
+            // /end too (review 7919b5692 J1): a refusal from in front of the
+            // runtime need not mean the session is over, and the agent must
+            // not stay up with the owner told it ended.
             await finish(
               {phase: 'ended', endReason: 'ended_elsewhere'},
-              {endRuntime: false},
+              {endRuntime: true},
             )
             return
           }
@@ -649,8 +640,8 @@ export function createLiveSessionController({
         try {
           await swap(s, t.data)
           rejoinLive = true
-          // Each step: an unbound removal is this attempt failing (next
-          // backoff); any other drop is acted on.
+          // Each step: a removal is a refused rejoin, this attempt failing
+          // (next rung, R2 rev 4); any other drop is acted on.
           if (over()) return
           if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
@@ -660,7 +651,10 @@ export function createLiveSessionController({
           if (over()) return
           if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
-          await room.setMicrophoneEnabled(state.micOn)
+          // The owner's intent, also when the drop came before the first
+          // join turned the mic on (review 30f293f4 G4).
+          await room.setMicrophoneEnabled(wantMic)
+          set({micOn: wantMic})
           if (over()) return
           if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
@@ -672,6 +666,8 @@ export function createLiveSessionController({
           connectedAt = deps.nowS()
           connFromRejoin = true
           set({phase: 'connected'})
+          // A first join that dropped before it connected never armed it (G4).
+          if (!cancelStageWait && !state.stage) armStageWait()
           return
         } catch (e) {
           leaving = false
@@ -686,17 +682,10 @@ export function createLiveSessionController({
           rejoinLive = false
         }
       }
-      // Out of budget. An unbound continued session whose joins were removed
-      // is most likely still held by the other device (F2). A plain outage
-      // (no removal seen) is a failed reconnect (review 30f293f4 G3).
-      if (!s.key && s.reused && removalSeen) {
-        await finish(
-          {phase: 'ended', endReason: 'still_open_elsewhere'},
-          {endRuntime: false},
-        )
-      } else {
-        await fail('reconnect_failed')
-      }
+      // Out of budget: "Couldn't reconnect", with /end (R2 rev 4). Only the
+      // server says a session is open elsewhere (the start reply's `reused`),
+      // never a guess from removals (ruling, review 7919b5692 item 8).
+      await fail('reconnect_failed')
     } finally {
       rejoining = false
       rejoinLive = false
@@ -721,11 +710,11 @@ export function createLiveSessionController({
         )
         return
       }
-      await join(s, t.data)
-      s.firstConnectedAt = deps.nowS()
-      if (over() || rejoining) return
       // The owner's intent is mic on, also for a rejoin that starts while
-      // this call is out (it restores state.micOn).
+      // this call is out (it restores wantMic, review 30f293f4 G4).
+      wantMic = true
+      await join(s, t.data)
+      if (over() || rejoining) return
       set({micOn: true})
       await r.setMicrophoneEnabled(true)
     } catch (e) {
@@ -738,8 +727,13 @@ export function createLiveSessionController({
     if (over() || rejoining) return
     budgetIndex = 0
     connectedAt = deps.nowS()
-    connFromRejoin = false
+    // A continued session's first join stands in for a rejoin of the held one.
+    connFromRejoin = s.reused
     set({phase: 'connected'})
+    armStageWait()
+  }
+
+  function armStageWait() {
     cancelStageWait = deps.setTimer(STAGE_WAIT_MS, () => {
       if (state.phase === 'connected' && !state.stage) {
         set({notice: 'agent_waiting'})
@@ -828,7 +822,9 @@ export function createLiveSessionController({
       }
       set({consentRequired, recordPolicy})
       if (reused) {
-        set({phase: 'reuse'})
+        // R3: only the same device key, proven, replaces a held participant,
+        // so only a device with a key can offer "Take over here".
+        set({phase: 'reuse', canTakeOver: !!key})
         return
       }
       await afterStart()
@@ -878,6 +874,7 @@ export function createLiveSessionController({
       if (!live()) return
       try {
         await room!.setMicrophoneEnabled(on)
+        wantMic = on
         set({micOn: on, notice: null})
       } catch {
         set({notice: 'action_failed'})
@@ -953,7 +950,7 @@ export function createLiveSessionController({
         if (over() || (await takeRejoinDrop())) return
         await resendBlind()
         if (over() || (await takeRejoinDrop())) return
-        await r.setMicrophoneEnabled(state.micOn)
+        await r.setMicrophoneEnabled(wantMic)
         if (over() || (await takeRejoinDrop())) return
         await r.setCameraEnabled(true)
         if (over() || (await takeRejoinDrop())) return

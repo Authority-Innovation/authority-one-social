@@ -43,6 +43,7 @@ import {
   SID,
   tokenOf,
 } from '../__fixtures__/runtimeLive'
+import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {
   captureLiveAuth,
   endLiveSession,
@@ -239,7 +240,7 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
 
   it('prove: the plain {ok: true} of a server before the exchange is server_outdated', async () => {
     // The recorded reply of a runtime without the exchange.
-    rt.on('/live/join/prove', 'proveOk')
+    rt.on('/live/join/prove', LEGACY.proveOk)
     const token = tokenOf('tokenForExchange')
     const sig = LIVE.proofs.tokenForExchange
     expect(await proveLiveJoin({token, sig})).toEqual({
