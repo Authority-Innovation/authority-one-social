@@ -166,7 +166,7 @@ const mockNavigate = jest.fn()
 const mockNav: {
   canGoBack: boolean
   prevent: boolean
-  onPrevented: () => void
+  onPrevented: (type?: string) => void
   listeners: Record<string, () => void>
   gesture: boolean[]
 } = {
@@ -179,6 +179,7 @@ const mockNav: {
 const mockNavObject = {
   navigate: (...args: unknown[]) => mockNavigate(...args),
   goBack: () => mockGoBack(),
+  dispatch: (a: unknown) => mockDispatch(a),
   canGoBack: () => mockNav.canGoBack,
   setOptions: (o: {gestureEnabled?: boolean}) => {
     if (o.gestureEnabled !== undefined) mockNav.gesture.push(o.gestureEnabled)
@@ -206,6 +207,7 @@ jest.mock('#/state/shell', () => ({
   useLockDrawerSwipe: () => mockShell.lock,
 }))
 const mockGoBack = jest.fn()
+const mockDispatch = jest.fn()
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavObject,
   // Runs like an effect: the screen is focused while mounted in these tests.
@@ -216,9 +218,13 @@ jest.mock('@react-navigation/native', () => ({
       }>('react')
       .useEffect(cb, [cb]),
   // The latest usePreventRemove call, so a test can swipe back.
-  usePreventRemove: (prevent: boolean, cb: () => void) => {
+  usePreventRemove: (
+    prevent: boolean,
+    cb: (e: {data: {action: {type: string}}}) => void,
+  ) => {
     mockNav.prevent = prevent
-    mockNav.onPrevented = cb
+    // The owner going back by default; a test can pass another action type.
+    mockNav.onPrevented = (type = 'GO_BACK') => cb({data: {action: {type}}})
   },
 }))
 
@@ -904,7 +910,7 @@ describe('session screen (flag on)', () => {
     await press(r.getByTestId('agentLiveConsent-ai_process'))
     await press(r.getByTestId('agentLiveConsentSubmit'))
     expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
-      'Your agent couldn’t start, so the live session has ended. Try again later.',
+      'Your agent couldn’t start. Try again later.',
     )
     expect(fake.connects()).toEqual([])
   })
@@ -1039,6 +1045,48 @@ describe('session screen (flag on)', () => {
     expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
       'Live needs a server update that isn’t available yet, so Live stopped on this device. Try again after the update.',
     )
+  })
+
+  it('c23bdc031 F1: a notification that pops the stack (POP_TO_TOP) does not end Live: it goes through, no /end', async () => {
+    mockDispatch.mockClear()
+    const {unmount, fake} = await goLive()
+    rt.on('/live/sessions/:sid/end', 'end')
+    act(() => {
+      mockNav.onPrevented('POP_TO_TOP')
+    })
+    await flush()
+    expect(mockDispatch).toHaveBeenCalledWith({type: 'POP_TO_TOP'})
+    expect(mockNav.prevent).toBe(false)
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    // The navigator then unmounts the screen: room left, still no /end.
+    unmount()
+    await flush()
+    expect(fake.calls.map(c => c.op)).toContain('disconnect')
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+  })
+
+  it('c23bdc031 F1: the owner’s header back (POP) is still End', async () => {
+    const {getByTestId} = await goLive()
+    rt.on('/live/sessions/:sid/end', 'end')
+    act(() => {
+      mockNav.onPrevented('POP')
+    })
+    await flush()
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(getByTestId).toBeTruthy()
+  })
+
+  it('F2: a drop we didn’t ask for says the connection closed and the session wasn’t ended', async () => {
+    const {getByTestId, fake} = await goLive()
+    act(() => fake.drop('client'))
+    await flush()
+    expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+      'The connection to the live session closed.',
+    )
+    expect(getByTestId('agentLiveLeftRunning')).toHaveTextContent(
+      'The live session wasn’t ended: open Live again to end it, or it ends on its own at its time limit.',
+    )
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
   it('F1: a swipe-back while live is prevented and becomes End (waits for /end, then goes back)', async () => {

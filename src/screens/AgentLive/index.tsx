@@ -23,6 +23,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {msg} from '@lingui/core/macro'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {
+  type NavigationAction,
   useFocusEffect,
   useNavigation,
   usePreventRemove,
@@ -62,6 +63,9 @@ type Props = NativeStackScreenProps<CommonNavigatorParams, 'AgentLive'>
 const STAGE_BG = '#000000'
 const ON_STAGE_TEXT = '#FFFFFF'
 const MIC_ON_DOT = '#E5484D'
+
+/** Removals that are the owner going back (header back, Android back). */
+const OWNER_BACK: ReadonlySet<string> = new Set(['GO_BACK', 'POP'])
 
 export function AgentLiveScreen({route}: Props) {
   // Android: no microphone foreground service yet (see GoLiveButton).
@@ -176,22 +180,35 @@ function LiveSession({
     if ((leaveWhenEnded && ended) || leaveAnyway) leave()
   })
 
-  // Review f2caccaa F1: no way out that skips /end. While a session is open,
-  // or its /end is still out, a swipe-back or the header back becomes End (or,
-  // once ending, waits for the answer). On a failed-end panel the owner has
-  // seen the warning, so leaving then is their "Leave anyway".
+  // While a session is open, or its /end is still out, the owner going back
+  // (header back, Android back) is End, or, once ending, waits for the
+  // answer (review f2caccaa F1). Any other removal (a notification that pops
+  // the stack, a reset) is not the owner going back (review c23bdc031 F1):
+  // it goes through, and the unmount leaves the room but ends nothing (P3).
+  // On a failed-end panel, leaving is the owner's "Leave anyway".
   const open =
     state.phase !== 'idle' &&
     state.phase !== 'ended' &&
     state.phase !== 'failed'
-  usePreventRemove((open || state.ending) && !leaveAnyway, () => {
-    if (open) onEnd()
-  })
+  const [passThrough, setPassThrough] = useState<NavigationAction | null>(null)
+  usePreventRemove(
+    (open || state.ending) && !leaveAnyway && !passThrough,
+    ({data}) => {
+      if (OWNER_BACK.has(data.action.type)) {
+        if (open) onEnd()
+      } else {
+        setPassThrough(data.action)
+      }
+    },
+  )
+  useEffect(() => {
+    if (passThrough) navigation.dispatch(passThrough)
+  }, [navigation, passThrough])
   // The back swipe itself is off while a session is open or ending: on iOS 26
   // the native content-pop gesture is not stopped by usePreventRemove's
   // preventNativeDismiss (seen on the simulator: the swipe left the screen and
   // /end only went out from the unmount). End is the visible way out.
-  const blockGesture = (open || state.ending) && !leaveAnyway
+  const blockGesture = (open || state.ending) && !leaveAnyway && !passThrough
   useEffect(() => {
     navigation.setOptions({gestureEnabled: !blockGesture})
   }, [navigation, blockGesture])
@@ -526,7 +543,7 @@ function Finished({
         case 'no_join':
           return l`Couldn’t reach your agent. Try again later.`
         case 'agent_unavailable':
-          return l`Your agent couldn’t start, so the live session has ended. Try again later.`
+          return l`Your agent couldn’t start. Try again later.`
         case 'consent_incomplete':
         case 'consent_required':
           return l`Your agent can’t join until every choice is made.`
@@ -557,7 +574,10 @@ function Finished({
       case 'ended_elsewhere':
         return l`The live session has ended.`
       default:
-        return l`Live session ended.`
+        // A drop we didn't ask for ends nothing (P4): don't say it ended.
+        return state.leftRunning
+          ? l`The connection to the live session closed.`
+          : l`Live session ended.`
     }
   })()
   return (

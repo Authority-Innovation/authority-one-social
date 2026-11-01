@@ -1517,6 +1517,94 @@ describe('review 679a9d48', () => {
     })
   })
 
+  describe('c23bdc031: F3, F4, F6, F10', () => {
+    it.each([
+      ['network', new Error('offline')],
+      ['http 500', {status: 500, body: {error: 'boom'}}],
+      ['a garbled reply', {status: 200, body: 'not json at all'}],
+    ])('F4: %s on the first proof is an outage: /end', async (_n, answer) => {
+      const env = setup()
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/join/prove', answer)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.last().phase).toBe('failed')
+      expect(env.last().leftRunning).toBe(false)
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
+
+    it('F3: a refused camera proof, then outages on its ladder: no /end', async () => {
+      const env = setup({camera: 'granted'})
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/token', 'tokenCamera')
+      env.rt.on('/live/join/prove', {status: 401, body: {error: 'bad_proof'}})
+      env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.setCamera(true)
+      for (
+        let i = 0;
+        i < 60 && !['ended', 'failed'].includes(env.last().phase);
+        i++
+      ) {
+        await flush(40)
+      }
+      await flush()
+      expect(env.last()).toMatchObject({
+        phase: 'ended',
+        endReason: 'refused_reconnect',
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('F10: a session stopped without /end (not an outage) is owed to sign-out', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.fake.drop('client')
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+      endOpenLiveSessions()
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
+
+    it('F10: so is one stopped after a refusal', async () => {
+      const env = setup()
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/join/prove', {status: 404, body: {error: 'not found'}})
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+      endOpenLiveSessions()
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
+
+    it('F6: a sign-out while leave() is disconnecting still finds it owed', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      let release!: () => void
+      const gate = new Promise<void>(r => (release = r))
+      const disconnect = env.fake.room.disconnect
+      env.fake.room.disconnect = async (...a) => {
+        await gate
+        return disconnect(...a)
+      }
+      const left = env.c.leave()
+      await flush()
+      endOpenLiveSessions()
+      release()
+      await left
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
+  })
+
   describe('0dcc84ad3 P3/P4: /end only on the owner’s action or an outage', () => {
     it('leave() (an OS unmount): room left, no /end, kept for sign-out', async () => {
       const env = setup()

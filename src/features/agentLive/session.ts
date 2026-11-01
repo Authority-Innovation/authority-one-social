@@ -436,7 +436,8 @@ export function createLiveSessionController({
       endRuntime: boolean
       /**
        * The owner's explicit action (Dispatch ruling on 0dcc84ad3 P3): End,
-       * the back swipe, Cancel, leaving or covering the screen, sign-out.
+       * a deliberate back, Cancel, sign-out or an account switch. Being
+       * covered, backgrounded or unmounted is not (it never calls end()).
        */
       owner?: boolean
       /** The open-session panel's "End the live session" (every device). */
@@ -459,17 +460,26 @@ export function createLiveSessionController({
     // 3. otherwise never after a refusal;
     // 4. otherwise only after an outage on this device's own session;
     // 5. anything else stops here and says the session wasn't ended.
+    // A session of ours stopped here without /end stays owed to sign-out,
+    // which is the owner's action (review c23bdc031 F10).
+    let owed = false
     if (endRuntime && s && !everywhere) {
       if (s.reused && !s.tookOver) {
         endRuntime = false
         patch = leftOpen(patch)
       } else if (!owner && s.refused) {
         endRuntime = false
+        owed = true
         patch = refusedLeftOpen(patch)
       } else if (!owner && !isOutage(patch)) {
         endRuntime = false
+        owed = true
         patch = {...patch, leftRunning: true}
       }
+    }
+    if (owed && s) {
+      keepRegistered = true
+      endPending = s
     }
     set({
       micOn: false,
@@ -966,7 +976,9 @@ export function createLiveSessionController({
 
   async function rejoinWithoutCamera() {
     set({cameraOn: false})
-    await rejoin()
+    // A refused camera proof started this ladder: it is recorded as refused
+    // (review c23bdc031 F3), as a refused removal is.
+    await rejoin(false, !!session?.refused)
   }
 
   const controller: LiveSessionController = {
@@ -1214,11 +1226,13 @@ export function createLiveSessionController({
       // A reused session not taken over is the other device's: not ours to
       // end at sign-out either.
       const ours = !!s && !(s.reused && !s.tookOver)
+      // Owed before the await: a sign-out while the room disconnects still
+      // finds it (review c23bdc031 F6).
+      if (s && ours) endPending = s
       await finish(
         {phase: 'ended', endReason: 'left_open'},
         {endRuntime: false, keepRegistered: ours},
       )
-      if (s && ours) endPending = s
     },
 
     async retryEnd() {
