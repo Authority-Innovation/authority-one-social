@@ -31,7 +31,15 @@ describe('sign-out and account switch end open live sessions first', () => {
     )
   })
 
-  it.each(['logoutCurrentAccount', 'logoutEveryAccount', 'login'])(
+  it('login calls it only after the new credentials worked, before the switch (f2caccaa F7)', () => {
+    const b = body('login')
+    const call = b.indexOf('endOpenLiveSessions()')
+    expect(call).toBeGreaterThan(b.indexOf('createAgentAndLogin('))
+    expect(call).toBeGreaterThan(b.indexOf('if (signal.aborted)'))
+    expect(call).toBeLessThan(b.indexOf("type: 'switched-to-account'"))
+  })
+
+  it.each(['logoutCurrentAccount', 'logoutEveryAccount'])(
     '%s calls it before cancelling or dispatching',
     name => {
       const b = body(name)

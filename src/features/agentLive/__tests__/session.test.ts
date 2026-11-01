@@ -69,6 +69,7 @@ import {
   type LiveDeps,
   type LiveSessionState,
   REJOIN_BACKOFF_MS,
+  STAGE_WAIT_MS,
 } from '../session'
 
 const EXP = reply('consentAdmitted').body.expiresAt as number
@@ -117,6 +118,9 @@ function setup({
     return rt.fetch(url, init)
   }
   const fake = createFakeRoom(log)
+  // A clock the test can move, and timers it can fire.
+  const clock = {now: nowS}
+  const timers: Array<{ms: number; cb: () => void; cancelled: boolean}> = []
   const deps: Partial<LiveDeps> = {
     getDeviceKey: jest.fn(() =>
       Promise.resolve(key ? deviceKeyFromSeed(DEVICE_SEED) : null),
@@ -124,7 +128,15 @@ function setup({
     requestMicAccess: jest.fn(() => Promise.resolve(mic)),
     requestCameraAccess: jest.fn(() => Promise.resolve(camera)),
     sleep: jest.fn(() => Promise.resolve()),
-    nowS: () => nowS,
+    nowS: () => clock.now,
+    setTimer: (ms: number, cb: () => void) => {
+      const t = {ms, cb, cancelled: false}
+      timers.push(t)
+      return () => {
+        t.cancelled = true
+      }
+    },
+    onEndGaveUp: jest.fn(),
   }
   const states: LiveSessionState[] = []
   const factory = jest.fn(roomFactory ?? (() => fake.room))
@@ -135,7 +147,7 @@ function setup({
     deps,
   })
   const last = () => states[states.length - 1] ?? {phase: 'idle'}
-  return {c, rt, fake, log, last, deps, factory, states}
+  return {c, rt, fake, log, last, deps, factory, states, clock, timers}
 }
 
 type Env = ReturnType<typeof setup>
@@ -540,6 +552,257 @@ describe('H1: the media connection', () => {
     env.fake.fail('data')
     await expect(env.c.setBlind(true)).resolves.toBe(false)
     expect(env.last().blindOn).toBe(false)
+  })
+})
+
+describe('review f2caccaa', () => {
+  const unboundLive = async (env: Env, start = 'startAwaitingConsent') => {
+    await toConsent(env, start)
+    if (start === 'startReused') await env.c.continueHere()
+    env.rt.on('/live/sessions/:sid/consent', {
+      status: 200,
+      body: {...reply('consentAdmitted').body, popRequired: false},
+    })
+    await env.c.submitConsent({ai_process: true})
+  }
+  const unboundToken = {
+    status: 200,
+    body: {...reply('tokenUnbound').body, popRequired: false},
+  }
+
+  it.each<[string, string, Record<string, unknown>]>([
+    [
+      'startReused',
+      'a continued session',
+      {phase: 'ended', endReason: 'still_open_elsewhere'},
+    ],
+    [
+      'startAwaitingConsent',
+      'a new session',
+      {phase: 'failed', error: 'reconnect_failed'},
+    ],
+  ])(
+    'F2: an unbound session never admitted (%s: %s) runs out of budget and says so',
+    async (start, _name, expected) => {
+      const env = setup({key: false})
+      await unboundLive(env, start)
+      for (let i = 0; i < 12; i++)
+        env.rt.on('/live/sessions/:sid/token', unboundToken)
+      // Every join is removed right after it connects (the other holder stays).
+      const connect = env.fake.room.connect
+      env.fake.room.connect = async args => {
+        await connect(args)
+        queueMicrotask(() => env.fake.drop('removed'))
+      }
+      env.fake.drop('removed')
+      for (
+        let i = 0;
+        i < 60 && !['ended', 'failed'].includes(env.last().phase);
+        i++
+      ) {
+        await flush(40)
+      }
+      expect(env.last()).toMatchObject({...expected, micOn: false})
+      expect(env.rt.to('/live/sessions/:sid/token').length).toBeLessThanOrEqual(
+        5,
+      )
+    },
+  )
+
+  it('F2: a removal long after the last rejoin starts a fresh budget', async () => {
+    const env = setup({key: false})
+    await unboundLive(env)
+    env.rt.on('/live/sessions/:sid/token', unboundToken, unboundToken)
+    env.fake.drop('removed')
+    await flush(200)
+    expect(env.last().phase).toBe('connected')
+    env.clock.now += 60
+    env.fake.drop('removed')
+    await flush(200)
+    expect(env.last().phase).toBe('connected')
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
+      1000, 1000,
+    ])
+  })
+
+  it('F3: a drop during the first join’s mic call never shows “connected” before the rejoin decides', async () => {
+    const env = setup()
+    await toConsent(env)
+    env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    let releaseMic!: () => void
+    const mic = env.fake.room.setMicrophoneEnabled
+    let first = true
+    env.fake.room.setMicrophoneEnabled = on => {
+      if (!first) return mic(on)
+      first = false
+      return new Promise<void>(r => (releaseMic = () => void mic(on).then(r)))
+    }
+    let releaseSleep!: () => void
+    ;(env.deps.sleep as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>(r => (releaseSleep = r)),
+    )
+    const submitted = env.c.submitConsent({ai_process: true})
+    await flush()
+    env.fake.drop('network')
+    await flush()
+    releaseMic()
+    await submitted
+    await flush()
+    // The rejoin is still in its backoff: never connected meanwhile.
+    expect(env.states.map(st => st.phase)).not.toContain('connected')
+    expect(env.last().phase).toBe('reconnecting')
+    releaseSleep()
+    await flush(200)
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
+  })
+
+  it('F4: a drop while the camera token is minted aborts the camera; the rejoin owns the room', async () => {
+    const env = setup()
+    await toLive(env)
+    let releaseMint!: () => void
+    const gate = new Promise<void>(r => (releaseMint = r))
+    const real = (
+      globalThis as {fetch: (u: string, i: RequestInit) => Promise<Response>}
+    ).fetch
+    let held = false
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (!held && new URL(u).pathname.endsWith('/token')) {
+        held = true
+        await gate
+      }
+      return real(u, i)
+    }
+    // The rejoin's mint goes first (the camera's is held), then the camera's.
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveExchange')
+    const cam = env.c.setCamera(true)
+    await flush()
+    env.fake.drop('network')
+    await flush()
+    releaseMint()
+    await cam
+    await flush(300)
+    expect(env.last()).toMatchObject({
+      phase: 'connected',
+      cameraOn: false,
+      cameraPending: false,
+      notice: 'camera_failed',
+    })
+    expect(env.fake.cameraPublishes()).toBe(0)
+    // One rejoin connect after the first join; no camera swap on top.
+    expect(env.fake.connects()).toHaveLength(2)
+  })
+
+  it('F5: a /end that gave up stays registered, and sign-out re-sends it', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/end', E503, E503, E503, E503)
+    await env.c.end()
+    expect(env.last()).toMatchObject({endFailed: true})
+    expect(openLiveSessionCount()).toBe(1)
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    endOpenLiveSessions()
+    await flush()
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(5)
+    expect(env.last()).toMatchObject({endFailed: false})
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
+  it('F5: leaving a reused session while it starts leaves the registry clean', async () => {
+    const env = setup()
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const real = (
+      globalThis as {fetch: (u: string, i: RequestInit) => Promise<Response>}
+    ).fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname === '/live/sessions') await gate
+      return real(u, i)
+    }
+    env.rt.on('/live/sessions', 'startReused')
+    const begun = env.c.begin()
+    await flush()
+    await env.c.end()
+    release()
+    await begun
+    expect(openLiveSessionCount()).toBe(0)
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+  })
+
+  it('F1: after the screen has gone, a /end that gives up is reported (onEndGaveUp)', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/end', E503, E503, E503, E503)
+    env.c.detach()
+    await env.c.end()
+    expect(env.deps.onEndGaveUp).toHaveBeenCalledTimes(1)
+  })
+
+  it('F1: a give-up the owner already saw on screen is not reported again', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/end', E503, E503, E503, E503)
+    await env.c.end()
+    env.c.detach({failureSeen: true})
+    expect(env.deps.onEndGaveUp).not.toHaveBeenCalled()
+    env.c.detach()
+    expect(env.deps.onEndGaveUp).toHaveBeenCalledTimes(1)
+  })
+
+  it('F6: a removal of a continued session long after it joined is a plain removal', async () => {
+    const env = setup()
+    await toConsent(env, 'startReused')
+    await env.c.continueHere()
+    env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    env.rt.on('/live/join/prove', 'proveExchange')
+    await env.c.submitConsent({ai_process: true})
+    env.clock.now += 120
+    env.fake.drop('removed')
+    await flush()
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'removed'})
+  })
+
+  it('F8: no stage 45 s after connecting shows “agent waiting”; the stage clears it', async () => {
+    const env = setup()
+    await toLive(env)
+    const wait = env.timers.find(t => t.ms === STAGE_WAIT_MS)!
+    expect(wait).toBeTruthy()
+    wait.cb()
+    expect(env.last().notice).toBe('agent_waiting')
+    env.fake.showStage('agent-stage')
+    expect(env.last()).toMatchObject({notice: null})
+  })
+
+  it('F8: the stage wait is cancelled when the session ends', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    await env.c.end()
+    expect(env.timers.find(t => t.ms === STAGE_WAIT_MS)!.cancelled).toBe(true)
+  })
+
+  it('F9: after a rejoin, blind goes out before the mic is published', async () => {
+    const env = setup()
+    await toLive(env)
+    await env.c.setBlind(true)
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+    env.rt.on('/live/join/prove', 'proveExchange')
+    env.log.length = 0
+    env.fake.drop('network')
+    await flush(400)
+    const ops = env.log.filter(l => l.startsWith('room.'))
+    expect(ops.indexOf('room.data')).toBeGreaterThan(
+      ops.indexOf('room.connect'),
+    )
+    expect(ops.indexOf('room.data')).toBeLessThan(ops.indexOf('room.mic(true)'))
   })
 })
 

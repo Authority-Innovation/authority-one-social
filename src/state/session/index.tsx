@@ -158,9 +158,6 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   const login = useCallback<SessionApiContext['login']>(
     async (params, logContext) => {
       addSessionDebugLog({type: 'method:start', method: 'login'})
-      // Agent Live: start ending any open live session while this account's
-      // bearer is still current (no-op when none is open, or Live is dark).
-      endOpenLiveSessions()
       const signal = cancelPendingTask()
       const {agent, account} = await createAgentAndLogin(
         params,
@@ -170,6 +167,11 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       if (signal.aborted) {
         return
       }
+      // Agent Live: the new credentials worked, so the account changes now.
+      // Start ending any open live session while the old account's bearer is
+      // still current (no-op when none is open, or Live is dark). Not before
+      // the login: a failed one changes nothing (review f2caccaa F7).
+      endOpenLiveSessions()
       store.dispatch({
         type: 'switched-to-account',
         newAgent: agent,

@@ -86,6 +86,10 @@ jest.mock('#/components/icons/Microphone', () => ({
   Microphone_Stroke2_Corner0_Rounded: () => null,
 }))
 jest.mock('#/lib/agent-runtime', () => ({}))
+const mockToastShow = jest.fn()
+jest.mock('#/components/Toast', () => ({
+  show: (...args: unknown[]) => mockToastShow(...args),
+}))
 jest.mock('#/components/forms/Toggle', () => {
   const {Pressable, Text} = require('react-native')
   return {
@@ -154,7 +158,11 @@ jest.mock('#/features/agentLive/permissions', () => ({
 }))
 
 const mockNavigate = jest.fn()
-const mockNav = {canGoBack: true}
+const mockNav: {
+  canGoBack: boolean
+  prevent: boolean
+  onPrevented: () => void
+} = {canGoBack: true, prevent: false, onPrevented: () => {}}
 const mockGoBack = jest.fn()
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -162,6 +170,11 @@ jest.mock('@react-navigation/native', () => ({
     goBack: mockGoBack,
     canGoBack: () => mockNav.canGoBack,
   }),
+  // The latest usePreventRemove call, so a test can swipe back.
+  usePreventRemove: (prevent: boolean, cb: () => void) => {
+    mockNav.prevent = prevent
+    mockNav.onPrevented = cb
+  },
 }))
 
 type Agent = {handle: string; did?: string; displayName?: string}
@@ -263,6 +276,7 @@ beforeEach(() => {
   mockNav.canGoBack = true
   mockNavigate.mockReset()
   mockGoBack.mockReset()
+  mockToastShow.mockReset()
   mockLoad.mockReset()
   mockKey.mockReset().mockResolvedValue(deviceKeyFromSeed(DEVICE_SEED))
   mockMic.mockReset().mockResolvedValue('granted')
@@ -707,6 +721,112 @@ describe('session screen (flag on)', () => {
     expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
       'This live session is still open on your other device. End it there, then try again here.',
     )
+  })
+
+  it('F1: a swipe-back while live is prevented and becomes End (waits for /end, then goes back)', async () => {
+    await goLive()
+    expect(mockNav.prevent).toBe(true)
+    rt.on('/live/sessions/:sid/end', 'end')
+    act(() => {
+      mockNav.onPrevented()
+    })
+    await flush()
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('F1: removal is not prevented before a session or after it ended', async () => {
+    const {getByTestId} = await open()
+    expect(getByTestId('agentLiveIntro')).toBeTruthy()
+    expect(mockNav.prevent).toBe(false)
+  })
+
+  it('F1: no Done while “Ending…” shows', async () => {
+    const {getByTestId, queryByTestId} = await goLive()
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const real = rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname.endsWith('/end')) await gate
+      return real(u, i)
+    }
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveEndButton'))
+    expect(getByTestId('agentLiveEnding')).toBeTruthy()
+    expect(queryByTestId('agentLiveDoneButton')).toBeNull()
+    expect(mockNav.prevent).toBe(true)
+    release()
+    await flush()
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('F1: Cancel while the session is starting ends it, then goes back', async () => {
+    const {getByTestId} = await open()
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const real = rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname === '/live/sessions') await gate
+      return real(u, i)
+    }
+    rt.on('/live/sessions', 'startAwaitingConsent')
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveBeginButton'))
+    await press(getByTestId('agentLiveCancelButton'))
+    release()
+    await flush()
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('F1: the screen goes (account switch, unmount) and /end gives up: a toast says so, once', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {unmount} = await goLive()
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      unmount()
+      for (const ms of [0, 1000, 3000, 7000]) {
+        await act(async () => {
+          jest.advanceTimersByTime(ms)
+          for (let i = 0; i < 30; i++) await Promise.resolve()
+        })
+      }
+      expect(rt.to('/live/sessions/:sid/end')).toHaveLength(4)
+      expect(mockToastShow).toHaveBeenCalledTimes(1)
+      expect(mockToastShow.mock.calls[0][0]).toMatch(/may still be live/)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('F1: Leave anyway after a failed /end shows no second warning', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {getByTestId, unmount} = await goLive()
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      await press(getByTestId('agentLiveEndButton'))
+      for (const ms of [1000, 3000, 7000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveEndFailed')).toBeTruthy()
+      expect(mockNav.prevent).toBe(false)
+      await press(getByTestId('agentLiveDoneButton'))
+      unmount()
+      expect(mockToastShow).not.toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('End with nothing to go back to opens the agent’s hub', async () => {
