@@ -544,6 +544,10 @@ function Finished({
         return l`You were removed from the live session.`
       case 'other_device':
         return l`This live session moved to another device.`
+      case 'refused_reconnect':
+        return l`Couldn’t reconnect: this device’s joins were refused, so it stopped here. The live session wasn’t ended: open Live again to end it, or it ends on its own at its time limit.`
+      case 'refused':
+        return l`The live session was refused here, so it stopped on this device. It wasn’t ended: open Live again to end it, or it ends on its own at its time limit.`
       case 'left_open':
         return l`You left the live session. It’s still open on your other device and wasn’t ended. End it there, or open Live again to end it.`
       case 'still_open_elsewhere':

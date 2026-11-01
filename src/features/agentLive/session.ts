@@ -97,6 +97,10 @@ export type LiveEndReason =
   | 'still_open_elsewhere'
   /** The owner left a reused session they had not taken over; it runs on. */
   | 'left_open'
+  /** The runtime refused it; stopped here with no /end (it runs on). */
+  | 'refused'
+  /** Rejoins refused until the ladder ran out; no /end (it runs on). */
+  | 'refused_reconnect'
 
 /** Something that went wrong without ending the session. */
 export type LiveNotice =
@@ -284,6 +288,13 @@ type Session = {
    * review 7f87024af N1).
    */
   tookOver?: boolean
+  /**
+   * The runtime refused something for this session (a proof, a mint, a join:
+   * R3's removal or a refused rejoin). Dispatch ruling on review 7f87024af:
+   * after any refusal the client never sends /end on its own; only the
+   * owner's explicit End does.
+   */
+  refused?: boolean
 }
 
 export function createLiveSessionController({
@@ -397,7 +408,17 @@ export function createLiveSessionController({
    */
   function finish(
     patch: Partial<LiveSessionState>,
-    {endRuntime, owner = false}: {endRuntime: boolean; owner?: boolean},
+    {
+      endRuntime,
+      owner = false,
+      everywhere = false,
+    }: {
+      endRuntime: boolean
+      /** The owner's explicit End (button, or the back swipe that is End). */
+      owner?: boolean
+      /** The open-session panel's "End the live session" (every device). */
+      everywhere?: boolean
+    },
   ): Promise<void> {
     if (ending) return ending
     cancelStageWait?.()
@@ -406,9 +427,14 @@ export function createLiveSessionController({
     cancelTakeover = null
     const s = session
     session = null
-    if (endRuntime && s?.reused && !s.tookOver && !owner) {
+    if (endRuntime && s?.reused && !s.tookOver && !everywhere) {
+      // Not ours yet: only the panel's End for every device ends it.
       endRuntime = false
       patch = leftOpen(patch)
+    } else if (endRuntime && s?.refused && !owner && !everywhere) {
+      // After a refusal, never on our own (Dispatch ruling, 7f87024af).
+      endRuntime = false
+      patch = refusedLeftOpen(patch)
     }
     set({
       micOn: false,
@@ -433,6 +459,47 @@ export function createLiveSessionController({
     'signed_out',
     'server_outdated',
   ])
+  /** A held session stopped after a refusal, with no /end: say so. */
+  function refusedLeftOpen(patch: Partial<LiveSessionState>) {
+    if (patch.phase === 'failed' && KEEP_ON_LEFT_OPEN.has(patch.error!)) {
+      return patch
+    }
+    // The ladder ran out on refusals: rev 4's "Couldn't reconnect", but
+    // honest that nothing was ended.
+    const endReason =
+      patch.phase === 'failed' && patch.error === 'reconnect_failed'
+        ? ('refused_reconnect' as const)
+        : ('refused' as const)
+    return {phase: 'ended' as const, endReason, error: null}
+  }
+
+  /**
+   * A runtime answer that refuses (as opposed to an outage, which is
+   * retried): 401, 403, 404, any other 4xx but 408 and 429, a bad proof.
+   */
+  function isRefusal(e: LiveError): boolean {
+    switch (e.kind) {
+      case 'bad_proof':
+      case 'not_found':
+      case 'consent_required':
+      case 'signed_out':
+      case 'invalid_argument':
+        return true
+      case 'http':
+        return (
+          e.status >= 400 &&
+          e.status < 500 &&
+          e.status !== 408 &&
+          e.status !== 429
+        )
+      default:
+        return false
+    }
+  }
+  function noteRefusal(s: Session, e: LiveError) {
+    if (isRefusal(e)) s.refused = true
+  }
+
   function leftOpen(patch: Partial<LiveSessionState>) {
     if (patch.phase === 'failed' && KEEP_ON_LEFT_OPEN.has(patch.error!)) {
       return patch
@@ -500,7 +567,10 @@ export function createLiveSessionController({
     const sig = s.key ? joinProof(s.key, j.token) : null
     if (!sig) throw new JoinError('bad_proof')
     const proved = await api.proveLiveJoin({token: j.token, sig})
-    if (!proved.ok) throw new JoinError(proved.error.kind)
+    if (!proved.ok) {
+      noteRefusal(s, proved.error)
+      throw new JoinError(proved.error.kind)
+    }
     return proved.data.token
   }
 
@@ -593,6 +663,7 @@ export function createLiveSessionController({
       ((connFromRejoin && deps.nowS() - connectedAt < REJOIN_REFUSED_GRACE_S) ||
         (session?.reused && phase() === 'connecting'))
     ) {
+      if (session) session.refused = true
       await rejoin(true)
       return
     }
@@ -600,6 +671,7 @@ export function createLiveSessionController({
       // An unbound token (no device key) can't replace the held participant;
       // the runtime removes it until the dead one leaves (R2 v2, up to ~30 s).
       // Keep trying: the next mint says if the session is really over.
+      session.refused = true
       await rejoin()
       return
     }
@@ -623,6 +695,7 @@ export function createLiveSessionController({
     if (!d || d.type !== 'disconnected' || d.reason !== 'removed') {
       return false
     }
+    if (session) session.refused = true
     rejoinDrop = null
     rejoinLive = false
     return true
@@ -662,6 +735,7 @@ export function createLiveSessionController({
         const t = await mintJoin(s, wantCamera)
         if (over()) return
         if (!t.ok) {
+          noteRefusal(s, t.error)
           const k = t.error.kind
           if (k === 'not_found') {
             await finish(
@@ -691,11 +765,11 @@ export function createLiveSessionController({
               t.error.status !== 408 &&
               t.error.status !== 429)
           ) {
-            // /end too (review 7919b5692 J1): a refusal from in front of the
-            // runtime need not mean the session is over, and the agent must
-            // not stay up with the owner told it ended.
+            // No /end (Dispatch ruling on 7f87024af, which replaces J1): the
+            // client never ends a session on a refusal; finish()'s rule turns
+            // this into "refused" (or "still open" on a reused session).
             await finish(
-              {phase: 'ended', endReason: 'ended_elsewhere'},
+              {phase: 'ended', endReason: 'refused'},
               {endRuntime: true},
             )
             return
@@ -771,6 +845,7 @@ export function createLiveSessionController({
       const t = await freshJoin(s, false)
       if (over()) return
       if (!t.ok) {
+        noteRefusal(s, t.error)
         await fail(
           t.error.kind === 'consent_required'
             ? 'consent_incomplete'
@@ -924,6 +999,7 @@ export function createLiveSessionController({
       })
       if (over()) return
       if (!res.ok) {
+        noteRefusal(s, res.error)
         await fail(res.error.kind)
         return
       }
@@ -1055,7 +1131,7 @@ export function createLiveSessionController({
       // live on the owner's other device.
       await finish(
         {phase: 'ended', endReason: 'local'},
-        {endRuntime: phase() !== 'reuse'},
+        {endRuntime: phase() !== 'reuse', owner: true},
       )
     },
 
@@ -1065,7 +1141,7 @@ export function createLiveSessionController({
       if (phase() !== 'reuse') return
       await finish(
         {phase: 'ended', endReason: 'local'},
-        {endRuntime: true, owner: true},
+        {endRuntime: true, everywhere: true},
       )
     },
 

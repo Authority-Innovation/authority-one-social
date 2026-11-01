@@ -613,10 +613,11 @@ describe('review f2caccaa', () => {
   it.each<[string, string, Record<string, unknown>]>([
     // An unbound continued session can't be continued at all now (no key,
     // R3; review 7f87024af N5): only a new one reaches this budget.
+    // Every join removed is a refusal: no /end (Dispatch ruling, 7f87024af).
     [
       'startAwaitingConsent',
       'a new session',
-      {phase: 'failed', error: 'reconnect_failed'},
+      {phase: 'ended', endReason: 'refused_reconnect'},
     ],
   ])(
     'F2: an unbound session never admitted (%s: %s) runs out of budget and says so',
@@ -1024,7 +1025,7 @@ describe('R2 rev 4: the proof exchange and the unbound wait (9fc23bd)', () => {
     expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
   })
 
-  it('bound: a rejoin refused every time climbs 1/2/4/8/16 s, then “reconnect failed” with /end (rev 4)', async () => {
+  it('bound: a rejoin refused every time climbs 1/2/4/8/16 s, then “Couldn’t reconnect” with no /end (rev 4 + ruling on 7f87024af)', async () => {
     const env = setup()
     await toLive(env)
     for (let i = 0; i < 6; i++) {
@@ -1046,12 +1047,13 @@ describe('R2 rev 4: the proof exchange and the unbound wait (9fc23bd)', () => {
       1000, 2000, 4000, 8000, 16000,
     ])
     expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(5)
+    // Rev 4's "Couldn't reconnect", but every rung was a refusal: no /end.
     expect(env.last()).toMatchObject({
-      phase: 'failed',
-      error: 'reconnect_failed',
+      phase: 'ended',
+      endReason: 'refused_reconnect',
       micOn: false,
     })
-    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
   it('bound: removed within 10 s of a rejoin’s connect is refused (next rung, no reset); after 10 s it is FINAL (rev 4)', async () => {
@@ -1079,7 +1081,7 @@ describe('R2 rev 4: the proof exchange and the unbound wait (9fc23bd)', () => {
   })
 
   it.each([400, 403, 409])(
-    'a refused mint (%i) during a rejoin is FINAL: “session ended”, no retry (rev 4)',
+    'a refused mint (%i) during a rejoin is FINAL, no retry, and no /end (ruling on 7f87024af, replaces J1)',
     async status => {
       const env = setup()
       await toLive(env)
@@ -1091,13 +1093,9 @@ describe('R2 rev 4: the proof exchange and the unbound wait (9fc23bd)', () => {
       env.fake.drop('network')
       await flush(400)
       expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
-      expect(env.last()).toMatchObject({
-        phase: 'ended',
-        endReason: 'ended_elsewhere',
-      })
-      // J1: /end too, so the agent doesn't stay up.
+      expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
       await flush()
-      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
     },
   )
 
@@ -1419,6 +1417,101 @@ describe('review 679a9d48', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
     expect(env.last()).toMatchObject({phase: 'ended', endReason: 'local'})
     expect(env.fake.connects()).toEqual([])
+  })
+
+  describe('ruling on 7f87024af: never /end on a refusal (new sessions too); only the owner’s End', () => {
+    const consentThen = async (env: Env, prove: unknown[]) => {
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/join/prove', ...(prove as never[]))
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+    }
+
+    it('a refused token on the first proof (404): stopped, no /end', async () => {
+      const env = setup()
+      await consentThen(env, [{status: 404, body: {error: 'not found'}}])
+      expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('a refused first mint (403, the consent token gone stale): stopped, no /end', async () => {
+      const env = setup({nowS: EXP + 60})
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/sessions/:sid/token', {
+        status: 403,
+        body: {error: 'refused'},
+      })
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+      expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('every rejoin proof refused: “Couldn’t reconnect”, no /end', async () => {
+      const env = setup()
+      await toLive(env)
+      const refused = {status: 401, body: {error: 'bad_proof'}}
+      for (let i = 0; i < 5; i++) {
+        env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+        env.rt.on('/live/join/prove', refused)
+      }
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.fake.drop('network')
+      for (let i = 0; i < 60 && env.last().phase !== 'ended'; i++) {
+        await flush(40)
+      }
+      await flush()
+      expect(env.last()).toMatchObject({
+        phase: 'ended',
+        endReason: 'refused_reconnect',
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('a refusal that recovered: the owner’s End still ends it (/end)', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+      env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
+      const connect = env.fake.room.connect
+      let refuse = true
+      env.fake.room.connect = async args => {
+        await connect(args)
+        if (refuse) {
+          refuse = false
+          env.fake.drop('removed')
+        }
+      }
+      env.fake.drop('network')
+      await flush(400)
+      expect(env.last().phase).toBe('connected')
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.end()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+      expect(env.last()).toMatchObject({phase: 'ended', endReason: 'local'})
+    })
+
+    it('a plain outage (no refusal) still fails as “Couldn’t reconnect”, with /end', async () => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      env.fake.drop('network')
+      for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
+        await flush(40)
+      }
+      await flush()
+      expect(env.last()).toMatchObject({
+        phase: 'failed',
+        error: 'reconnect_failed',
+      })
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    })
   })
 
   describe('7f87024af: a reused session not taken over is never ended on its own', () => {
@@ -1744,16 +1837,17 @@ describe('H3: a failed start leaves nothing behind', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
   })
 
-  it('a refused proof: no join, session ended', async () => {
+  it('a refused proof: no join, and no /end (Dispatch ruling on 7f87024af: never /end on a refusal)', async () => {
     const env = setup()
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', 'proveBadSignature')
     env.rt.on('/live/sessions/:sid/end', 'end')
     await env.c.submitConsent({ai_process: true})
-    expect(env.last()).toMatchObject({phase: 'failed', error: 'bad_proof'})
+    await flush()
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
     expect(env.fake.connects()).toEqual([])
-    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
   it('no device key: an unbound session, no proof', async () => {

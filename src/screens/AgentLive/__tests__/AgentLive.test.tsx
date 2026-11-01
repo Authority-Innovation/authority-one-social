@@ -907,6 +907,24 @@ describe('session screen (flag on)', () => {
     expect(queryByTestId('agentLiveContinueHereButton')).toBeNull()
   })
 
+  it('ruling on 7f87024af: a refused proof on a new session says it was refused and not ended (no /end)', async () => {
+    const fake = createFakeRoom()
+    mockLoad.mockResolvedValue(() => fake.room)
+    const r = screen()
+    await flush()
+    rt.on('/live/sessions', 'startAwaitingConsent')
+    await press(r.getByTestId('agentLiveBeginButton'))
+    rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    rt.on('/live/join/prove', {status: 404, body: {error: 'not found'}})
+    await press(r.getByTestId('agentLiveConsent-ai_process'))
+    await press(r.getByTestId('agentLiveConsentSubmit'))
+    await flush()
+    expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+      'The live session was refused here, so it stopped on this device. It wasn’t ended: open Live again to end it, or it ends on its own at its time limit.',
+    )
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+  })
+
   it('N6: a takeover that fails says the session is still open and was not ended', async () => {
     const {getByTestId} = await toSheet('startReused')
     await press(getByTestId('agentLiveContinueHereButton'))
