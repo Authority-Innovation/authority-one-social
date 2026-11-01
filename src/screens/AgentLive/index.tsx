@@ -437,7 +437,7 @@ function Reuse({
     <Panel testID="agentLiveReuse">
       <AgentName displayName={displayName} />
       <Text
-        testID="agentLiveStillOpen"
+        testID="agentLiveReuseTitle"
         style={[a.text_md, a.font_bold, {color: ON_STAGE_TEXT}]}>
         {bound ? (
           <Trans>Still open on your other device</Trans>
@@ -544,6 +544,8 @@ function Finished({
         return l`You were removed from the live session.`
       case 'other_device':
         return l`This live session moved to another device.`
+      case 'left_open':
+        return l`You left the live session. It’s still open on your other device and wasn’t ended. End it there, or open Live again to end it.`
       case 'still_open_elsewhere':
         return l`Couldn’t take the live session over: it’s still open on your other device, and it wasn’t ended. End it there, or open Live again to end it.`
       case 'consent_withdrawn':

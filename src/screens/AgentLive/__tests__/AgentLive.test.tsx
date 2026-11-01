@@ -876,7 +876,7 @@ describe('session screen (flag on)', () => {
 
   it('ruling: the server says it is open and this device held it: “Still open on your other device”, Take over here, End', async () => {
     const {getByTestId} = await toSheet('startReused')
-    expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
+    expect(getByTestId('agentLiveReuseTitle')).toHaveTextContent(
       'Still open on your other device',
     )
     expect(getByTestId('agentLiveContinueHereButton')).toHaveProp(
@@ -889,7 +889,7 @@ describe('session screen (flag on)', () => {
   it('ruling (563477989 R1): bound, but another device holds it: “Still open on your other device”, no Take over, no /end', async () => {
     mockHeld.here = false
     const {getByTestId, queryByTestId} = await toSheet('startReused')
-    expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
+    expect(getByTestId('agentLiveReuseTitle')).toHaveTextContent(
       'Still open on your other device',
     )
     expect(queryByTestId('agentLiveContinueHereButton')).toBeNull()
@@ -901,10 +901,24 @@ describe('session screen (flag on)', () => {
   it('ruling (563477989 R2): unbound, it can’t continue: “Couldn’t reconnect”, no Take over', async () => {
     mockKey.mockReset().mockResolvedValue(null)
     const {getByTestId, queryByTestId} = await toSheet('startReused')
-    expect(getByTestId('agentLiveStillOpen')).toHaveTextContent(
+    expect(getByTestId('agentLiveReuseTitle')).toHaveTextContent(
       'Couldn’t reconnect',
     )
     expect(queryByTestId('agentLiveContinueHereButton')).toBeNull()
+  })
+
+  it('N6: a takeover that fails says the session is still open and was not ended', async () => {
+    const {getByTestId} = await toSheet('startReused')
+    await press(getByTestId('agentLiveContinueHereButton'))
+    rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    rt.on('/live/join/prove', {status: 401, body: {error: 'bad_proof'}})
+    await press(getByTestId('agentLiveConsent-ai_process'))
+    await press(getByTestId('agentLiveConsentSubmit'))
+    await flush()
+    expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+      'Couldn’t take the live session over: it’s still open on your other device, and it wasn’t ended. End it there, or open Live again to end it.',
+    )
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
   })
 
   it('R3f: End on the open-session panel ends it for every device, then leaves', async () => {

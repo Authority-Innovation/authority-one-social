@@ -336,7 +336,7 @@ it('the stage track shows when the agent publishes it', async () => {
 
 describe('M2: a session already open (reused)', () => {
   it('asks first; continuing goes to the sheet', async () => {
-    const env = setup()
+    const env = setup({held: true})
     await toConsent(env, 'startReused')
     expect(env.last().phase).toBe('reuse')
     await env.c.continueHere()
@@ -611,15 +611,8 @@ describe('review f2caccaa', () => {
   }
 
   it.each<[string, string, Record<string, unknown>]>([
-    // Ruling (review 7919b5692 item 8): no guessing "still open" from
-    // removals; a continued session runs out like a new one.
-    // A continued session (the server said `reused`) whose joins are refused
-    // is held elsewhere: said, and left running (review 563477989 R1).
-    [
-      'startReused',
-      'a continued session',
-      {phase: 'ended', endReason: 'still_open_elsewhere'},
-    ],
+    // An unbound continued session can't be continued at all now (no key,
+    // R3; review 7f87024af N5): only a new one reaches this budget.
     [
       'startAwaitingConsent',
       'a new session',
@@ -838,7 +831,7 @@ describe('review f2caccaa', () => {
   })
 
   it('F6: a removal of a continued session long after it joined is a plain removal', async () => {
-    const env = setup()
+    const env = setup({held: true})
     await toConsent(env, 'startReused')
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
@@ -851,7 +844,7 @@ describe('review f2caccaa', () => {
   })
 
   it('a removal during the first join of a continued session is a refused rejoin: the ladder, not “removed” (ruling 7919b5692)', async () => {
-    const env = setup()
+    const env = setup({held: true})
     await toConsent(env, 'startReused')
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
@@ -900,27 +893,17 @@ describe('review f2caccaa', () => {
     expect(env.timers.filter(t => t.ms === STAGE_WAIT_MS)).toHaveLength(1)
   })
 
-  it('G3: an unbound continued session in a plain outage fails as a reconnect, with /end', async () => {
+  it('N5: an unbound continued session can’t be continued (R3): continueHere does nothing, nothing ends it', async () => {
     const env = setup({key: false})
     await toConsent(env, 'startReused')
     await env.c.continueHere()
-    env.rt.on('/live/sessions/:sid/consent', {
-      status: 200,
-      body: {...reply('consentAdmitted').body, popRequired: false},
-    })
-    await env.c.submitConsent({ai_process: true})
-    env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
-    env.rt.on('/live/sessions/:sid/end', 'end')
-    env.fake.drop('network')
-    for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
-      await flush(40)
-    }
-    await flush()
-    expect(env.last()).toMatchObject({
-      phase: 'failed',
-      error: 'reconnect_failed',
-    })
-    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.last()).toMatchObject({phase: 'reuse', canTakeOver: false})
+    expect(env.rt.sent.map(r => r.path)).toEqual(['/live/sessions'])
+    // A bound device that never held it can't either.
+    const other = setup({held: false})
+    await toConsent(other, 'startReused')
+    await other.c.continueHere()
+    expect(other.last().phase).toBe('reuse')
   })
 
   it('F8: no stage 45 s after connecting shows “agent waiting”; the stage clears it', async () => {
@@ -1398,6 +1381,8 @@ describe('review 679a9d48', () => {
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', 'proveExchange')
     await env.c.submitConsent({ai_process: true})
+    // It stays up past the refused window: a real takeover.
+    env.timers.find(t => t.ms === 10_000 && !t.cancelled)!.cb()
     env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
     env.rt.on('/live/sessions/:sid/end', 'end')
     env.fake.drop('network')
@@ -1434,6 +1419,143 @@ describe('review 679a9d48', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
     expect(env.last()).toMatchObject({phase: 'ended', endReason: 'local'})
     expect(env.fake.connects()).toEqual([])
+  })
+
+  describe('7f87024af: a reused session not taken over is never ended on its own', () => {
+    const takeOver = async (env: Env, prove: unknown[] = ['proveExchange']) => {
+      await toConsent(env, 'startReused')
+      await env.c.continueHere()
+      env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+      env.rt.on('/live/join/prove', ...(prove as never[]))
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+    }
+    const leftRunning = (env: Env) => {
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+      expect(env.last()).toMatchObject({
+        phase: 'ended',
+        endReason: 'still_open_elsewhere',
+        micOn: false,
+      })
+    }
+
+    it.each([
+      ['a refused proof (401)', {status: 401, body: {error: 'bad_proof'}}],
+      ['a refused token (404)', {status: 404, body: {error: 'not found'}}],
+      ['an outage (503)', E503],
+    ])('N1/N4: %s on the first takeover join', async (_n, answer) => {
+      const env = setup({held: true})
+      await takeOver(env, [answer])
+      leftRunning(env)
+    })
+
+    it.each([
+      ['403', {status: 403, body: {error: 'refused'}}],
+      ['409', {status: 409, body: {error: 'refused'}}],
+    ])('N1: removed, then a refused mint (%s)', async (_n, answer) => {
+      const env = setup({held: true})
+      await takeOver(env)
+      env.rt.on('/live/sessions/:sid/token', answer)
+      env.fake.drop('removed')
+      await flush(400)
+      leftRunning(env)
+    })
+
+    it('N1: removed, then a 401 mint: signed out is said, still no /end', async () => {
+      const env = setup({held: true})
+      await takeOver(env)
+      env.rt.on('/live/sessions/:sid/token', {
+        status: 401,
+        body: {error: 'unauthorized'},
+      })
+      env.fake.drop('removed')
+      await flush(400)
+      expect(env.last()).toMatchObject({phase: 'failed', error: 'signed_out'})
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('N3: refused, then a plain drop, then an outage: still no /end', async () => {
+      const env = setup({held: true})
+      await takeOver(env)
+      env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+      env.rt.on('/live/join/prove', 'proveExchange')
+      const connect = env.fake.room.connect
+      let n = 0
+      env.fake.room.connect = async args => {
+        await connect(args)
+        if (n++ === 0) env.fake.drop('network')
+      }
+      env.fake.drop('removed')
+      await flush(200)
+      env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503, E503)
+      for (let i = 0; i < 60 && env.last().phase !== 'ended'; i++) {
+        await flush(40)
+      }
+      await flush()
+      leftRunning(env)
+    })
+
+    it('End on the stage before it is taken over leaves it running (left_open)', async () => {
+      const env = setup({held: true})
+      await takeOver(env)
+      expect(env.last().phase).toBe('connected')
+      await env.c.end()
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+      expect(env.last()).toMatchObject({phase: 'ended', endReason: 'left_open'})
+    })
+
+    it('once taken over (up past the refused window) it is ours: End sends /end', async () => {
+      const env = setup({held: true})
+      await takeOver(env)
+      env.timers.find(t => t.ms === 10_000 && !t.cancelled)!.cb()
+      await env.c.end()
+      expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+      expect(env.last()).toMatchObject({phase: 'ended', endReason: 'local'})
+    })
+
+    it('a join that dropped before the window ends is not a takeover', async () => {
+      const env = setup({held: true})
+      await takeOver(env)
+      const timer = env.timers.find(t => t.ms === 10_000)!
+      env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+      env.fake.drop('network')
+      timer.cb()
+      for (let i = 0; i < 60 && env.last().phase !== 'ended'; i++) {
+        await flush(40)
+      }
+      await flush()
+      leftRunning(env)
+    })
+
+    it('N2: Cancel while the holder check runs sends no /end', async () => {
+      const env = setup({held: true})
+      let release!: (v: boolean) => void
+      ;(
+        env.deps.wasHeldHere as jest.Mock<() => Promise<boolean>>
+      ).mockImplementationOnce(() => new Promise<boolean>(r => (release = r)))
+      env.rt.on('/live/sessions', 'startReused')
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      const begun = env.c.begin()
+      await flush()
+      await env.c.end()
+      release(true)
+      await begun
+      await flush()
+      expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    })
+
+    it('N6: a rejoin that connects records the session as held here', async () => {
+      const env = setup()
+      await toLive(env)
+      ;(env.deps.markHeldHere as jest.Mock).mockClear()
+      env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+      env.rt.on('/live/join/prove', 'proveExchange')
+      env.fake.drop('network')
+      await flush(400)
+      expect(env.last().phase).toBe('connected')
+      expect(env.deps.markHeldHere).toHaveBeenCalledWith(OWNER_DID, SID)
+    })
   })
 
   it('reuse: Take over only where R3 allows it - a key, and this device held the session (563477989 R1)', async () => {

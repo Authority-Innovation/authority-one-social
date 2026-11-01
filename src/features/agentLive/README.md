@@ -47,9 +47,25 @@ refresh the contract; never edit it by hand.
 ## Flow
 
 Nothing happens on arrival (a deep link included). The owner taps Continue:
-mic access → `POST /live/sessions` (a session, no media) → if `reused`,
-"continue here?" (Not now leaves it running) → the consent sheet → `consent`
-→ proof → join → mic on. The camera publishes only after camera access, a
+mic access → `POST /live/sessions` (a session, no media) → if `reused`, the
+open-session panel → the consent sheet → `consent` → proof → join → mic on.
+
+The open-session panel (the server said `reused`; ruling on reviews
+7919b5692, 563477989 and 7f87024af):
+
+- this device held the session itself (`heldSessions.ts`, so it has the
+  holder's key, R3 `mayReplace`): "Still open on your other device" with
+  "Take over here";
+- bound, but another device holds it: "Still open on your other device", no
+  takeover;
+- unbound: "Couldn't reconnect";
+- always "End the live session" (every device, `/end`), and Not now / Done,
+  which leave it running.
+
+A reused session is the other device's until a join of ours stays up past the
+10 s refused window (`tookOver`). Until then nothing ends it on its own: every
+failure or leave says it is still open and sends no `/end`
+(`still_open_elsewhere`, `left_open`). Only the panel's End does. The camera publishes only after camera access, a
 proven camera token and a rejoin. A session whose `recordPolicy` isn't `off`
 shows a recording indicator, on the sheet and on the stage.
 

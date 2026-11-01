@@ -276,6 +276,11 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
     }
   })
 
+  it('K5: the bounds are 10 s, and 30 s for start and consent', () => {
+    expect(LIVE_REQUEST_TIMEOUT_MS).toBe(10_000)
+    expect(LIVE_START_TIMEOUT_MS).toBe(30_000)
+  })
+
   it('K5: start may take longer (it can launch the agent job), still bounded', async () => {
     jest.useFakeTimers({doNotFake: ['Date']})
     try {
