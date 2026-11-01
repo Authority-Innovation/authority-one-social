@@ -6,6 +6,10 @@
  * only to this session's agent (`agent:<sid>:*`): its `stage` video and its
  * voice. Edge sources and guests are not subscribed here. The owner's own
  * tracks are visible to the agent identity only.
+ *
+ * Connection: the SDK's own resume shows as reconnecting/reconnected. A drop
+ * it can't recover from is reported once with its reason (types.ts), and the
+ * session decides what to do (rejoin with a fresh token, or end).
  */
 import {
   AudioSession,
@@ -14,6 +18,7 @@ import {
   VideoTrack,
 } from '@livekit/react-native'
 import {
+  DisconnectReason,
   type Participant,
   type RemoteParticipant,
   type RemoteTrackPublication,
@@ -24,7 +29,13 @@ import {
 } from 'livekit-client'
 
 import {LIVE_IOS_AUDIO_POLICY} from './audioSession'
-import {type LiveRoom, type LiveRoomFactory, type StageRef} from './types'
+import {
+  type LiveConnectionEvent,
+  type LiveDisconnectReason,
+  type LiveRoom,
+  type LiveRoomFactory,
+  type StageRef,
+} from './types'
 
 let globalsRegistered = false
 
@@ -41,6 +52,24 @@ function isStage(pub: TrackPublication) {
   )
 }
 
+export function disconnectReasonOf(
+  reason: DisconnectReason | undefined,
+): LiveDisconnectReason {
+  switch (reason) {
+    case DisconnectReason.CLIENT_INITIATED:
+      return 'client'
+    case DisconnectReason.PARTICIPANT_REMOVED:
+      return 'removed'
+    case DisconnectReason.ROOM_DELETED:
+    case DisconnectReason.ROOM_CLOSED:
+      return 'room_deleted'
+    case DisconnectReason.DUPLICATE_IDENTITY:
+      return 'duplicate_identity'
+    default:
+      return 'network'
+  }
+}
+
 export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
   if (!globalsRegistered) {
     // Our own iOS audio policy instead of the SDK default, which leaves
@@ -53,7 +82,9 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
   const agentPrefix = `agent:${sid}:`
   const isAgent = (p: Participant) => p.identity.startsWith(agentPrefix)
   const room = new Room({adaptiveStream: true, dynacast: true})
-  const listeners = new Set<(stage: StageRef | null) => void>()
+  const stageListeners = new Set<(stage: StageRef | null) => void>()
+  const connListeners = new Set<(e: LiveConnectionEvent) => void>()
+  let audioOn = false
 
   const findStage = (): StageRef | null => {
     for (const p of room.remoteParticipants.values()) {
@@ -71,10 +102,12 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
     }
     return null
   }
-  const emit = () => {
+  const emitStage = () => {
     const stage = findStage()
-    listeners.forEach(cb => cb(stage))
+    stageListeners.forEach(cb => cb(stage))
   }
+  const emitConn = (e: LiveConnectionEvent) =>
+    connListeners.forEach(cb => cb(e))
 
   const consider = (pub: RemoteTrackPublication, p: RemoteParticipant) => {
     if (!isAgent(p)) return
@@ -89,6 +122,11 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
       agents.map(p => ({participantIdentity: p.identity, allowAll: true})),
     )
   }
+  const stopAudio = async () => {
+    if (!audioOn) return
+    audioOn = false
+    await AudioSession.stopAudioSession().catch(() => {})
+  }
 
   room
     .on(RoomEvent.TrackPublished, consider)
@@ -98,10 +136,16 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
     })
     .on(RoomEvent.ParticipantDisconnected, () => {
       allowAgents()
-      emit()
+      emitStage()
     })
-    .on(RoomEvent.TrackSubscribed, emit)
-    .on(RoomEvent.TrackUnsubscribed, emit)
+    .on(RoomEvent.TrackSubscribed, emitStage)
+    .on(RoomEvent.TrackUnsubscribed, emitStage)
+    .on(RoomEvent.Reconnecting, () => emitConn({type: 'reconnecting'}))
+    .on(RoomEvent.Reconnected, () => emitConn({type: 'reconnected'}))
+    .on(RoomEvent.Disconnected, reason => {
+      emitStage()
+      emitConn({type: 'disconnected', reason: disconnectReasonOf(reason)})
+    })
 
   const StageVideo: LiveRoom['StageVideo'] = ({stage, style}) => (
     <VideoTrack
@@ -113,18 +157,27 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
 
   return {
     async connect({wsUrl, token}) {
-      await AudioSession.startAudioSession()
-      await room.connect(wsUrl, token, {autoSubscribe: false})
+      if (!audioOn) {
+        await AudioSession.startAudioSession()
+        audioOn = true
+      }
+      try {
+        await room.connect(wsUrl, token, {autoSubscribe: false})
+      } catch (e) {
+        // A failed join must not leave the audio session running.
+        await stopAudio()
+        throw e
+      }
       allowAgents()
       room.remoteParticipants.forEach(p =>
         p.trackPublications.forEach(pub => consider(pub, p)),
       )
-      emit()
+      emitStage()
     },
-    async disconnect() {
+    async disconnect({keepAudio = false} = {}) {
       await room.disconnect()
-      await AudioSession.stopAudioSession()
-      emit()
+      if (!keepAudio) await stopAudio()
+      emitStage()
     },
     async setMicrophoneEnabled(on) {
       await room.localParticipant.setMicrophoneEnabled(on)
@@ -142,9 +195,15 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
       await room.localParticipant.publishData(payload, {topic, reliable})
     },
     onStageChange(cb) {
-      listeners.add(cb)
+      stageListeners.add(cb)
       return () => {
-        listeners.delete(cb)
+        stageListeners.delete(cb)
+      }
+    },
+    onConnectionChange(cb) {
+      connListeners.add(cb)
+      return () => {
+        connListeners.delete(cb)
       }
     },
     StageVideo,

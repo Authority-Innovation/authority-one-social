@@ -1,21 +1,41 @@
 /**
- * One owner live session: start, mic, blind, camera, end. Plain TypeScript (no
- * React, no SDK) so the rules below are tested without a device.
+ * One owner live session. Plain TypeScript (no React, no SDK) so the rules
+ * below are tested without a device.
+ *
+ * FLOW (design r2 §6). Nothing happens until the owner taps:
+ *   idle → begin() (a tap) → mic access → POST /live/sessions (a session, no
+ *   media) → [reuse: "continue here?"] → consent sheet → POST .../consent →
+ *   proof of possession → join → mic on → connected.
+ * The mic publishes only after the owner has decided every consent kind and
+ * tapped Go live. A deep link to the screen starts nothing.
  *
  * - Identity: the start call sends `agentDid` only (see ./api.ts). The owner
- *   is whoever the bearer says.
- * - Camera: off by default. Turning it on asks the runtime for a token with the
- *   CAMERA source first (POST /live/sessions/:sid/token {camera: true}),
- *   rejoins with that token, and only then publishes. If the token call
- *   fails, nothing is published. Turning it off unpublishes.
- * - Blind: owner-only (./blind.ts). Sent only on a session this owner started.
+ *   is whoever the bearer says; the session is pinned to that account
+ *   (`LiveAuth`) for every later call, including the end call on sign-out or
+ *   account switch.
+ * - Camera: off by default. Turning it on asks for camera access, then a token
+ *   with the CAMERA source (POST /live/sessions/:sid/token {camera: true}),
+ *   proves it and rejoins with it, and only then publishes. If any step fails
+ *   nothing is published, and the session rejoins without the camera.
+ * - Connection: a drop the SDK can't recover from either ends the session
+ *   (removed, ended elsewhere, opened on another device) or is retried once
+ *   with a fresh token. The screen never shows "Mic on" on a dead room.
+ * - End: the runtime's /end goes out first (before the room is left, so the
+ *   bearer is read while the account is still this one), and is retried. It
+ *   stops the agent's job and deletes the room; it is the app's stop path.
  * - The join token lives in this closure only: never logged or persisted.
  */
 import {
+  captureLiveAuth,
   endLiveSession,
+  type LiveAuth,
   type LiveError,
+  type LiveJoin,
+  type LiveResult,
+  proveLiveJoin,
   requestLiveToken,
   startLiveSession,
+  submitLiveConsent,
 } from './api'
 import {
   ALL_SOURCES,
@@ -23,14 +43,64 @@ import {
   blindMessage,
   encodeBlindMessage,
 } from './blind'
-import {type LiveRoom, type LiveRoomFactory, type StageRef} from './room'
+import {
+  canGoLive,
+  CONSENT_TEXT_VERSION,
+  type ConsentChoices,
+  decisionsFor,
+} from './consent'
+import {getDeviceKey} from './deviceKey'
+import {
+  type MediaAccess,
+  requestCameraAccess,
+  requestMicAccess,
+} from './permissions'
+import {type DeviceKey, joinProof} from './pop'
+import {
+  type LiveConnectionEvent,
+  type LiveRoom,
+  type LiveRoomFactory,
+  type StageRef,
+} from './room'
 
-export type LivePhase = 'idle' | 'starting' | 'connected' | 'ended' | 'failed'
+export type LivePhase =
+  | 'idle'
+  | 'starting'
+  | 'reuse'
+  | 'consent'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'ended'
+  | 'failed'
+
+export type LiveFailure =
+  | LiveError['kind']
+  | 'mic_denied'
+  | 'consent_incomplete'
+  | 'connect'
+
+/** Why a session ended (the screen words it). */
+export type LiveEndReason =
+  | 'local'
+  | 'ended_elsewhere'
+  | 'removed'
+  | 'other_device'
+  | 'consent_withdrawn'
+
+/** Something that went wrong without ending the session. */
+export type LiveNotice = 'camera_denied' | 'camera_failed' | 'action_failed'
 
 export type LiveSessionState = {
   phase: LivePhase
-  /** Why the last step failed, if it did. */
-  error: LiveError['kind'] | 'connect' | null
+  /** Why the session failed, in `failed`. */
+  error: LiveFailure | null
+  endReason: LiveEndReason | null
+  notice: LiveNotice | null
+  /** The kinds the owner decides on the sheet (the runtime's list). */
+  consentRequired: string[]
+  /** The session's recording policy; anything but 'off' shows the indicator. */
+  recordPolicy: string
   micOn: boolean
   cameraOn: boolean
   /** A camera request is in flight. */
@@ -38,52 +108,113 @@ export type LiveSessionState = {
   /** Blind on for all sources. */
   blindOn: boolean
   stage: StageRef | null
+  /** The runtime's /end is still being sent (retried). */
+  ending: boolean
 }
 
 export const initialLiveSessionState: LiveSessionState = {
   phase: 'idle',
   error: null,
+  endReason: null,
+  notice: null,
+  consentRequired: [],
+  recordPolicy: 'off',
   micOn: false,
   cameraOn: false,
   cameraPending: false,
   blindOn: false,
   stage: null,
+  ending: false,
 }
 
 export type LiveApi = {
+  captureLiveAuth: typeof captureLiveAuth
   startLiveSession: typeof startLiveSession
+  submitLiveConsent: typeof submitLiveConsent
   requestLiveToken: typeof requestLiveToken
+  proveLiveJoin: typeof proveLiveJoin
   endLiveSession: typeof endLiveSession
 }
 
-const defaultApi: LiveApi = {startLiveSession, requestLiveToken, endLiveSession}
+export type LiveDeps = {
+  api: LiveApi
+  getDeviceKey: (ownerDid: string) => Promise<DeviceKey | null>
+  requestMicAccess: () => Promise<MediaAccess>
+  requestCameraAccess: () => Promise<MediaAccess>
+  sleep: (ms: number) => Promise<void>
+  /** Seconds, to compare with a token's `expiresAt`. */
+  nowS: () => number
+}
+
+const defaultDeps: LiveDeps = {
+  api: {
+    captureLiveAuth,
+    startLiveSession,
+    submitLiveConsent,
+    requestLiveToken,
+    proveLiveJoin,
+    endLiveSession,
+  },
+  getDeviceKey,
+  requestMicAccess,
+  requestCameraAccess,
+  sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
+  nowS: () => Math.floor(Date.now() / 1000),
+}
+
+/** Waits between /end attempts (the route is idempotent). */
+export const END_RETRY_DELAYS_MS = [1000, 3000, 7000]
+/** Fresh-token rejoins after a drop the SDK couldn't recover from. */
+export const REJOIN_ATTEMPTS = 2
+export const REJOIN_DELAY_MS = 1000
+/** A token this close to `expiresAt` is replaced before joining. */
+const TOKEN_MARGIN_S = 5
 
 export type LiveSessionController = {
-  start(): Promise<void>
+  /** The owner tapped to start. Asks for the mic, then creates the session. */
+  begin(): Promise<void>
+  /** On `reuse`: the owner chose to continue the open session here. */
+  continueHere(): Promise<void>
+  /** The owner's consent sheet, then the join. */
+  submitConsent(choices: ConsentChoices): Promise<void>
   setMic(on: boolean): Promise<void>
   /** Returns false when nothing was sent (no session, or a bad source id). */
   setBlind(on: boolean, src?: string): Promise<boolean>
   setCamera(on: boolean): Promise<void>
   end(): Promise<void>
-  /** The room, once started (the screen renders its StageVideo). */
+  /** The room, once joining (the screen renders its StageVideo). */
   room(): LiveRoom | null
+}
+
+type Session = {
+  sid: string
+  wsUrl: string
+  auth: LiveAuth
+  key: DeviceKey | null
+  join: LiveJoin | null
 }
 
 export function createLiveSessionController({
   agentDid,
   roomFactory,
   onChange,
-  api = defaultApi,
+  deps: depsIn,
 }: {
   agentDid: string
   roomFactory: LiveRoomFactory
   onChange: (state: LiveSessionState) => void
-  api?: LiveApi
+  deps?: Partial<LiveDeps>
 }): LiveSessionController {
+  const deps: LiveDeps = {...defaultDeps, ...depsIn}
+  const {api} = deps
   let state = initialLiveSessionState
-  let session: {sid: string; wsUrl: string} | null = null
+  let session: Session | null = null
   let room: LiveRoom | null = null
-  let offStage: (() => void) | null = null
+  let unsubscribe: Array<() => void> = []
+  let ending: Promise<void> | null = null
+  // A disconnect we asked for (end, the camera rejoin): not a drop.
+  let leaving = false
+  let rejoining = false
 
   const set = (patch: Partial<LiveSessionState>) => {
     state = {...state, ...patch}
@@ -91,101 +222,448 @@ export function createLiveSessionController({
   }
   // Read through a function: the phase changes across awaits.
   const phase = (): LivePhase => state.phase
-  const live = () => phase() === 'connected' && !!session && !!room
+  const over = () => phase() === 'ended' || phase() === 'failed'
+  const live = () =>
+    phase() === 'connected' && !!session && !!room && !rejoining
+
+  /** The runtime's /end, retried; the session is the account's that started it. */
+  async function endOnRuntime(s: Session) {
+    set({ending: true})
+    for (let attempt = 0; ; attempt++) {
+      const res = await api.endLiveSession({sid: s.sid, auth: s.auth})
+      // not_found: already gone (or never ours); signed_out: the runtime no
+      // longer accepts this account's bearer. Neither improves with a retry.
+      if (
+        res.ok ||
+        ['not_found', 'signed_out', 'invalid_argument'].includes(res.error.kind)
+      ) {
+        break
+      }
+      const wait = END_RETRY_DELAYS_MS[attempt]
+      if (wait === undefined) break
+      await deps.sleep(wait)
+    }
+    set({ending: false})
+  }
+
+  /** Leave the room (if any) and stop listening to it. */
+  async function leaveRoom() {
+    const r = room
+    unsubscribe.forEach(off => off())
+    unsubscribe = []
+    if (!r) return
+    leaving = true
+    await r.disconnect().catch(() => {})
+  }
+
+  /**
+   * Stop here. `endRuntime`: also end the runtime's session (not when the
+   * session ended elsewhere or moved to another device).
+   */
+  function finish(
+    patch: Partial<LiveSessionState>,
+    {endRuntime}: {endRuntime: boolean},
+  ): Promise<void> {
+    if (ending) return ending
+    const s = session
+    session = null
+    set({
+      micOn: false,
+      cameraOn: false,
+      cameraPending: false,
+      stage: null,
+      ...patch,
+    })
+    // /end first: its bearer is read now, before any await.
+    const runtime = endRuntime && s ? endOnRuntime(s) : Promise.resolve()
+    ending = Promise.all([runtime, leaveRoom()]).then(() => {})
+    return ending
+  }
+
+  const fail = (error: LiveFailure) =>
+    finish({phase: 'failed', error}, {endRuntime: true})
+
+  /** A usable token: the one in hand while fresh, else a new one. */
+  async function freshJoin(
+    s: Session,
+    camera: boolean,
+  ): Promise<LiveResult<LiveJoin>> {
+    const j = s.join
+    if (!camera && j && j.expiresAt - TOKEN_MARGIN_S > deps.nowS()) {
+      s.join = null // single use
+      return {ok: true, data: j}
+    }
+    s.join = null
+    return api.requestLiveToken({
+      sid: s.sid,
+      auth: s.auth,
+      camera,
+      devicePubKey: s.key?.publicKey ?? null,
+    })
+  }
+
+  /** Proof of possession for a bound token. Throws on failure. */
+  async function prove(s: Session, j: LiveJoin) {
+    if (!j.popRequired) return
+    const sig = s.key ? joinProof(s.key, j.token) : null
+    if (!sig) throw new JoinError('bad_proof')
+    const proved = await api.proveLiveJoin({token: j.token, sig})
+    if (!proved.ok) throw new JoinError(proved.error.kind)
+  }
+
+  /** The proof, then the join. Throws on failure. */
+  async function join(s: Session, j: LiveJoin) {
+    await prove(s, j)
+    if (over()) throw new JoinError('connect')
+    await room!.connect({wsUrl: s.wsUrl, token: j.token})
+  }
+
+  /**
+   * Swap the connection for one on `j`: proven first, so a refused proof
+   * never drops the live connection; audio kept across the gap.
+   */
+  async function swap(s: Session, j: LiveJoin) {
+    await prove(s, j)
+    if (over()) throw new JoinError('connect')
+    leaving = true
+    await room!.disconnect({keepAudio: true}).catch(() => {})
+    leaving = false
+    if (over()) throw new JoinError('connect')
+    await room!.connect({wsUrl: s.wsUrl, token: j.token})
+  }
+
+  function watchRoom(r: LiveRoom) {
+    unsubscribe.push(
+      r.onStageChange(stage => set({stage})),
+      r.onConnectionChange(e => void onConnection(e)),
+    )
+  }
+
+  async function onConnection(e: LiveConnectionEvent) {
+    if (over() || rejoining) return
+    if (e.type === 'reconnecting') {
+      if (phase() === 'connected') set({phase: 'reconnecting'})
+      return
+    }
+    if (e.type === 'reconnected') {
+      if (phase() === 'reconnecting') set({phase: 'connected'})
+      return
+    }
+    if (e.reason === 'client') {
+      if (leaving) return
+    }
+    if (e.reason === 'duplicate_identity') {
+      await finish(
+        {phase: 'ended', endReason: 'other_device'},
+        {endRuntime: false},
+      )
+      return
+    }
+    if (e.reason === 'room_deleted') {
+      await finish(
+        {phase: 'ended', endReason: 'ended_elsewhere'},
+        {endRuntime: false},
+      )
+      return
+    }
+    if (e.reason === 'removed') {
+      // The runtime removed us (withdrawn consent, a revoked or refused token):
+      // it owns the session's state now.
+      await finish({phase: 'ended', endReason: 'removed'}, {endRuntime: false})
+      return
+    }
+    await rejoin()
+  }
+
+  /** After a drop: fresh tokens, a few times, then give up and end. */
+  async function rejoin() {
+    const s = session
+    if (!s || !room) return
+    rejoining = true
+    set({phase: 'reconnecting'})
+    const wantCamera = state.cameraOn
+    try {
+      for (let attempt = 0; attempt < REJOIN_ATTEMPTS; attempt++) {
+        if (attempt > 0) await deps.sleep(REJOIN_DELAY_MS)
+        if (over()) return
+        const t = await freshJoin(s, wantCamera)
+        if (over()) return
+        if (!t.ok) {
+          const k = t.error.kind
+          if (k === 'not_found') {
+            await finish(
+              {phase: 'ended', endReason: 'ended_elsewhere'},
+              {endRuntime: false},
+            )
+            return
+          }
+          if (k === 'consent_required') {
+            await finish(
+              {phase: 'ended', endReason: 'consent_withdrawn'},
+              {endRuntime: false},
+            )
+            return
+          }
+          if (k === 'signed_out') {
+            await fail('signed_out')
+            return
+          }
+          continue
+        }
+        try {
+          await swap(s, t.data)
+          if (over()) return
+          await room.setMicrophoneEnabled(state.micOn)
+          if (wantCamera) await room.setCameraEnabled(true)
+          set({phase: 'connected'})
+          return
+        } catch {
+          leaving = false
+        }
+      }
+      await fail('connect')
+    } finally {
+      rejoining = false
+    }
+  }
+
+  /** The owner's token is in hand: join and turn the mic on. */
+  async function connect(s: Session) {
+    set({phase: 'connecting'})
+    try {
+      const r = roomFactory({sid: s.sid})
+      room = r
+      watchRoom(r)
+      const t = await freshJoin(s, false)
+      if (over()) return
+      if (!t.ok) {
+        await fail(
+          t.error.kind === 'consent_required'
+            ? 'consent_incomplete'
+            : t.error.kind,
+        )
+        return
+      }
+      await join(s, t.data)
+      if (over()) return
+      await r.setMicrophoneEnabled(true)
+    } catch (e) {
+      if (!over()) await fail(e instanceof JoinError ? e.kind : 'connect')
+      return
+    }
+    if (over()) return
+    set({phase: 'connected', micOn: true})
+  }
+
+  async function afterStart() {
+    const s = session
+    if (!s) return
+    // Already decided in this session (a reused one): straight to the join.
+    if (s.join) {
+      await connect(s)
+      return
+    }
+    set({phase: 'consent'})
+  }
+
+  async function rejoinWithoutCamera() {
+    set({cameraOn: false})
+    await rejoin()
+  }
 
   return {
-    async start() {
-      if (state.phase !== 'idle') return
+    async begin() {
+      if (phase() !== 'idle') return
       set({phase: 'starting', error: null})
-      const res = await api.startLiveSession({agentDid})
+      // Asked before anything exists on the runtime: no session for a person
+      // who said no.
+      if ((await deps.requestMicAccess()) !== 'granted') {
+        if (phase() === 'starting') set({phase: 'failed', error: 'mic_denied'})
+        return
+      }
+      const auth = await api.captureLiveAuth()
+      if (!auth) {
+        if (phase() === 'starting') set({phase: 'failed', error: 'signed_out'})
+        return
+      }
+      const key = await deps.getDeviceKey(auth.ownerDid)
+      if (phase() !== 'starting') return
+      const res = await api.startLiveSession({
+        agentDid,
+        auth,
+        devicePubKey: key?.publicKey ?? null,
+      })
       if (!res.ok) {
         if (phase() === 'starting') {
           set({phase: 'failed', error: res.error.kind})
         }
         return
       }
-      const {sid, wsUrl, token} = res.data
-      // Left before the runtime answered: end the session it just made.
+      const {
+        sid,
+        wsUrl,
+        join: j,
+        consentRequired,
+        recordPolicy,
+        reused,
+      } = res.data
+      session = {sid, wsUrl, auth, key, join: j}
+      // Left before the runtime answered: end the session it just made (not a
+      // reused one, which may be live on another device).
       if (phase() !== 'starting') {
-        await api.endLiveSession({sid})
+        const s = session
+        session = null
+        if (!reused) await endOnRuntime(s)
         return
       }
-      session = {sid, wsUrl}
-      const r = roomFactory({sid})
-      room = r
-      offStage = r.onStageChange(stage => set({stage}))
-      try {
-        await r.connect({wsUrl, token})
-        await r.setMicrophoneEnabled(true)
-      } catch {
-        if (phase() === 'starting') set({phase: 'failed', error: 'connect'})
+      set({consentRequired, recordPolicy})
+      if (reused) {
+        set({phase: 'reuse'})
         return
       }
-      // Left while connecting: end() has already ended the session.
-      if (phase() !== 'starting') {
-        await r.disconnect().catch(() => {})
+      await afterStart()
+    },
+
+    async continueHere() {
+      if (phase() !== 'reuse') return
+      await afterStart()
+    },
+
+    async submitConsent(choices) {
+      const s = session
+      if (phase() !== 'consent' || !s) return
+      if (!canGoLive(state.consentRequired, choices)) return
+      set({phase: 'connecting'})
+      const res = await api.submitLiveConsent({
+        sid: s.sid,
+        auth: s.auth,
+        decisions: decisionsFor(state.consentRequired, choices),
+        textVersion: CONSENT_TEXT_VERSION,
+        devicePubKey: s.key?.publicKey ?? null,
+      })
+      if (over()) return
+      if (!res.ok) {
+        await fail(res.error.kind)
         return
       }
-      set({phase: 'connected', micOn: true})
+      if (!res.data.admitted) {
+        await fail('consent_incomplete')
+        return
+      }
+      if (!res.data.join) {
+        await fail('unavailable')
+        return
+      }
+      s.join = res.data.join
+      await connect(s)
     },
 
     async setMic(on) {
       if (!live()) return
-      await room!.setMicrophoneEnabled(on)
-      set({micOn: on})
+      try {
+        await room!.setMicrophoneEnabled(on)
+        set({micOn: on, notice: null})
+      } catch {
+        set({notice: 'action_failed'})
+      }
     },
 
     async setBlind(on, src = ALL_SOURCES) {
       if (!live()) return false
       const msg = blindMessage(on, src)
       if (!msg) return false
-      await room!.publishData(encodeBlindMessage(msg), {
-        topic: BLIND_TOPIC,
-        reliable: true,
-      })
-      if (src === ALL_SOURCES) set({blindOn: on})
+      try {
+        await room!.publishData(encodeBlindMessage(msg), {
+          topic: BLIND_TOPIC,
+          reliable: true,
+        })
+      } catch {
+        set({notice: 'action_failed'})
+        return false
+      }
+      if (src === ALL_SOURCES) set({blindOn: on, notice: null})
       return true
     },
 
     async setCamera(on) {
       if (!live() || state.cameraPending || on === state.cameraOn) return
+      const s = session!
+      const r = room!
       if (!on) {
-        await room!.setCameraEnabled(false)
-        set({cameraOn: false})
+        try {
+          await r.setCameraEnabled(false)
+          set({cameraOn: false, notice: null})
+        } catch {
+          set({notice: 'action_failed'})
+        }
         return
       }
-      set({cameraPending: true, error: null})
-      const res = await api.requestLiveToken({sid: session!.sid, camera: true})
+      set({cameraPending: true, notice: null})
+      if ((await deps.requestCameraAccess()) !== 'granted') {
+        if (!over()) set({cameraPending: false, notice: 'camera_denied'})
+        return
+      }
+      if (!live() && !over()) {
+        set({cameraPending: false})
+        return
+      }
+      const res = await freshJoin(s, true)
+      if (over()) return
       if (!res.ok) {
-        set({cameraPending: false, error: res.error.kind})
+        if (res.error.kind === 'consent_required') {
+          await finish(
+            {phase: 'ended', endReason: 'consent_withdrawn'},
+            {endRuntime: false},
+          )
+          return
+        }
+        set({cameraPending: false, notice: 'camera_failed'})
         return
       }
+      // The new grant takes effect on join, so rejoin with the camera token
+      // before publishing anything from the camera. The token is proven by
+      // this device's key, so the runtime lets it replace the connected owner.
+      rejoining = true
       try {
-        // The new grant takes effect on join, so rejoin with the camera token
-        // before publishing anything from the camera.
-        await room!.disconnect()
-        await room!.connect({wsUrl: session!.wsUrl, token: res.data.token})
-        await room!.setMicrophoneEnabled(state.micOn)
-        await room!.setCameraEnabled(true)
+        await swap(s, res.data)
+        if (over()) return
+        await r.setMicrophoneEnabled(state.micOn)
+        if (over()) return
+        await r.setCameraEnabled(true)
       } catch {
-        set({cameraPending: false, error: 'connect'})
+        leaving = false
+        rejoining = false
+        if (over()) return
+        set({cameraPending: false, notice: 'camera_failed'})
+        // Back without the camera; this ends the session if it can't.
+        await rejoinWithoutCamera()
         return
       }
+      rejoining = false
+      if (over()) return
       set({cameraPending: false, cameraOn: true})
     },
 
     async end() {
-      if (state.phase === 'ended') return
-      const s = session
-      const r = room
-      session = null
-      offStage?.()
-      offStage = null
-      set({phase: 'ended', micOn: false, cameraOn: false, stage: null})
-      if (r) await r.disconnect().catch(() => {})
-      if (s) await api.endLiveSession({sid: s.sid})
+      if (phase() === 'ended' || phase() === 'failed') {
+        if (ending) await ending
+        return
+      }
+      // A session not created yet: `begin` ends it when the runtime answers.
+      // Declining "continue here?" leaves the open session alone: it may be
+      // live on the owner's other device.
+      await finish(
+        {phase: 'ended', endReason: 'local'},
+        {endRuntime: phase() !== 'reuse'},
+      )
     },
 
     room: () => room,
+  }
+}
+
+class JoinError extends Error {
+  constructor(readonly kind: LiveFailure) {
+    super(kind)
   }
 }

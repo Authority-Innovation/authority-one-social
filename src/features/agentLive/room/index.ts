@@ -1,6 +1,12 @@
 import {type LiveRoomFactory} from './types'
 
-export type {LiveRoom, LiveRoomFactory, StageRef} from './types'
+export type {
+  LiveConnectionEvent,
+  LiveDisconnectReason,
+  LiveRoom,
+  LiveRoomFactory,
+  StageRef,
+} from './types'
 
 /**
  * Loads the LiveKit binding on demand. This is the ONLY path to the SDK in the

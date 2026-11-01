@@ -4,6 +4,9 @@
  * Renders nothing, not a disabled button, unless EXPO_PUBLIC_AGENT_LIVE_ENABLED
  * is on and the agent is owned with a known DID. It imports no LiveKit code:
  * the SDK loads only when the session screen starts a session.
+ *
+ * Not on Android yet: without a microphone foreground service, Android cuts
+ * the mic as soon as the app is in the background.
  */
 import {useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
@@ -13,13 +16,14 @@ import {type NavigationProp} from '#/lib/routes/types'
 import {atoms as a} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {Live_Stroke2_Corner0_Rounded as LiveIcon} from '#/components/icons/Live'
+import {IS_ANDROID} from '#/env'
 import {AGENT_LIVE_ENABLED} from './flag'
 
 export function GoLiveButton({agent}: {agent: OwnerAgent | undefined}) {
   const {t: l} = useLingui()
   const navigation = useNavigation<NavigationProp>()
 
-  if (!AGENT_LIVE_ENABLED || !agent?.did) return null
+  if (!AGENT_LIVE_ENABLED || IS_ANDROID || !agent?.did) return null
 
   return (
     <Button

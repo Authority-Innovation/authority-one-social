@@ -1,9 +1,12 @@
 /**
- * Screen tests for Agent Live:
- * - flag off: no Go live button, no session, no LiveKit SDK evaluated;
- * - flag on: the stage fills the screen with mic and blind controls on top,
- *   the camera is off by default and publishes only after the owner turns it
- *   on and the camera token arrives.
+ * Screen tests for Agent Live, over the real session controller and api
+ * module answering with the runtime's recorded replies (live.json):
+ * - flag off (and Android): no Go live button, no session, no LiveKit SDK;
+ * - flag on: nothing starts on arrival; Continue → the consent sheet (per
+ *   kind, all off, AI processing required) → Go live → the stage, with mic,
+ *   blind and camera controls; the recording indicator when the session
+ *   records; reuse asks first; drops and failures show what happened; End
+ *   ends the runtime session and goes back.
  */
 import {StyleSheet} from 'react-native'
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
@@ -83,14 +86,81 @@ jest.mock('#/components/icons/Microphone', () => ({
   Microphone_Stroke2_Corner0_Rounded: () => null,
 }))
 jest.mock('#/lib/agent-runtime', () => ({}))
+jest.mock('#/components/forms/Toggle', () => {
+  const {Pressable, Text} = require('react-native')
+  return {
+    Item: ({
+      children,
+      name,
+      label,
+      value,
+      onChange,
+      disabled,
+    }: {
+      children: React.ReactNode
+      name: string
+      label: string
+      value: boolean
+      onChange: (v: boolean) => void
+      disabled?: boolean
+    }) => (
+      <Pressable
+        testID={`agentLiveConsent-${name}`}
+        accessibilityLabel={label}
+        accessibilityHint=""
+        accessibilityState={{checked: value, disabled: !!disabled}}
+        disabled={disabled}
+        onPress={() => onChange(!value)}>
+        {children}
+      </Pressable>
+    ),
+    LabelText: ({children}: {children: React.ReactNode}) => (
+      <Text>{children}</Text>
+    ),
+    Platform: () => null,
+  }
+})
+const mockEnv = {android: false}
+jest.mock('#/env', () => ({
+  get IS_ANDROID() {
+    return mockEnv.android
+  },
+}))
+jest.mock('#/lib/agent-runtime/authToken', () => ({
+  getAgentRuntimeAccessToken: jest.fn(() =>
+    Promise.resolve('opaque-owner-session-bearer'),
+  ),
+}))
+jest.mock('#/lib/agent-runtime/config', () => ({
+  AGENT_RUNTIME_BASE_URL: 'https://runtime.test',
+}))
+jest.mock('#/state/persisted', () => ({
+  get: jest.fn(() => ({
+    currentAccount: {did: 'did:plc:tatenantowner0000000001'},
+  })),
+}))
+jest.mock('#/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}))
+jest.mock('#/features/agentLive/deviceKey', () => ({getDeviceKey: jest.fn()}))
+jest.mock('#/features/agentLive/permissions', () => ({
+  requestMicAccess: jest.fn(),
+  requestCameraAccess: jest.fn(),
+}))
 
 const mockNavigate = jest.fn()
+const mockNav = {canGoBack: true}
 const mockGoBack = jest.fn()
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
-    canGoBack: () => true,
+    canGoBack: () => mockNav.canGoBack,
   }),
 }))
 
@@ -115,64 +185,46 @@ jest.mock('#/features/agentLive/room', () => ({
   loadLiveRoomFactory: jest.fn(),
 }))
 
-jest.mock('#/features/agentLive/api', () => ({
-  startLiveSession: jest.fn(),
-  requestLiveToken: jest.fn(),
-  endLiveSession: jest.fn(),
-}))
-
 // Evaluating either SDK module calls this. Flag off must never do so.
 const mockSdkLoaded = jest.fn()
 jest.mock('@livekit/react-native', () => {
   mockSdkLoaded('@livekit/react-native')
-  return {
-    registerGlobals: () => {},
-    AudioSession: {
-      startAudioSession: async () => {},
-      stopAudioSession: async () => {},
-    },
-    VideoTrack: () => null,
-  }
+  return {}
 })
 jest.mock('livekit-client', () => {
   mockSdkLoaded('livekit-client')
-  class Room {
-    remoteParticipants = new Map()
-    on() {
-      return this
-    }
-  }
-  return {
-    Room,
-    RoomEvent: {},
-    Track: {Kind: {}, Source: {}},
-  }
+  return {}
 })
 
 import {createFakeRoom} from '#/features/agentLive/__fixtures__/fakeRoom'
+import {createRuntimeFetch} from '#/features/agentLive/__fixtures__/runtimeFetch'
 import {
   AGENT_DID,
   AGENT_HANDLE,
-  CAMERA_TOKEN_FIXTURE,
-  SESSION_FIXTURE,
-} from '#/features/agentLive/__fixtures__/piece1Live'
-import {
-  endLiveSession,
-  requestLiveToken,
-  startLiveSession,
-} from '#/features/agentLive/api'
+  DEVICE_SEED,
+  OWNER_DID,
+  reply,
+  tokenOf,
+} from '#/features/agentLive/__fixtures__/runtimeLive'
+import {getDeviceKey} from '#/features/agentLive/deviceKey'
 import {GoLiveButton} from '#/features/agentLive/GoLiveButton'
+import {
+  requestCameraAccess,
+  requestMicAccess,
+} from '#/features/agentLive/permissions'
+import {deviceKeyFromSeed} from '#/features/agentLive/pop'
 import {loadLiveRoomFactory} from '#/features/agentLive/room'
 import {AgentLiveScreen} from '../index'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
 const mockLoad = loadLiveRoomFactory as jest.Mock<typeof loadLiveRoomFactory>
-const mockStart = startLiveSession as jest.Mock<typeof startLiveSession>
-const mockToken = requestLiveToken as jest.Mock<typeof requestLiveToken>
-const mockEnd = endLiveSession as jest.Mock<typeof endLiveSession>
+const mockKey = getDeviceKey as jest.Mock<typeof getDeviceKey>
+const mockMic = requestMicAccess as jest.Mock<typeof requestMicAccess>
+const mockCam = requestCameraAccess as jest.Mock<typeof requestCameraAccess>
 
 const OWNED: Agent = {handle: AGENT_HANDLE, did: AGENT_DID, displayName: 'Bob'}
+let rt: ReturnType<typeof createRuntimeFetch>
 
 function render(ui: React.ReactElement) {
   return rtlRender(<I18nProvider i18n={i18n}>{ui}</I18nProvider>)
@@ -192,7 +244,7 @@ function screen() {
 
 async function flush() {
   await act(async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve()
+    for (let i = 0; i < 30; i++) await Promise.resolve()
   })
 }
 
@@ -205,16 +257,24 @@ async function press(el: Parameters<typeof fireEvent.press>[0]) {
 
 beforeEach(() => {
   mockFlag.on = false
+  mockEnv.android = false
   mockOwned.agent = OWNED
   mockOwned.loading = false
+  mockNav.canGoBack = true
   mockNavigate.mockReset()
   mockGoBack.mockReset()
   mockLoad.mockReset()
-  mockStart.mockReset().mockResolvedValue({ok: true, data: SESSION_FIXTURE})
-  mockToken
-    .mockReset()
-    .mockResolvedValue({ok: true, data: CAMERA_TOKEN_FIXTURE})
-  mockEnd.mockReset().mockResolvedValue({ok: true, data: null})
+  mockKey.mockReset().mockResolvedValue(deviceKeyFromSeed(DEVICE_SEED))
+  mockMic.mockReset().mockResolvedValue('granted')
+  mockCam.mockReset().mockResolvedValue('granted')
+  rt = createRuntimeFetch()
+  ;(globalThis as {fetch: unknown}).fetch = rt.fetch
+  // The clock of the runtime's recorded tokens (60 s join tokens).
+  jest
+    .spyOn(Date, 'now')
+    .mockReturnValue(
+      ((reply('consentAdmitted').body.expiresAt as number) - 30) * 1000,
+    )
 })
 
 describe('flag off (EXPO_PUBLIC_AGENT_LIVE_ENABLED)', () => {
@@ -230,11 +290,26 @@ describe('flag off (EXPO_PUBLIC_AGENT_LIVE_ENABLED)', () => {
     expect(getByTestId('agentLiveOff')).toBeTruthy()
     expect(queryByTestId('agentLiveStage')).toBeNull()
     expect(mockLoad).not.toHaveBeenCalled()
-    expect(mockStart).not.toHaveBeenCalled()
+    expect(rt.sent).toEqual([])
   })
 
   it('no LiveKit SDK module was evaluated', () => {
     expect(mockSdkLoaded).not.toHaveBeenCalled()
+  })
+})
+
+describe('Android (no microphone foreground service yet)', () => {
+  beforeEach(() => {
+    mockFlag.on = true
+    mockEnv.android = true
+  })
+
+  it('no Go live button, and the screen is off', async () => {
+    expect(render(<GoLiveButton agent={OWNED} />).toJSON()).toBeNull()
+    const {getByTestId} = screen()
+    await flush()
+    expect(getByTestId('agentLiveOff')).toBeTruthy()
+    expect(mockLoad).not.toHaveBeenCalled()
   })
 })
 
@@ -264,11 +339,32 @@ describe('session screen (flag on)', () => {
     mockFlag.on = true
   })
 
-  async function startScreen() {
+  async function open() {
     const fake = createFakeRoom()
     mockLoad.mockResolvedValue(() => fake.room)
     const r = screen()
     await flush()
+    return {...r, fake}
+  }
+
+  async function toSheet(start = 'startAwaitingConsent') {
+    const r = await open()
+    rt.on('/live/sessions', start)
+    await press(r.getByTestId('agentLiveBeginButton'))
+    return r
+  }
+
+  async function goLive(start?: {status: number; body: unknown}) {
+    const fake = createFakeRoom()
+    mockLoad.mockResolvedValue(() => fake.room)
+    const r = screen()
+    await flush()
+    rt.on('/live/sessions', start ?? 'startAwaitingConsent')
+    await press(r.getByTestId('agentLiveBeginButton'))
+    rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    rt.on('/live/join/prove', 'proveOk')
+    await press(r.getByTestId('agentLiveConsent-ai_process'))
+    await press(r.getByTestId('agentLiveConsentSubmit'))
     return {...r, fake}
   }
 
@@ -278,17 +374,82 @@ describe('session screen (flag on)', () => {
     await flush()
     expect(getByTestId('agentLiveNotOwned')).toBeTruthy()
     expect(mockLoad).not.toHaveBeenCalled()
-    expect(mockStart).not.toHaveBeenCalled()
+    expect(rt.sent).toEqual([])
   })
 
-  it('starts with {agentDid} only', async () => {
-    await startScreen()
-    expect(mockStart).toHaveBeenCalledTimes(1)
-    expect(mockStart).toHaveBeenCalledWith({agentDid: AGENT_DID})
+  it('arriving (a deep link too) starts nothing: no request, no mic', async () => {
+    const {getByTestId, fake} = await open()
+    expect(getByTestId('agentLiveIntro')).toBeTruthy()
+    expect(getByTestId('agentLiveAiLabel')).toBeTruthy()
+    expect(rt.sent).toEqual([])
+    expect(mockMic).not.toHaveBeenCalled()
+    expect(fake.calls).toEqual([])
+  })
+
+  it('Continue asks for the mic, starts with {agentDid}, and shows the sheet with every kind off', async () => {
+    const {getByTestId, fake} = await toSheet()
+    expect(mockMic).toHaveBeenCalled()
+    expect(rt.sent.map(s => s.path)).toEqual(['/live/sessions'])
+    expect(rt.sent[0].body!.agentDid).toBe(AGENT_DID)
+    expect(getByTestId('agentLiveConsentSheet')).toBeTruthy()
+    for (const kind of reply('startAwaitingConsent').body
+      .consentRequired as string[]) {
+      expect(getByTestId(`agentLiveConsent-${kind}`)).toHaveProp(
+        'accessibilityState',
+        expect.objectContaining({checked: false}),
+      )
+    }
+    // Go live needs AI processing.
+    expect(getByTestId('agentLiveConsentSubmit')).toHaveProp(
+      'accessibilityState',
+      expect.objectContaining({disabled: true}),
+    )
+    expect(getByTestId('agentLiveConsentNeedsAi')).toBeTruthy()
+    expect(fake.calls).toEqual([])
+  })
+
+  it('mic access refused: no session, and a way to Settings', async () => {
+    mockMic.mockResolvedValue('denied')
+    const {getByTestId} = await open()
+    await press(getByTestId('agentLiveBeginButton'))
+    expect(rt.sent).toEqual([])
+    expect(getByTestId('agentLiveFailed')).toBeTruthy()
+    expect(getByTestId('agentLiveOpenSettingsButton')).toBeTruthy()
+  })
+
+  it('Go live sends the owner’s own decisions, then joins and turns the mic on', async () => {
+    const {getByTestId, fake} = await goLive()
+    expect(rt.to('/live/sessions/:sid/consent')[0].body!.decisions).toEqual({
+      record_audio: 'refused',
+      record_video: 'refused',
+      transcribe: 'refused',
+      ai_process: 'given',
+      remember: 'refused',
+    })
+    expect(fake.connects()[0].token).toBe(tokenOf('consentAdmitted'))
+    expect(fake.calls[fake.calls.length - 1]).toEqual({op: 'mic', on: true})
+    expect(getByTestId('agentLiveMicIndicator')).toBeTruthy()
+  })
+
+  it('cancelling the sheet ends the session and goes back; nothing was published', async () => {
+    const {getByTestId, fake} = await toSheet()
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveConsentCancel'))
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(fake.calls).toEqual([])
+    expect(mockGoBack).toHaveBeenCalled()
+  })
+
+  it('a reused session asks before continuing; “not now” leaves it running', async () => {
+    const {getByTestId} = await toSheet('startReused')
+    expect(getByTestId('agentLiveReuse')).toBeTruthy()
+    await press(getByTestId('agentLiveNotNowButton'))
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    expect(mockGoBack).toHaveBeenCalled()
   })
 
   it('renders the stage full screen, with mic and blind controls', async () => {
-    const {getByTestId, fake} = await startScreen()
+    const {getByTestId, fake} = await goLive()
     const stage = getByTestId('agentLiveStage')
     const {style} = (stage as unknown as {props: {style: unknown}}).props
     expect(StyleSheet.flatten(style as object)).toMatchObject({
@@ -299,23 +460,46 @@ describe('session screen (flag on)', () => {
       bottom: 0,
     })
     act(() => fake.showStage('agent-stage'))
-    // The agent's stage video is inside the full-screen stage view.
-    expect(within(stage).getByTestId('fakeStageVideo')).toBeTruthy()
+    await flush()
+    expect(
+      within(getByTestId('agentLiveStage')).getByTestId('fakeStageVideo'),
+    ).toBeTruthy()
     expect(getByTestId('agentLiveMicButton')).toBeTruthy()
-    expect(getByTestId('agentLiveMicIndicator')).toBeTruthy()
     expect(getByTestId('agentLiveBlindButton')).toBeTruthy()
     expect(getByTestId('agentLiveAiLabel')).toBeTruthy()
   })
 
+  it('no recording indicator on an unrecorded session; one throughout a recorded one', async () => {
+    const plain = await goLive()
+    expect(plain.queryByTestId('agentLiveRecordingIndicator')).toBeNull()
+    plain.unmount()
+
+    const recorded = await goLive({
+      status: 200,
+      body: {...reply('startAwaitingConsent').body, recordPolicy: 'record'},
+    })
+    expect(recorded.getByTestId('agentLiveRecordingIndicator')).toBeTruthy()
+  })
+
+  it('the sheet warns when the session records', async () => {
+    const r = await open()
+    rt.on('/live/sessions', {
+      status: 200,
+      body: {...reply('startAwaitingConsent').body, recordPolicy: 'record'},
+    })
+    await press(r.getByTestId('agentLiveBeginButton'))
+    expect(r.getByTestId('agentLiveConsentRecordingNote')).toBeTruthy()
+  })
+
   it('mic toggles off and the indicator goes', async () => {
-    const {getByTestId, queryByTestId, fake} = await startScreen()
+    const {getByTestId, queryByTestId, fake} = await goLive()
     await press(getByTestId('agentLiveMicButton'))
     expect(fake.calls[fake.calls.length - 1]).toEqual({op: 'mic', on: false})
     expect(queryByTestId('agentLiveMicIndicator')).toBeNull()
   })
 
   it('the blind control sends the ruling 2 message', async () => {
-    const {getByTestId, getByLabelText, fake} = await startScreen()
+    const {getByTestId, getByLabelText, fake} = await goLive()
     await press(getByTestId('agentLiveBlindButton'))
     expect(fake.calls.filter(c => c.op === 'data')).toEqual([
       {
@@ -329,40 +513,87 @@ describe('session screen (flag on)', () => {
   })
 
   it('camera is off by default and publishes only once turned on', async () => {
-    const {getByTestId, getByLabelText, fake} = await startScreen()
+    const {getByTestId, getByLabelText, fake} = await goLive()
     expect(getByLabelText('Turn camera on')).toBeTruthy()
     expect(fake.cameraPublishes()).toBe(0)
-    expect(mockToken).not.toHaveBeenCalled()
+    expect(rt.to('/live/sessions/:sid/token')).toEqual([])
 
+    rt.on('/live/sessions/:sid/token', 'tokenCamera')
+    rt.on('/live/join/prove', 'proveCamera')
     await press(getByTestId('agentLiveCameraButton'))
-    expect(mockToken).toHaveBeenCalledWith({
-      sid: SESSION_FIXTURE.sid,
-      camera: true,
-    })
+    expect(rt.to('/live/sessions/:sid/token')[0].body!.camera).toBe(true)
     expect(fake.cameraPublishes()).toBe(1)
-    // The camera token joined the room before the camera published.
     const lastConnect = fake.calls.map(c => c.op).lastIndexOf('connect')
     const publish = fake.calls.findIndex(c => c.op === 'camera' && c.on)
     expect(lastConnect).toBeLessThan(publish)
     expect(fake.calls[lastConnect]).toMatchObject({
-      token: CAMERA_TOKEN_FIXTURE.token,
+      token: tokenOf('tokenCamera'),
     })
     expect(getByLabelText('Turn camera off')).toBeTruthy()
   })
 
-  it('end leaves the room, ends the session and goes back', async () => {
-    const {getByTestId, fake} = await startScreen()
+  it('camera access refused: a notice on the stage, still live', async () => {
+    mockCam.mockResolvedValue('denied')
+    const {getByTestId, fake} = await goLive()
+    await press(getByTestId('agentLiveCameraButton'))
+    expect(getByTestId('agentLiveNotice')).toBeTruthy()
+    expect(fake.cameraPublishes()).toBe(0)
+    expect(getByTestId('agentLiveScreen')).toBeTruthy()
+  })
+
+  it.each<['removed' | 'room_deleted' | 'duplicate_identity', string]>([
+    ['removed', 'You were removed from the live session.'],
+    ['room_deleted', 'The live session has ended.'],
+    ['duplicate_identity', 'This live session moved to another device.'],
+  ])('a %s drop shows what happened, not “Mic on”', async (reason, text) => {
+    const {getByTestId, queryByTestId, fake} = await goLive()
+    act(() => fake.drop(reason))
+    await flush()
+    expect(queryByTestId('agentLiveMicIndicator')).toBeNull()
+    expect(getByTestId('agentLiveEnded')).toBeTruthy()
+    expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(text)
+  })
+
+  it('reconnecting shows on the stage and the controls are off', async () => {
+    const {getByTestId, queryByTestId, fake} = await goLive()
+    act(() => fake.emit({type: 'reconnecting'}))
+    await flush()
+    expect(getByTestId('agentLiveReconnecting')).toBeTruthy()
+    expect(queryByTestId('agentLiveMicIndicator')).toBeNull()
+    expect(getByTestId('agentLiveMicButton')).toHaveProp(
+      'accessibilityState',
+      expect.objectContaining({disabled: true}),
+    )
+  })
+
+  it('End ends the runtime session (stopping the agent), leaves the room and goes back', async () => {
+    const {getByTestId, fake} = await goLive()
+    rt.on('/live/sessions/:sid/end', 'end')
     await press(getByTestId('agentLiveEndButton'))
-    expect(fake.calls[fake.calls.length - 1]).toEqual({op: 'disconnect'})
-    expect(mockEnd).toHaveBeenCalledWith({sid: SESSION_FIXTURE.sid})
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(fake.calls[fake.calls.length - 1].op).toBe('disconnect')
     expect(mockGoBack).toHaveBeenCalled()
   })
 
-  it('leaving the screen ends the session', async () => {
-    const {unmount} = await startScreen()
+  it('End with nothing to go back to opens the agent’s hub', async () => {
+    mockNav.canGoBack = false
+    const {getByTestId} = await goLive()
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(getByTestId('agentLiveEndButton'))
+    expect(mockNavigate).toHaveBeenCalledWith('AgentHub', {agent: AGENT_HANDLE})
+  })
+
+  it('leaving the screen ends the session, with this account’s bearer', async () => {
+    const {unmount} = await goLive()
+    rt.on('/live/sessions/:sid/end', 'end')
     unmount()
     await flush()
-    expect(mockEnd).toHaveBeenCalledWith({sid: SESSION_FIXTURE.sid})
+    const end = rt.to('/live/sessions/:sid/end')
+    expect(end).toHaveLength(1)
+    expect(end[0].headers.Authorization).toBe(
+      'Bearer opaque-owner-session-bearer',
+    )
+    expect(JSON.stringify(end[0])).not.toContain(OWNER_DID)
   })
 
   it('the injected room kept the SDK out of these tests too', () => {

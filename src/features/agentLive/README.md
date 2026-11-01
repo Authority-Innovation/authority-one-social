@@ -10,12 +10,59 @@ screen. Design: runtime repo `docs/design/AGENT-LIVE-MULTITENANT-DESIGN-2026-10-
 | File | What |
 | --- | --- |
 | `flag.ts` | `AGENT_LIVE_ENABLED`, exactly `'true'` |
-| `api.ts` | `POST /live/sessions` `{agentDid}`, `/:sid/token` `{camera}`, `/:sid/end`. Bearer only, no owner DID or identity field, empty query |
+| `api.ts` | The owner's `/live` calls (contract below). Bearer only, no owner DID or identity field, empty query. `captureLiveAuth` pins a session to the account that started it |
+| `consent.ts` | The consent sheet's rules: per kind, all off, every kind decided, `ai_process` needed to go live |
+| `pop.ts` | Device-key proof of possession for bound join tokens (Ed25519, `@noble/curves`) |
+| `deviceKey.ts` | The per-account device key seed in expo-secure-store (`deviceKey.web.ts`: none) |
+| `permissions.ts` | Mic and camera access, asked before anything is created on the runtime |
 | `blind.ts` | `{"t":"blind","on":bool,"src":"*"\|"<sourceId>"}` on `stage.reply`, reliable |
-| `session.ts` | Start, mic, blind, camera, end. Plain TS, no SDK |
+| `session.ts` | The flow, connection handling and end. Plain TS, no SDK |
 | `room/` | `LiveRoom` seam. `room/livekit.tsx` is the only SDK importer, reached only through `loadLiveRoomFactory()` (dynamic `import()`) |
-| `GoLiveButton.tsx` | On the AgentHub for an owned agent. Renders nothing when off |
-| `../../screens/AgentLive` | The session screen, route `AgentLive` (`/agents/:agent/live`) |
+| `GoLiveButton.tsx` | On the AgentHub for an owned agent. Renders nothing when off, or on Android |
+| `../../screens/AgentLive` | The session screen, route `AgentLive` (`/agents/:agent/live`), and its consent sheet |
+
+## Runtime contract
+
+Built to `authority-one-runtime` `agent-live/integration` @ 3dd4ac1
+(`src/live/tenant/live-routes.js`, `live-consent-routes.js`):
+
+| Call | Body | Reply |
+| --- | --- | --- |
+| `POST /live/sessions` | `{agentDid, devicePubKey?}` | `{sid, region, wsUrl, token: null, expiresAt: null, popRequired, consentRequired, recordPolicy, reused, consentMissing: true}` before consent |
+| `POST /live/sessions/:sid/consent` | `{decisions, textVersion, devicePubKey?}` | `{admitted, missing, token, expiresAt, popRequired, agent}` |
+| `POST /live/join/prove` | `{token, sig}` (no bearer) | `{ok}`; 401 `bad_proof` |
+| `POST /live/sessions/:sid/token` | `{camera, devicePubKey?}` | `{token, expiresAt, popRequired}`; 403 `consent_required` |
+| `POST /live/sessions/:sid/end` | none | `{ok}` (idempotent) |
+
+Join tokens last at most 60 s and are single use. A token minted with a
+device key joins only after the proof; a proven token from the same key may
+replace the connected owner (the camera rejoin), an unbound one can't.
+
+`__fixtures__/live.json` is what those routes answered, produced by
+`node scripts/agentLive/generateLiveFixtures.mjs <runtimeRoot>` over the
+runtime's own test world (real DOs, the real room-service client over its fake
+LiveKit, the real join backstop). Re-run it against a newer runtime commit to
+refresh the contract; never edit it by hand.
+
+## Flow
+
+Nothing happens on arrival (a deep link included). The owner taps Continue:
+mic access → `POST /live/sessions` (a session, no media) → if `reused`,
+"continue here?" (Not now leaves it running) → the consent sheet → `consent`
+→ proof → join → mic on. The camera publishes only after camera access, a
+proven camera token and a rejoin. A session whose `recordPolicy` isn't `off`
+shows a recording indicator, on the sheet and on the stage.
+
+Connection: the SDK's own resume shows as Reconnecting. A drop the SDK can't
+recover from ends the session (removed: consent withdrawn or a refused token;
+the room deleted: ended elsewhere, the agent or a voice "stop"; another device)
+or is retried with a fresh token (network), and ends if that fails.
+
+Stop path: End calls `/end`, which stops the agent's job and deletes the room.
+It goes out with the bearer of the account that started the session (also on
+sign-out or account switch, when the screen unmounts) and is retried; it keeps
+running after the screen has gone. There is no separate "Stop agent" control
+in this client: End is it.
 
 ## Build gate (`plugins/agentLive`)
 
@@ -27,6 +74,10 @@ screen. Design: runtime repo `docs/design/AGENT-LIVE-MULTITENANT-DESIGN-2026-10-
   import to an empty module.
 - The flag is read at prebuild, pod install, Gradle and Metro time. Set it in
   the environment for all four on a local build. EAS sets it from the profile.
+- `scripts/ios-archive-guard.sh pre` refuses a local archive whose `ios/` was
+  prebuilt with the flag on (an `audio` background mode, LiveKit pods, no
+  autolinking exclude) when the archive's flag is off, and a flag-on archive
+  unless `AO_ARCHIVE_ALLOW_AGENT_LIVE=1`.
 
 ## Background audio (iOS)
 
@@ -47,18 +98,19 @@ background:
   background processing", but its only other stated need is background camera
   (iOS 18+, `enableMultitaskingCameraAccess`), which we do not enable. Add
   `voip` together with CallKit if a more robust background is ever needed.
-- Android background (a foreground service) is not covered here.
+- Android: no microphone foreground service yet, so Android cuts the mic in
+  the background. Go live is hidden on Android and the screen is off there.
 
 ## Rules the tests hold
 
-- Ruling 1: `__tests__/buildGate.test.ts`, `screens/AgentLive/__tests__`.
-- Ruling 2: `__tests__/blind.test.ts`, `__tests__/session.test.ts`.
-- Ruling 3: `__tests__/api.test.ts`.
-- Background audio and the playAndRecord policy:
-  `__tests__/backgroundAudio.test.ts`.
-- Camera off by default, and published only after the camera token and a
-  rejoin: `__tests__/session.test.ts`, `screens/AgentLive/__tests__`.
-
-Fixtures (`__fixtures__/piece1Live.ts`) follow piece 1's route shapes. They
-were not captured from Dev, because Dev has no `/live` route yet. Re-capture
-them once it does.
+- Ruling 1 (dark): `__tests__/buildGate.test.ts`, `screens/AgentLive/__tests__`.
+- Ruling 2 (blind): `__tests__/blind.test.ts`, `__tests__/session.test.ts`.
+- Ruling 3 (identity) and the contract: `__tests__/api.test.ts`, over `live.json`.
+- Consent before media, drops, end, failed starts, camera: `__tests__/session.test.ts`
+  (the real `api.ts` over `live.json`) and `screens/AgentLive/__tests__`.
+- Proof of possession: `__tests__/pop.test.ts` (the app's signatures equal the
+  ones the runtime accepted).
+- The LiveKit binding (subscriptions, drop reasons, audio session, camera off):
+  `__tests__/livekitBinding.test.ts`.
+- Background audio: `__tests__/backgroundAudio.test.ts`.
+- The archive guard: `scripts/__tests__/iosArchiveGuard.test.js`.
