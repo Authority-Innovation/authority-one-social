@@ -198,7 +198,7 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
     expectNoIdentity()
   })
 
-  it('prove: {token, sig, exchange: true}, no bearer, and the RETURNED token comes back (R2 v2)', async () => {
+  it('prove: {token, sig} only (rev 4: no exchange flag), no bearer, and the RETURNED token comes back', async () => {
     rt.on('/live/join/prove', 'proveExchange')
     const token = tokenOf('tokenForExchange')
     const sig = LIVE.proofs.tokenForExchange
@@ -210,7 +210,7 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
       },
     })
     expect(tokenOf('proveExchange')).not.toBe(token)
-    expect(rt.sent[0].body).toEqual({token, sig, exchange: true})
+    expect(rt.sent[0].body).toEqual({token, sig})
     expect(rt.sent[0].headers.Authorization).toBeUndefined()
   })
 
@@ -236,7 +236,7 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
     })
   })
 
-  it('prove: the plain {ok: true} of a server before the exchange) is server_outdated', async () => {
+  it('prove: the plain {ok: true} of a server before the exchange is server_outdated', async () => {
     // The recorded reply of a runtime without the exchange.
     rt.on('/live/join/prove', 'proveOk')
     const token = tokenOf('tokenForExchange')

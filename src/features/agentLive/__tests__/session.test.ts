@@ -236,8 +236,9 @@ describe('B2: nothing before the owner taps, no media before consent', () => {
     const token = tokenOf('consentAdmitted')
     const prove = env.rt.to('/live/join/prove')[0]
     expect(prove.body!.token).toBe(token)
-    // R2 v2: the proof asks for the exchange, and the RETURNED token joins.
-    expect(prove.body!.exchange).toBe(true)
+    // R2 rev 4: the proof always trades (no exchange flag sent), and the
+    // RETURNED token joins.
+    expect(prove.body).toEqual({token, sig: prove.body!.sig})
     expect(proofVerifies(token, String(prove.body!.sig))).toBe(true)
     expect(env.log).toEqual([
       'api /live/sessions',
@@ -940,24 +941,118 @@ describe('R2 v2: the proof exchange and the unbound wait (ac11bd0)', () => {
     })
   })
 
-  it('bound: a removal that arrives while the rejoin’s connect() resolves is FINAL, not lost', async () => {
+  it('bound: a removal while the rejoin’s connect() resolves is a refused rejoin: the next rung, not lost (rev 4)', async () => {
     const env = setup()
     await toLive(env)
-    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveExchange')
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
+    const connect = env.fake.room.connect
+    let refuse = true
+    env.fake.room.connect = async args => {
+      await connect(args)
+      if (refuse) {
+        refuse = false
+        env.fake.drop('removed')
+      }
+    }
+    env.fake.drop('network')
+    await flush(400)
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(2)
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
+      1000, 2000,
+    ])
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
+  })
+
+  it('bound: a rejoin refused every time climbs 1/2/4/8/16 s, then “reconnect failed” with /end (rev 4)', async () => {
+    const env = setup()
+    await toLive(env)
+    for (let i = 0; i < 6; i++) {
+      env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
+      env.rt.on('/live/join/prove', 'proveExchange')
+    }
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    // Every rejoin's join is removed as it connects (the old one stays held).
     const connect = env.fake.room.connect
     env.fake.room.connect = async args => {
       await connect(args)
       env.fake.drop('removed')
     }
     env.fake.drop('network')
-    await flush(400)
+    for (let i = 0; i < 60 && env.last().phase !== 'failed'; i++) {
+      await flush(40)
+    }
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
+      1000, 2000, 4000, 8000, 16000,
+    ])
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(5)
     expect(env.last()).toMatchObject({
-      phase: 'ended',
-      endReason: 'removed',
+      phase: 'failed',
+      error: 'reconnect_failed',
       micOn: false,
     })
-    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+  })
+
+  it('bound: removed within 10 s of a rejoin’s connect is refused (next rung, no reset); after 10 s it is FINAL (rev 4)', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
+    env.fake.drop('network')
+    await flush(400)
+    expect(env.last().phase).toBe('connected')
+    // 9 s after the rejoin connected: refused, so the ladder carries on.
+    env.clock.now += 9
+    env.fake.drop('removed')
+    await flush(400)
+    expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
+      1000, 2000,
+    ])
+    expect(env.last().phase).toBe('connected')
+    // 11 s after that rejoin: a real removal, FINAL.
+    env.clock.now += 11
+    env.fake.drop('removed')
+    await flush()
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(2)
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'removed'})
+  })
+
+  it.each([400, 403, 409])(
+    'a refused mint (%i) during a rejoin is FINAL: “session ended”, no retry (rev 4)',
+    async status => {
+      const env = setup()
+      await toLive(env)
+      env.rt.on('/live/sessions/:sid/token', {
+        status,
+        body: {error: 'refused'},
+      })
+      env.fake.drop('network')
+      await flush(400)
+      expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
+      expect(env.last()).toMatchObject({
+        phase: 'ended',
+        endReason: 'ended_elsewhere',
+      })
+    },
+  )
+
+  it('an outage mint (503, network) during a rejoin is retried on the ladder', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on(
+      '/live/sessions/:sid/token',
+      E503,
+      new Error('offline'),
+      'tokenForJoin',
+    )
+    env.rt.on('/live/join/prove', 'proveExchange')
+    env.fake.drop('network')
+    for (let i = 0; i < 20 && env.last().phase !== 'connected'; i++) {
+      await flush(40)
+    }
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(3)
+    expect(env.last().phase).toBe('connected')
   })
 
   it('bound: removed stays FINAL (no rejoin, no mint)', async () => {
@@ -1031,10 +1126,7 @@ describe('review 679a9d48', () => {
     expect(openLiveSessionCount()).toBe(0)
   })
 
-  it.each<['removed' | 'room_deleted', string]>([
-    ['removed', 'removed'],
-    ['room_deleted', 'ended_elsewhere'],
-  ])(
+  it.each<['room_deleted', string]>([['room_deleted', 'ended_elsewhere']])(
     'N1: a FINAL drop (%s) while the rejoin turns the mic on is not swallowed',
     async (reason, endReason) => {
       const env = setup()
@@ -1061,12 +1153,34 @@ describe('review 679a9d48', () => {
     },
   )
 
+  it('N1: a removal while the rejoin turns the mic on is a refused rejoin, not swallowed (rev 4)', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
+    const mic = env.fake.room.setMicrophoneEnabled
+    let first = true
+    env.fake.room.setMicrophoneEnabled = on => {
+      if (first) {
+        first = false
+        // The runtime's backstop removes the fresh join at participant_joined.
+        env.fake.drop('removed')
+      }
+      return mic(on)
+    }
+    env.fake.drop('network')
+    await flush(400)
+    // The removal was acted on: another rung, a fresh mint, a new join.
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(2)
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
+  })
+
   it('N1: a muted owner too (mic off resolves at once)', async () => {
     const env = setup()
     await toLive(env)
     await env.c.setMic(false)
-    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
-    env.rt.on('/live/join/prove', 'proveExchange')
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveExchange', 'proveExchange')
     const mic = env.fake.room.setMicrophoneEnabled
     let first = true
     env.fake.room.setMicrophoneEnabled = on => {
@@ -1078,7 +1192,8 @@ describe('review 679a9d48', () => {
     }
     env.fake.drop('network')
     await flush(400)
-    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'removed'})
+    expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(2)
+    expect(env.last()).toMatchObject({phase: 'connected', micOn: false})
   })
 
   it('N1: a network drop of the new connection while finishing rejoins again', async () => {

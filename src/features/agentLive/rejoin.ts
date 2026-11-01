@@ -1,17 +1,17 @@
 /**
  * REJOIN (join gate R2, runtime design AGENT-LIVE-JOIN-GATE-REVISED @ adeeadb).
  * The One app's copy of the runtime's rule, `live-agent/src/rejoin.js` on
- * feat/agent-live-r2-workers-v2 @ ac11bd0 (the agent job and AO Edge use it):
+ * feat/agent-live-r2-workers-v2 @ 9fc23bd (the agent job and AO Edge use it):
  * keep the backoff and the final reasons the same in both.
  *
  * A lost LiveKit connection is a FULL rejoin with a FRESH join token, never
  * LiveKit's resume: the Dev signal site refuses every resume (R1). A bound
- * token is proven with the exchange and replaces the held participant; an
- * unbound one waits until the dead participant leaves (R2 v2). FINAL reasons
- * never rejoin: we left, the room or session is over, the runtime removed us
- * (for an unbound session a removal is one failed attempt instead, see
- * session.ts), or our own replacement took the identity. Pure: no SDK, no
- * network.
+ * token is proven (the proof always trades it for the token that joins) and
+ * replaces the held participant; an unbound one waits until the dead
+ * participant leaves (R2 v2). FINAL reasons never rejoin: we left, the room or
+ * session is over, the runtime removed us (except a refused rejoin, see
+ * REJOIN_REFUSED_GRACE_S, and an unbound session's removal, see session.ts),
+ * or our own replacement took the identity. Pure: no SDK, no network.
  *
  * Reasons are the LiveKit protocol's DisconnectReason names, shared by
  * livekit-client (this app) and @livekit/rtc-node (the workers).
@@ -30,6 +30,15 @@ export const LIVEKIT_DEPARTURE_TIMEOUT_S = 30
 export const REJOIN_BACKOFF_MS: readonly number[] = Object.freeze([
   1000, 2000, 4000, 8000, 16000,
 ])
+
+/**
+ * A rejoin connection removed within this long of connecting is a REFUSED
+ * rejoin (the old participant is still held), not a removal from the session:
+ * it takes the next rung, and the ladder is not reset (R2 contract rev 4;
+ * the workers' REJOIN_REFUSED_GRACE_MS on 9fc23bd). Only a drop of a
+ * connection that was not refused starts the ladder again.
+ */
+export const REJOIN_REFUSED_GRACE_S = 10
 
 export const FINAL_REASONS: ReadonlySet<string> = new Set([
   'CLIENT_INITIATED',

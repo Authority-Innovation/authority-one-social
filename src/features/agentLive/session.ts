@@ -59,7 +59,7 @@ import {
 } from './permissions'
 import {type DeviceKey, joinProof} from './pop'
 import {registerLiveSession} from './registry'
-import {LIVEKIT_DEPARTURE_TIMEOUT_S, REJOIN_BACKOFF_MS} from './rejoin'
+import {REJOIN_BACKOFF_MS, REJOIN_REFUSED_GRACE_S} from './rejoin'
 import {
   type LiveConnectionEvent,
   type LiveRoom,
@@ -274,20 +274,23 @@ export function createLiveSessionController({
   // camera): kept, then acted on (review 679a9d48 N1), never swallowed.
   let rejoinLive = false
   let rejoinDrop: LiveConnectionEvent | null = null
-  // This rejoin saw an unbound join removed (the other holder), not just an
-  // outage: only then does running out mean "still open elsewhere".
-  let unboundRemoved = false
+  // This rejoin saw its join removed (refused, or an unbound one held off by
+  // the other holder), not just an outage: only then does an unbound
+  // continued session running out mean "still open elsewhere".
+  let removalSeen = false
   // The session whose /end gave up, for retryEnd.
   let endPending: Session | null = null
   // The session ended or left: unregister from the sign-out hook.
   let unregister: (() => void) | null = null
   // The screen has gone (detach): a /end give-up is reported, not shown.
   let detached = false
-  // The unbound rejoin budget (review f2caccaa F2): an unbound removal soon
-  // after a rejoin connected carries on from where that rejoin was in the
-  // backoff, so a session that is never admitted runs out and says so.
+  // The rejoin ladder's next rung. A refused rejoin (R2 rev 4) carries on
+  // from here rather than resetting, so a session that is never admitted
+  // runs out and says so (review f2caccaa F2).
   let budgetIndex = 0
   let connectedAt = 0
+  // The current connection was made by a rejoin (connectedAt is its time).
+  let connFromRejoin = false
   let cancelStageWait: (() => void) | null = null
   // Bumped by every rejoin: a camera request that saw a rejoin start while
   // its token was minted is dropped (review f2caccaa F4).
@@ -487,14 +490,20 @@ export function createLiveSessionController({
       )
       return
     }
+    if (
+      e.reason === 'removed' &&
+      connFromRejoin &&
+      deps.nowS() - connectedAt < REJOIN_REFUSED_GRACE_S
+    ) {
+      // A refused rejoin (R2 rev 4): the next rung, no ladder reset.
+      await rejoin(true, true)
+      return
+    }
     if (e.reason === 'removed' && session && !session.key) {
       // An unbound token (no device key) can't replace the held participant;
       // the runtime removes it until the dead one leaves (R2 v2, up to ~30 s).
-      // Keep trying: the next mint says if the session is really over. A
-      // removal soon after the last rejoin connected is that rejoin failing
-      // after all, so it carries on in the same backoff (F2).
-      const carry = deps.nowS() - connectedAt < LIVEKIT_DEPARTURE_TIMEOUT_S
-      await rejoin(carry, true)
+      // Keep trying: the next mint says if the session is really over.
+      await rejoin(false, true)
       return
     }
     if (e.reason === 'removed') {
@@ -522,18 +531,19 @@ export function createLiveSessionController({
   }
 
   /**
-   * An unbound session's fresh join removed while the dead participant is
-   * still held (R2 v2): not final, just this attempt failing. True when that
-   * was the drop (it is consumed).
+   * The rejoin's new connection removed while the rejoin is still finishing:
+   * a refused rejoin (R2 rev 4; bound or unbound, the old participant is
+   * still held), not final, just this attempt failing. True when that was
+   * the drop (it is consumed).
    */
-  function unboundRemoval(s: Session): boolean {
+  function refusedRemoval(): boolean {
     const d = rejoinDrop
-    if (!d || s.key || d.type !== 'disconnected' || d.reason !== 'removed') {
+    if (!d || d.type !== 'disconnected' || d.reason !== 'removed') {
       return false
     }
     rejoinDrop = null
     rejoinLive = false
-    unboundRemoved = true
+    removalSeen = true
     return true
   }
 
@@ -559,7 +569,7 @@ export function createLiveSessionController({
   async function rejoin(carry = false, removal = false) {
     const s = session
     if (!s || !room) return
-    unboundRemoved = removal
+    removalSeen = removal
     rejoining = true
     rejoinGen++
     set({phase: 'reconnecting'})
@@ -591,6 +601,22 @@ export function createLiveSessionController({
             await fail('signed_out')
             return
           }
+          // A refused mint is final (R2 rev 4): any other 4xx answer. Only an
+          // outage (network, 5xx, 408, 429, a garbled reply) is retried.
+          if (
+            k === 'invalid_argument' ||
+            (k === 'http' &&
+              t.error.status >= 400 &&
+              t.error.status < 500 &&
+              t.error.status !== 408 &&
+              t.error.status !== 429)
+          ) {
+            await finish(
+              {phase: 'ended', endReason: 'ended_elsewhere'},
+              {endRuntime: false},
+            )
+            return
+          }
           continue
         }
         // A fresh token, never the one in hand: a join token is single use.
@@ -600,24 +626,25 @@ export function createLiveSessionController({
           // Each step: an unbound removal is this attempt failing (next
           // backoff); any other drop is acted on.
           if (over()) return
-          if (unboundRemoval(s)) continue
+          if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
           // Blind first: a new connection carries no state, and the agent
           // must not see anything before it is blinded again (F9).
           await resendBlind()
           if (over()) return
-          if (unboundRemoval(s)) continue
+          if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
           await room.setMicrophoneEnabled(state.micOn)
           if (over()) return
-          if (unboundRemoval(s)) continue
+          if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
           if (wantCamera) await room.setCameraEnabled(true)
           if (over()) return
-          if (unboundRemoval(s)) continue
+          if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
           rejoinLive = false
           connectedAt = deps.nowS()
+          connFromRejoin = true
           set({phase: 'connected'})
           return
         } catch (e) {
@@ -628,7 +655,7 @@ export function createLiveSessionController({
             await fail('server_outdated')
             return
           }
-          if (unboundRemoval(s)) continue
+          if (refusedRemoval()) continue
           if (await takeRejoinDrop()) return
           rejoinLive = false
         }
@@ -636,7 +663,7 @@ export function createLiveSessionController({
       // Out of budget. An unbound continued session whose joins were removed
       // is most likely still held by the other device (F2). A plain outage
       // (no removal seen) is a failed reconnect (review 30f293f4 G3).
-      if (!s.key && s.reused && unboundRemoved) {
+      if (!s.key && s.reused && removalSeen) {
         await finish(
           {phase: 'ended', endReason: 'still_open_elsewhere'},
           {endRuntime: false},
@@ -685,6 +712,7 @@ export function createLiveSessionController({
     if (over() || rejoining) return
     budgetIndex = 0
     connectedAt = deps.nowS()
+    connFromRejoin = false
     set({phase: 'connected'})
     cancelStageWait = deps.setTimer(STAGE_WAIT_MS, () => {
       if (state.phase === 'connected' && !state.stage) {
