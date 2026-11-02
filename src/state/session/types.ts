@@ -34,10 +34,10 @@ export type SessionApiContext = {
   ) => Promise<void>
   logoutCurrentAccount: (
     logContext: Metrics['account:loggedOut']['logContext'],
-  ) => void
+  ) => Promise<void>
   logoutEveryAccount: (
     logContext: Metrics['account:loggedOut']['logContext'],
-  ) => void
+  ) => Promise<void>
   resumeSession: (
     account: SessionAccount,
     isSwitchingAccounts?: boolean,

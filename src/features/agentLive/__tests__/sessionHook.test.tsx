@@ -10,10 +10,12 @@ import {BskyAgent} from '@atproto/api'
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {act, render} from '@testing-library/react-native'
 
+import {logger} from '#/logger'
 import {type Action, type State} from '#/state/session/reducer'
 import {type SessionAccount} from '#/state/session/types'
 
 const order: string[] = []
+const mockWarn = jest.spyOn(logger, 'warn').mockImplementation(() => {})
 
 jest.mock('jwt-decode', () => ({jwtDecode: () => ({})}))
 jest.mock('#/state/session/reducer', () => {
@@ -28,8 +30,21 @@ jest.mock('#/state/session/reducer', () => {
     },
   }
 })
+// Sign-out waits for the ends (review r404 a), only when a session is open.
+const mockLive = {
+  open: false,
+  answer: (_r: 'settled' | 'timed_out') => {},
+  waitedMs: [] as number[],
+}
 jest.mock('#/features/agentLive/registry', () => ({
   endOpenLiveSessions: () => order.push('endOpenLiveSessions'),
+  hasOpenLiveSessions: () => mockLive.open,
+  endOpenLiveSessionsAndWait: (ms: number) => {
+    order.push('endOpenLiveSessionsAndWait')
+    mockLive.waitedMs.push(ms)
+    return new Promise(r => (mockLive.answer = r))
+  },
+  LIVE_END_WAIT_MS: 8_000,
 }))
 jest.mock('#/state/session/agent', () => {
   const actual = jest.requireActual<typeof import('#/state/session/agent')>(
@@ -153,6 +168,9 @@ const METRICS = {signupDuration: 0, fieldErrorsTotal: 0, backgroundCount: 0}
 
 beforeEach(() => {
   order.length = 0
+  mockLive.open = false
+  mockLive.waitedMs = []
+  mockWarn.mockClear()
   agentModule.createAgentAndLogin.mockReset()
   agentModule.createAgentAndResume.mockReset()
   agentModule.createAgentAndCreateAccount.mockReset()
@@ -194,25 +212,69 @@ describe('sign-out and account switch end open live sessions first', () => {
     expect(order).toEqual([])
   })
 
-  it('logoutCurrentAccount ends them before the account is logged out', async () => {
+  it.each<['logoutCurrentAccount' | 'logoutEveryAccount', string]>([
+    ['logoutCurrentAccount', 'logged-out-current-account'],
+    ['logoutEveryAccount', 'logged-out-every-account'],
+  ])(
+    'r404 a: %s Cancels or ends them and waits for the /end, within 8 s, before logging out',
+    async (method, action) => {
+      const api = setup()
+      await signedInAs(api)
+      order.length = 0
+      mockLive.open = true
+      let done = false
+      act(() => {
+        void api()[method]('Settings').then(() => {
+          done = true
+        })
+      })
+      await act(() => Promise.resolve())
+      expect(order).toEqual(['endOpenLiveSessionsAndWait'])
+      expect(mockLive.waitedMs).toEqual([8_000])
+      expect(done).toBe(false)
+      act(() => mockLive.answer('settled'))
+      await act(() => Promise.resolve())
+      expect(order).toEqual(['endOpenLiveSessionsAndWait', action])
+      expect(done).toBe(true)
+      expect(mockWarn).not.toHaveBeenCalled()
+    },
+  )
+
+  it('r404 a: a sign-out whose /end wait timed out still signs out, and says so', async () => {
     const api = setup()
     await signedInAs(api)
-    act(() => api().logoutCurrentAccount('Settings'))
-    expect(order.slice(0, 2)).toEqual([
-      'endOpenLiveSessions',
+    order.length = 0
+    mockLive.open = true
+    act(() => {
+      void api().logoutCurrentAccount('Settings')
+    })
+    act(() => mockLive.answer('timed_out'))
+      await act(() => Promise.resolve())
+    expect(order).toEqual([
+      'endOpenLiveSessionsAndWait',
       'logged-out-current-account',
     ])
+    expect(mockWarn).toHaveBeenCalledWith(
+      'agentLive: sign-out went ahead with /end unsettled',
+      {timeoutMs: 8_000},
+    )
   })
 
-  it('logoutEveryAccount ends them before every account is logged out', async () => {
-    const api = setup()
-    await signedInAs(api)
-    act(() => api().logoutEveryAccount('Settings'))
-    expect(order.slice(0, 2)).toEqual([
-      'endOpenLiveSessions',
-      'logged-out-every-account',
-    ])
-  })
+  it.each<['logoutCurrentAccount' | 'logoutEveryAccount', string]>([
+    ['logoutCurrentAccount', 'logged-out-current-account'],
+    ['logoutEveryAccount', 'logged-out-every-account'],
+  ])(
+    'r404 a: %s with no live session open waits for nothing (logs out at once)',
+    async (method, action) => {
+      const api = setup()
+      await signedInAs(api)
+      order.length = 0
+      act(() => {
+        void api()[method]('Settings')
+      })
+      expect(order).toEqual([action])
+    },
+  )
 
   it('resumeSession ends them on an account switch, before resuming', async () => {
     const api = setup()

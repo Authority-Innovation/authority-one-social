@@ -26,7 +26,7 @@ import * as toast from '#/components/Toast'
 import {Span, Text} from '#/components/Typography'
 import {
   endOpenLiveSessionsAndWait,
-  LIVE_END_BEFORE_DELETE_MS,
+  LIVE_END_WAIT_MS,
 } from '#/features/agentLive/registry'
 import {resetToTab} from '#/Navigation'
 
@@ -125,10 +125,10 @@ function DeleteAccountDialogInner({
       }
       // Agent Live: deleting the account is a sign-out (Dispatch ruling on
       // review 784dbc925 F21). End a held live session and wait for it (at
-      // most LIVE_END_BEFORE_DELETE_MS), while this account's bearer still
+      // most LIVE_END_WAIT_MS), while this account's bearer still
       // works; after the delete it may not (review 3b593301c F21).
       const liveEnd = await endOpenLiveSessionsAndWait(
-        LIVE_END_BEFORE_DELETE_MS,
+        LIVE_END_WAIT_MS,
       )
       // The delete goes ahead either way; record that /end was still out
       // (review r392 L7).
@@ -136,7 +136,7 @@ function DeleteAccountDialogInner({
         logger.warn(
           'agentLive: account delete went ahead with /end unsettled',
           {
-            timeoutMs: LIVE_END_BEFORE_DELETE_MS,
+            timeoutMs: LIVE_END_WAIT_MS,
           },
         )
       }

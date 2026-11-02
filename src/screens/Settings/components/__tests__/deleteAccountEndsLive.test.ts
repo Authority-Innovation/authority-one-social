@@ -18,7 +18,7 @@ const SRC = fs.readFileSync(
 describe('deleting the account ends Agent Live first', () => {
   it('awaits the end (bounded) before the server deleteAccount (3b593301c F21)', () => {
     const end = SRC.search(
-      /await endOpenLiveSessionsAndWait\(\s*LIVE_END_BEFORE_DELETE_MS,?\s*\)/,
+      /await endOpenLiveSessionsAndWait\(\s*LIVE_END_WAIT_MS,?\s*\)/,
     )
     const del = SRC.indexOf('agent.com.atproto.server.deleteAccount(')
     expect(end).toBeGreaterThan(-1)
@@ -38,9 +38,9 @@ describe('deleting the account ends Agent Live first', () => {
   })
 
   it('uses the shared bound, not a local copy (r392 L10)', () => {
-    expect(SRC).not.toMatch(/const LIVE_END_BEFORE_DELETE_MS\s*=/)
+    expect(SRC).not.toMatch(/const LIVE_END_WAIT_MS\s*=/)
     expect(SRC).toMatch(
-      /LIVE_END_BEFORE_DELETE_MS,?\s*\n?\s*\}? from '#\/features\/agentLive\/registry'/,
+      /LIVE_END_WAIT_MS,?\s*\n?\s*\}? from '#\/features\/agentLive\/registry'/,
     )
   })
 })

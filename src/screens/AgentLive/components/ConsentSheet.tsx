@@ -16,7 +16,9 @@ import {Text} from '#/components/Typography'
 import {
   canGoLive,
   type ConsentChoices,
+  type ConsentWords,
   initialChoices,
+  shownWordsSha256,
 } from '#/features/agentLive/consent'
 
 export function ConsentSheet({
@@ -29,7 +31,11 @@ export function ConsentSheet({
   required: string[]
   recordPolicy: string
   busy?: boolean
-  onSubmit: (choices: ConsentChoices) => void
+  /** `textSha256`: per kind, the hash of the exact words shown (r404 d). */
+  onSubmit: (
+    choices: ConsentChoices,
+    textSha256: Record<string, string>,
+  ) => void
   onCancel: () => void
 }) {
   const t = useTheme()
@@ -40,7 +46,8 @@ export function ConsentSheet({
   )
   const ready = canGoLive(required, choices)
 
-  const words = (kind: string): {title: string; detail: string} => {
+  // The words rendered below are the words hashed on submit: one source.
+  const words = (kind: string): ConsentWords => {
     switch (kind) {
       case 'ai_process':
         return {
@@ -144,7 +151,9 @@ export function ConsentSheet({
             color="primary"
             size="large"
             disabled={!ready || busy}
-            onPress={() => onSubmit(choices)}>
+            onPress={() =>
+              onSubmit(choices, shownWordsSha256(required, words))
+            }>
             <ButtonText>
               {l({message: 'Go live', context: 'Button'})}
             </ButtonText>

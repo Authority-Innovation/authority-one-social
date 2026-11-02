@@ -5,8 +5,16 @@
  */
 import {describe, expect, it} from '@jest/globals'
 
+import {RUNTIME_ONE_APP_V1_SHA256} from '../__fixtures__/consentWordsSha256'
 import {reply} from '../__fixtures__/runtimeLive'
-import {canGoLive, decisionsFor, initialChoices} from '../consent'
+import {
+  canGoLive,
+  type ConsentWords,
+  consentWordsSha256,
+  decisionsFor,
+  initialChoices,
+  shownWordsSha256,
+} from '../consent'
 
 const REQUIRED = reply('startAwaitingConsent').body.consentRequired as string[]
 
@@ -48,5 +56,45 @@ describe('consent sheet', () => {
   it('going live needs AI processing', () => {
     expect(canGoLive(REQUIRED, initialChoices(REQUIRED))).toBe(false)
     expect(canGoLive(REQUIRED, {ai_process: true})).toBe(true)
+  })
+})
+
+describe('r404 d: the words hash as the runtime hashes them', () => {
+  // The runtime's own copy of the words (texts.js at ba7b6f0): title, a
+  // newline, detail. Kinds the sheet has no words for show the kind id.
+  const RUNTIME_WORDS: Record<string, ConsentWords> = {
+    ai_process: {
+      title: 'Let your agent hear and see you',
+      detail:
+        'Needed to go live. Your agent processes your voice and anything you show it, only during this session.',
+    },
+    retain_extended: {
+      title: 'retain_extended',
+      detail: 'Another use of this session.',
+    },
+  }
+
+  it('title + newline + detail, SHA-256 hex, equal to the runtime constants', () => {
+    for (const [kind, w] of Object.entries(RUNTIME_WORDS)) {
+      expect(consentWordsSha256(w)).toBe(RUNTIME_ONE_APP_V1_SHA256[kind])
+    }
+  })
+
+  it('any change to the words changes the hash', () => {
+    const w = RUNTIME_WORDS.ai_process
+    expect(consentWordsSha256({...w, detail: w.detail + ' '})).not.toBe(
+      RUNTIME_ONE_APP_V1_SHA256.ai_process,
+    )
+    expect(consentWordsSha256({title: `${w.title}\n${w.detail}`, detail: ''}))
+      .not.toBe(RUNTIME_ONE_APP_V1_SHA256.ai_process)
+  })
+
+  it('one hash per required kind, from the words given', () => {
+    expect(
+      shownWordsSha256(['ai_process', 'retain_extended'], k => RUNTIME_WORDS[k]),
+    ).toEqual({
+      ai_process: RUNTIME_ONE_APP_V1_SHA256.ai_process,
+      retain_extended: RUNTIME_ONE_APP_V1_SHA256.retain_extended,
+    })
   })
 })

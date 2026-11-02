@@ -78,6 +78,9 @@ jest.mock('sentry-expo', () => ({
 }))
 
 jest.mock('crypto', () => ({}))
+// js-sha256 hashes as on device (pure JS), not through Node's crypto, which
+// is stubbed above (Agent Live consent words, review r404 d).
+globalThis.JS_SHA256_NO_NODE_JS = true
 
 jest.mock('expo-application', () => ({
   nativeApplicationVersion: '1.0.0',

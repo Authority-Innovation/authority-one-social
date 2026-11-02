@@ -44,6 +44,7 @@ jest.mock('../permissions', () => ({
 import {getAgentRuntimeAccessToken} from '#/lib/agent-runtime/authToken'
 import {logger} from '#/logger'
 import * as persisted from '#/state/persisted'
+import {RUNTIME_ONE_APP_V1_SHA256 as SHOWN} from '../__fixtures__/consentWordsSha256'
 import {createFakeRoom} from '../__fixtures__/fakeRoom'
 import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {createRuntimeFetch} from '../__fixtures__/runtimeFetch'
@@ -174,7 +175,7 @@ async function toLive(env: Env) {
   await toConsent(env)
   env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
   env.rt.on('/live/join/prove', 'proveExchange')
-  await env.c.submitConsent({ai_process: true, transcribe: true})
+  await env.c.submitConsent({ai_process: true, transcribe: true}, SHOWN)
 }
 
 const flush = async (turns = 100) => {
@@ -244,6 +245,13 @@ describe('B2: nothing before the owner taps, no media before consent', () => {
         remember: 'refused',
       },
       textVersion: 'one-app-v1',
+      textSha256: {
+        record_audio: SHOWN.record_audio,
+        record_video: SHOWN.record_video,
+        transcribe: SHOWN.transcribe,
+        ai_process: SHOWN.ai_process,
+        remember: SHOWN.remember,
+      },
       devicePubKey: LIVE.device.publicKey,
     })
     const token = tokenOf('consentAdmitted')
@@ -278,7 +286,7 @@ describe('B2: nothing before the owner taps, no media before consent', () => {
   it('without AI processing nothing is sent', async () => {
     const env = setup()
     await toConsent(env)
-    await env.c.submitConsent({record_audio: true})
+    await env.c.submitConsent({record_audio: true}, SHOWN)
     expect(env.rt.to('/live/sessions/:sid/consent')).toEqual([])
     expect(env.last().phase).toBe('consent')
   })
@@ -288,7 +296,7 @@ describe('B2: nothing before the owner taps, no media before consent', () => {
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentPartial')
     env.rt.on('/live/sessions/:sid/end', 'end')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     await flush()
     expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
     expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
@@ -507,7 +515,7 @@ describe('H1: the media connection', () => {
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', LEGACY.proveOk)
     env.rt.on('/live/sessions/:sid/end', 'end')
-    await env.c.submitConsent({ai_process: true, transcribe: true})
+    await env.c.submitConsent({ai_process: true, transcribe: true}, SHOWN)
     await flush()
     expect(env.fake.connects()).toEqual([])
     expect(env.last()).toMatchObject({
@@ -609,7 +617,7 @@ describe('review f2caccaa', () => {
       status: 200,
       body: {...reply('consentAdmitted').body, popRequired: false},
     })
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
   }
   const unboundToken = {
     status: 200,
@@ -687,7 +695,7 @@ describe('review f2caccaa', () => {
     ;(env.deps.sleep as jest.Mock).mockImplementationOnce(
       () => new Promise<void>(r => (releaseSleep = r)),
     )
-    const submitted = env.c.submitConsent({ai_process: true})
+    const submitted = env.c.submitConsent({ai_process: true}, SHOWN)
     await flush()
     env.fake.drop('network')
     await flush()
@@ -843,7 +851,7 @@ describe('review f2caccaa', () => {
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', 'proveExchange')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     env.clock.now += 120
     env.fake.drop('removed')
     await flush()
@@ -867,7 +875,7 @@ describe('review f2caccaa', () => {
       }
       await connect(args)
     }
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     await flush(400)
     expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
     expect((env.deps.sleep as jest.Mock).mock.calls.map(c => c[0])).toEqual([
@@ -891,7 +899,7 @@ describe('review f2caccaa', () => {
         env.fake.drop('network')
       }
     }
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     await flush(400)
     expect(env.last()).toMatchObject({phase: 'connected', micOn: true})
     expect(env.fake.calls.filter(c => c.op === 'mic').at(-1)).toMatchObject({
@@ -963,7 +971,7 @@ describe('R2 rev 4: the proof exchange and the unbound wait (9fc23bd)', () => {
       status: 200,
       body: {...reply('consentAdmitted').body, popRequired: false},
     })
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     const unbound = {...reply('tokenUnbound').body, popRequired: false}
     env.rt.on(
       '/live/sessions/:sid/token',
@@ -997,7 +1005,7 @@ describe('R2 rev 4: the proof exchange and the unbound wait (9fc23bd)', () => {
       status: 200,
       body: {...reply('consentAdmitted').body, popRequired: false},
     })
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     env.rt.on('/live/sessions/:sid/token', 'tokenAfterEnd')
     env.fake.drop('removed')
     await flush(200)
@@ -1334,7 +1342,7 @@ describe('review 679a9d48', () => {
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentAgentUnavailable')
     env.rt.on('/live/sessions/:sid/end', 'end')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     expect(reply('consentAgentUnavailable').body.agent).toBe('unavailable')
     expect(env.last()).toMatchObject({
       phase: 'failed',
@@ -1352,7 +1360,7 @@ describe('review 679a9d48', () => {
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', 'proveExchange')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     for (let i = 0; i < 5; i++) {
       env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
       env.rt.on('/live/join/prove', 'proveExchange')
@@ -1385,7 +1393,7 @@ describe('review 679a9d48', () => {
     await env.c.continueHere()
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', 'proveExchange')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     // It stays up past the refused window: a real takeover.
     env.timers.find(t => t.ms === 10_000 && !t.cancelled)!.cb()
     env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
@@ -1412,7 +1420,7 @@ describe('review 679a9d48', () => {
       status: 200,
       body: {...reply('consentAdmitted').body, popRequired: false},
     })
-    await unbound.c.submitConsent({ai_process: true})
+    await unbound.c.submitConsent({ai_process: true}, SHOWN)
     expect(unbound.deps.markHeldHere).not.toHaveBeenCalled()
   })
 
@@ -1432,7 +1440,7 @@ describe('review 679a9d48', () => {
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
       env.rt.on('/live/join/prove', ...(prove as never[]))
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
     }
 
@@ -1452,7 +1460,7 @@ describe('review 679a9d48', () => {
         body: {error: 'refused'},
       })
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.rt.to('/live/sessions/:sid/token')).toHaveLength(1)
       expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
@@ -1745,6 +1753,87 @@ describe('review 679a9d48', () => {
     expect(openLiveSessionCount()).toBe(0)
   })
 
+  it('L12 (r404): the screen left while the start call is out: delete waits for the answer and sends the owed /end', async () => {
+    const env = setup()
+    const h = holdCalls(env)
+    h.held.end = false
+    env.rt.on('/live/sessions', 'startAwaitingConsent')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const begun = env.c.begin()
+    await flush()
+    await env.c.leave()
+    // Still registered: what the start makes is owed.
+    expect(openLiveSessionCount()).toBe(1)
+    let waited = false
+    const waiting = endOpenLiveSessionsAndWait(8000).then(() => {
+      waited = true
+    })
+    await flush()
+    expect(waited).toBe(false)
+    h.answerStart()
+    await waiting
+    await begun
+    expect(h.held.endsAsked).toBe(1)
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
+  it('L12 (r404): the screen left while starting, no delete: no /end (P3), owed to sign-out', async () => {
+    const env = setup()
+    const h = holdCalls(env)
+    h.held.end = false
+    env.rt.on('/live/sessions', 'startAwaitingConsent')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const begun = env.c.begin()
+    await flush()
+    await env.c.leave()
+    h.answerStart()
+    await begun
+    expect(h.held.endsAsked).toBe(0)
+    expect(openLiveSessionCount()).toBe(1)
+    await endOpenLiveSessionsAndWait(8000)
+    expect(h.held.endsAsked).toBe(1)
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
+  it('L13 (r404): registered during the key read; delete then Cancels, and no start call goes out', async () => {
+    const env = setup()
+    let readKey!: () => void
+    const keyGate = new Promise<void>(r => (readKey = r))
+    ;(env.deps.getDeviceKey as jest.Mock).mockImplementation(async () => {
+      await keyGate
+      return deviceKeyFromSeed(DEVICE_SEED)
+    })
+    env.rt.on('/live/sessions', 'startAwaitingConsent')
+    const begun = env.c.begin()
+    await flush()
+    expect(env.deps.getDeviceKey).toHaveBeenCalled()
+    expect(openLiveSessionCount()).toBe(1)
+    let waited = false
+    const waiting = endOpenLiveSessionsAndWait(8000).then(() => {
+      waited = true
+    })
+    await flush()
+    // The key read is still out: the wait holds for the start to settle.
+    expect(waited).toBe(false)
+    readKey()
+    await waiting
+    await begun
+    expect(env.rt.to('/live/sessions')).toEqual([])
+    expect(env.last()).toMatchObject({
+      phase: 'ended',
+      endReason: 'cancelled',
+      stopping: false,
+    })
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
+  it('L13 (r404): registered from the tap; a mic refusal unregisters', async () => {
+    const env = setup({mic: 'denied'})
+    await env.c.begin()
+    expect(env.last()).toMatchObject({phase: 'failed', error: 'mic_denied'})
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
   it('F18: a start that fails after Cancel also clears “stopping”', async () => {
     const env = setup()
     let answer!: () => void
@@ -1777,7 +1866,7 @@ describe('review 679a9d48', () => {
         body: {...reply('consentAdmitted').body, token: 'not.a-jwt.x'},
       })
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.last()).toMatchObject({
         phase: 'failed',
@@ -1807,7 +1896,7 @@ describe('review 679a9d48', () => {
         env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
         env.rt.on('/live/join/prove', 'proveExchange')
         env.rt.on('/live/sessions/:sid/end', 'end')
-        await env.c.submitConsent({ai_process: true})
+        await env.c.submitConsent({ai_process: true}, SHOWN)
         await flush()
         expect(env.last()).toMatchObject({
           phase: 'failed',
@@ -1845,7 +1934,7 @@ describe('review 679a9d48', () => {
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
       env.rt.on('/live/join/prove', answer)
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.last().phase).toBe('failed')
       expect(env.last().leftRunning).toBe(false)
@@ -1893,7 +1982,7 @@ describe('review 679a9d48', () => {
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
       env.rt.on('/live/join/prove', {status: 404, body: {error: 'not found'}})
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
       endOpenLiveSessions()
@@ -1979,7 +2068,7 @@ describe('review 679a9d48', () => {
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
       env.rt.on('/live/join/prove', LEGACY.proveOk)
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.last()).toMatchObject({
         phase: 'failed',
@@ -1997,7 +2086,7 @@ describe('review 679a9d48', () => {
         body: {...reply('consentAdmitted').body, token: null, expiresAt: null},
       })
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.last()).toMatchObject({phase: 'failed', error: 'no_join'})
       expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
@@ -2008,7 +2097,7 @@ describe('review 679a9d48', () => {
       await toConsent(env)
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.last()).toMatchObject({phase: 'failed', leftRunning: true})
       expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
@@ -2020,7 +2109,7 @@ describe('review 679a9d48', () => {
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
       env.rt.on('/live/join/prove', E503)
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.last()).toMatchObject({phase: 'failed', error: 'unavailable'})
       expect(env.last().leftRunning).toBe(false)
@@ -2086,7 +2175,7 @@ describe('review 679a9d48', () => {
         body: {error: 'refused'},
       })
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
       expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
       expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
@@ -2119,7 +2208,7 @@ describe('review 679a9d48', () => {
         status: 200,
         body: {...reply('consentAdmitted').body, popRequired: false},
       })
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       expect(env.last().phase).toBe('connected')
       env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
       env.rt.on('/live/sessions/:sid/end', 'end')
@@ -2173,7 +2262,7 @@ describe('review 679a9d48', () => {
       env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
       env.rt.on('/live/join/prove', ...(prove as never[]))
       env.rt.on('/live/sessions/:sid/end', 'end')
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       await flush()
     }
     const leftRunning = (env: Env) => {
@@ -2466,7 +2555,7 @@ describe('H3: a failed start leaves nothing behind', () => {
       env.rt.on('/live/join/prove', 'proveExchange')
       env.rt.on('/live/sessions/:sid/end', 'end')
       env.fake.fail(op)
-      await env.c.submitConsent({ai_process: true})
+      await env.c.submitConsent({ai_process: true}, SHOWN)
       expect(env.last()).toMatchObject({
         phase: 'failed',
         error: 'connect',
@@ -2487,7 +2576,7 @@ describe('H3: a failed start leaves nothing behind', () => {
     await toConsent(env)
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/sessions/:sid/end', 'end')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     expect(env.last()).toMatchObject({
       phase: 'failed',
       error: 'connect',
@@ -2502,7 +2591,7 @@ describe('H3: a failed start leaves nothing behind', () => {
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/join/prove', 'proveBadSignature')
     env.rt.on('/live/sessions/:sid/end', 'end')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     await flush()
     expect(env.last()).toMatchObject({phase: 'ended', endReason: 'refused'})
     expect(env.fake.connects()).toEqual([])
@@ -2517,7 +2606,7 @@ describe('H3: a failed start leaves nothing behind', () => {
       status: 200,
       body: {...reply('consentAdmitted').body, popRequired: false},
     })
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     expect(env.rt.to('/live/join/prove')).toEqual([])
     expect(env.last().phase).toBe('connected')
   })
@@ -2528,7 +2617,7 @@ describe('H3: a failed start leaves nothing behind', () => {
     env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
     env.rt.on('/live/sessions/:sid/token', 'tokenForJoin')
     env.rt.on('/live/join/prove', 'proveExchange')
-    await env.c.submitConsent({ai_process: true})
+    await env.c.submitConsent({ai_process: true}, SHOWN)
     // The fresh token is the one proven; the exchange's token joins.
     expect(env.rt.to('/live/join/prove')[0].body!.token).toBe(
       tokenOf('tokenForJoin'),

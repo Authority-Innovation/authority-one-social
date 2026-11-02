@@ -34,6 +34,7 @@ jest.mock('#/logger', () => ({
 import {getAgentRuntimeAccessToken} from '#/lib/agent-runtime/authToken'
 import {logger} from '#/logger'
 import * as persisted from '#/state/persisted'
+import {RUNTIME_ONE_APP_V1_SHA256 as SHOWN} from '../__fixtures__/consentWordsSha256'
 import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
 import {createRuntimeFetch} from '../__fixtures__/runtimeFetch'
 import {
@@ -164,13 +165,17 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
       auth: AUTH,
       decisions,
       textVersion: 'one-app-v1',
+      textSha256: SHOWN,
       devicePubKey: PK,
     })
     const [c] = rt.sent
     expect(c.path).toBe(`/live/sessions/${SID}/consent`)
+    // The hash of each decided kind's words, and only those (r404 d).
+    const {retain_extended, export_publish, ...decided} = SHOWN
     expect(c.body).toEqual({
       decisions,
       textVersion: 'one-app-v1',
+      textSha256: decided,
       devicePubKey: PK,
     })
     expect(c.raw).not.toMatch(/did:/)
@@ -276,6 +281,29 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
     }
   })
 
+  it('r404 d: no consent goes out without the hash of the words shown for every kind decided', async () => {
+    const bad = {ok: false, error: {kind: 'invalid_argument'}}
+    const decisions = {ai_process: 'given', remember: 'refused'} as const
+    const {remember: _r, ...noRemember} = SHOWN
+    for (const textSha256 of [
+      {},
+      noRemember,
+      {...SHOWN, remember: SHOWN.remember.toUpperCase()},
+      {...SHOWN, remember: 'abc'},
+    ]) {
+      expect(
+        await submitLiveConsent({
+          sid: SID,
+          auth: AUTH,
+          decisions,
+          textVersion: 'one-app-v1',
+          textSha256,
+        }),
+      ).toEqual(bad)
+    }
+    expect(rt.sent).toEqual([])
+  })
+
   it('K5: the bounds are 10 s, and 30 s for start and consent', () => {
     expect(LIVE_REQUEST_TIMEOUT_MS).toBe(10_000)
     expect(LIVE_START_TIMEOUT_MS).toBe(30_000)
@@ -322,6 +350,7 @@ describe('ruling 3: no DID or identity field leaves the app', () => {
         auth: AUTH,
         decisions: {ai_process: 'maybe' as never},
         textVersion: 'one-app-v1',
+        textSha256: SHOWN,
       }),
     ).toEqual(bad)
     expect(await proveLiveJoin({token: 'x', sig: 'y'})).toEqual(bad)
@@ -365,6 +394,7 @@ describe('the runtime replies (live.json)', () => {
       auth: AUTH,
       decisions: {},
       textVersion: 'one-app-v1',
+      textSha256: {},
     }
     expect(await submitLiveConsent(args)).toEqual({
       ok: true,

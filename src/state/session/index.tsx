@@ -27,7 +27,13 @@ import {
 } from './agent'
 import {type Action, getInitialState, reducer, type State} from './reducer'
 export {isSignupQueued} from './util'
-import {endOpenLiveSessions} from '#/features/agentLive/registry'
+import {logger} from '#/logger'
+import {
+  endOpenLiveSessions,
+  endOpenLiveSessionsAndWait,
+  hasOpenLiveSessions,
+  LIVE_END_WAIT_MS,
+} from '#/features/agentLive/registry'
 import {addSessionDebugLog} from './logging'
 export type {SessionAccount} from '#/state/session/types'
 
@@ -55,8 +61,8 @@ AgentContext.displayName = 'SessionAgentContext'
 const ApiContext = createContext<SessionApiContext>({
   createAccount: async () => {},
   login: async () => {},
-  logoutCurrentAccount: () => {},
-  logoutEveryAccount: () => {},
+  logoutCurrentAccount: async () => {},
+  logoutEveryAccount: async () => {},
   resumeSession: async () => {},
   removeAccount: () => {},
   partialRefreshSession: async () => {},
@@ -101,6 +107,15 @@ class SessionStore {
       void persisted.write('session', persistedData)
     }
     this.listeners.forEach(listener => listener())
+  }
+}
+
+async function endLiveBeforeSignOut() {
+  const liveEnd = await endOpenLiveSessionsAndWait(LIVE_END_WAIT_MS)
+  if (liveEnd === 'timed_out') {
+    logger.warn('agentLive: sign-out went ahead with /end unsettled', {
+      timeoutMs: LIVE_END_WAIT_MS,
+    })
   }
 }
 
@@ -193,11 +208,12 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   const logoutCurrentAccount = useCallback<
     SessionApiContext['logoutCurrentAccount']
   >(
-    logContext => {
+    async logContext => {
       addSessionDebugLog({type: 'method:start', method: 'logout'})
-      // Agent Live: start ending any open live session while this account's
-      // bearer is still current (no-op when none is open, or Live is dark).
-      endOpenLiveSessions()
+      // Agent Live: Cancel or end any open live session and wait for its
+      // /end while this account's bearer is still current, as deleting the
+      // account does (review r404 a). Nothing open, or Live dark: no wait.
+      if (hasOpenLiveSessions()) await endLiveBeforeSignOut()
       cancelPendingTask()
       const prevState = store.getState()
       store.dispatch({
@@ -232,11 +248,12 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   const logoutEveryAccount = useCallback<
     SessionApiContext['logoutEveryAccount']
   >(
-    logContext => {
+    async logContext => {
       addSessionDebugLog({type: 'method:start', method: 'logout'})
-      // Agent Live: start ending any open live session while this account's
-      // bearer is still current (no-op when none is open, or Live is dark).
-      endOpenLiveSessions()
+      // Agent Live: Cancel or end any open live session and wait for its
+      // /end while this account's bearer is still current, as deleting the
+      // account does (review r404 a). Nothing open, or Live dark: no wait.
+      if (hasOpenLiveSessions()) await endLiveBeforeSignOut()
       cancelPendingTask()
       const prevState = store.getState()
       store.dispatch({

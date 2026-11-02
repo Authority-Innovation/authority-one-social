@@ -294,7 +294,9 @@ function LiveSession({
         <ConsentSheet
           required={state.consentRequired}
           recordPolicy={state.recordPolicy}
-          onSubmit={choices => void controller?.submitConsent(choices)}
+          onSubmit={(choices, textSha256) =>
+            void controller?.submitConsent(choices, textSha256)
+          }
           onCancel={onEnd}
         />
       )

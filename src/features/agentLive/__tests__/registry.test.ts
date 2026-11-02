@@ -3,7 +3,7 @@ import {afterEach, describe, expect, it, jest} from '@jest/globals'
 import {
   endOpenLiveSessionsAndWait,
   forgetLiveSessionsForTests,
-  LIVE_END_BEFORE_DELETE_MS,
+  LIVE_END_WAIT_MS,
   registerLiveSession,
 } from '../registry'
 
@@ -68,6 +68,6 @@ describe('endOpenLiveSessionsAndWait (review 3b593301c F21: delete waits for /en
   })
 
   it('the delete bound is 8 s (r392 L10)', () => {
-    expect(LIVE_END_BEFORE_DELETE_MS).toBe(8_000)
+    expect(LIVE_END_WAIT_MS).toBe(8_000)
   })
 })

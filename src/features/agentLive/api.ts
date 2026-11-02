@@ -10,7 +10,7 @@
  *   POST /live/sessions               {agentDid, devicePubKey?}
  *     → {sid, region, wsUrl, token|null, expiresAt|null, popRequired,
  *        consentRequired, recordPolicy, reused, consentMissing?}
- *   POST /live/sessions/:sid/consent  {decisions, textVersion, devicePubKey?}
+ *   POST /live/sessions/:sid/consent  {decisions, textVersion, textSha256, devicePubKey?}
  *     → {admitted, missing, token|null, expiresAt|null, popRequired, agent}
  *   POST /live/sessions/:sid/token    {camera, devicePubKey?}
  *     → {token, expiresAt, popRequired}   403 {error: consent_required}
@@ -112,6 +112,7 @@ const DID_RE = /^did:[a-z0-9]+:[A-Za-z0-9._:%-]{1,200}$/
 const PUBKEY_RE = /^[A-Za-z0-9_-]{43}$/
 const KIND_RE = /^[a-z_]{1,40}$/
 const TEXT_VERSION_RE = /^[A-Za-z0-9._-]{1,40}$/
+const SHA256_HEX_RE = /^[0-9a-f]{64}$/
 const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
 const SIG_RE = /^[A-Za-z0-9_-]{86}$/
 
@@ -167,12 +168,19 @@ export async function submitLiveConsent({
   auth,
   decisions,
   textVersion,
+  textSha256,
   devicePubKey,
 }: {
   sid: string
   auth: LiveAuth
   decisions: Record<string, LiveDecision>
   textVersion: string
+  /**
+   * Per kind decided, the SHA-256 (hex) of the exact words the owner was
+   * shown (review r404 d). The runtime refuses words it doesn't hold for
+   * `textVersion` (text_mismatch).
+   */
+  textSha256: Record<string, string>
   devicePubKey?: string | null
 }): Promise<LiveResult<LiveConsentResult>> {
   if (!SID_RE.test(sid) || !TEXT_VERSION_RE.test(textVersion)) {
@@ -187,10 +195,25 @@ export async function submitLiveConsent({
     }
     clean[kind] = d
   }
+  // A hash for every kind decided, and nothing else: no decision goes out
+  // without the words it was made on.
+  const shown: Record<string, string> = {}
+  for (const kind of Object.keys(clean)) {
+    const h = Object.hasOwn(textSha256, kind) ? textSha256[kind] : undefined
+    if (typeof h !== 'string' || !SHA256_HEX_RE.test(h)) {
+      return {ok: false, error: {kind: 'invalid_argument'}}
+    }
+    shown[kind] = h
+  }
   const res = await post(
     [sid, 'consent'],
     auth,
-    {decisions: clean, textVersion, ...(pk ? {devicePubKey: pk} : {})},
+    {
+      decisions: clean,
+      textVersion,
+      textSha256: shown,
+      ...(pk ? {devicePubKey: pk} : {}),
+    },
     LIVE_START_TIMEOUT_MS,
   )
   if (!res.ok) return res

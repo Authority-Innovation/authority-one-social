@@ -279,7 +279,11 @@ export type LiveSessionController = {
   /** On `reuse`: the owner chose to continue the open session here. */
   continueHere(): Promise<void>
   /** The owner's consent sheet, then the join. */
-  submitConsent(choices: ConsentChoices): Promise<void>
+  /** `textSha256`: per kind, the hash of the exact words shown (r404 d). */
+  submitConsent(
+    choices: ConsentChoices,
+    textSha256: Record<string, string>,
+  ): Promise<void>
   setMic(on: boolean): Promise<void>
   /** Returns false when nothing was sent (no session, or a bad source id). */
   setBlind(on: boolean, src?: string): Promise<boolean>
@@ -377,8 +381,8 @@ export function createLiveSessionController({
   // The session whose /end gave up, for retryEnd.
   let endPending: Session | null = null
   // The /end out now, from any path (finish, Cancel while starting,
-  // retryEnd): delete waits for it to settle rather than return while it is
-  // still in flight (review 826fdac63 M1). Sign-out starts it, not waits.
+  // retryEnd): delete and sign-out wait for it to settle rather than return
+  // while it is still in flight (review 826fdac63 M1; r404 a).
   let endInFlight: {done: Promise<void>} | null = null
   // The session ended or left: unregister from the sign-out hook.
   let unregister: (() => void) | null = null
@@ -1086,25 +1090,36 @@ export function createLiveSessionController({
   async function beginSession() {
     if (phase() !== 'idle') return
     set({phase: 'starting', error: null})
+    // Registered from the tap, before the mic, the key read and the start
+    // call (review r404 L13; r392 M3): a delete or sign-out at any point
+    // Cancels the start and waits for its answer, then for the /end of what
+    // it made. A start the screen left (leave()) is owed, not ended, so that
+    // /end goes out here (r404 L12).
+    unregister = registerLiveSession(async () => {
+      await controller.end()
+      await beginRun
+      if (screenLeft && endPending) await controller.retryEnd()
+      await endSettled()
+    })
     // Asked before anything exists on the runtime: no session for a person
     // who said no.
     if ((await deps.requestMicAccess()) !== 'granted') {
+      unregister?.()
       if (phase() === 'starting') set({phase: 'failed', error: 'mic_denied'})
       return
     }
     const auth = await api.captureLiveAuth()
     if (!auth) {
+      unregister?.()
       if (phase() === 'starting') set({phase: 'failed', error: 'signed_out'})
       return
     }
     const key = await deps.getDeviceKey(auth.ownerDid)
-    if (phase() !== 'starting') return
-    // Registered before the start call: a delete or sign-out while it is
-    // out Cancels it, and the delete waits for the answer (review r392 M3).
-    unregister = registerLiveSession(async () => {
-      await controller.end()
-      await startSettled()
-    })
+    // Cancelled or left during the key read: nothing was created.
+    if (phase() !== 'starting') {
+      unregister?.()
+      return
+    }
     const res = await api.startLiveSession({
       agentDid,
       auth,
@@ -1185,7 +1200,7 @@ export function createLiveSessionController({
       await afterStart()
     },
 
-    async submitConsent(choices) {
+    async submitConsent(choices, textSha256) {
       const s = session
       if (phase() !== 'consent' || !s) return
       if (!canGoLive(state.consentRequired, choices)) return
@@ -1195,6 +1210,7 @@ export function createLiveSessionController({
         auth: s.auth,
         decisions: decisionsFor(state.consentRequired, choices),
         textVersion: CONSENT_TEXT_VERSION,
+        textSha256,
         devicePubKey: s.key?.publicKey ?? null,
       })
       if (over()) return
@@ -1368,12 +1384,16 @@ export function createLiveSessionController({
       // A reused session not taken over is the other device's: not ours to
       // end at sign-out either.
       const ours = !!s && !(s.reused && !s.tookOver)
+      // Left while starting: what the start makes is owed, so stay
+      // registered for the delete or sign-out that sends its /end (review
+      // r404 L12).
+      const starting = phase() === 'starting'
       // Owed before the await: a sign-out while the room disconnects still
       // finds it (review c23bdc031 F6).
       if (s && ours) endPending = s
       await finish(
         {phase: 'ended', endReason: 'left_open'},
-        {endRuntime: false, keepRegistered: ours},
+        {endRuntime: false, keepRegistered: ours || starting},
       )
     },
 

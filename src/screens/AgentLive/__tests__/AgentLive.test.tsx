@@ -273,6 +273,7 @@ jest.mock('livekit-client', () => {
   return {}
 })
 
+import {RUNTIME_ONE_APP_V1_SHA256} from '#/features/agentLive/__fixtures__/consentWordsSha256'
 import {createFakeRoom} from '#/features/agentLive/__fixtures__/fakeRoom'
 import LEGACY from '#/features/agentLive/__fixtures__/legacy-ac11bd0.json'
 import {createRuntimeFetch} from '#/features/agentLive/__fixtures__/runtimeFetch'
@@ -555,6 +556,18 @@ describe('session screen (flag on)', () => {
       ai_process: 'given',
       remember: 'refused',
     })
+    // r404 d: per kind, the hash of the words the sheet rendered, which must
+    // be the runtime's own for one-app-v1 (pure-JS SHA-256, as on device).
+    const sent = rt.to('/live/sessions/:sid/consent')[0].body!
+    expect(sent.textVersion).toBe('one-app-v1')
+    expect(sent.textSha256).toEqual(
+      Object.fromEntries(
+        Object.keys(sent.decisions as object).map(k => [
+          k,
+          RUNTIME_ONE_APP_V1_SHA256[k],
+        ]),
+      ),
+    )
     // R2 v2: the proven token is exchanged; the returned one joins.
     expect(fake.connects()[0].token).toBe(tokenOf('proveExchange'))
     expect(fake.calls[fake.calls.length - 1]).toEqual({op: 'mic', on: true})

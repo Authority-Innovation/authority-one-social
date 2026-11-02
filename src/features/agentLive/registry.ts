@@ -4,9 +4,10 @@
  * H2 item 4). Tiny and dependency-free: `state/session` imports it, and it
  * must not pull in the Live client (nothing here is LiveKit).
  *
- * The end is started, not awaited: each controller's /end reads its bearer
- * synchronously when it starts, before the account's tokens are cleared, and
- * keeps retrying after the screen has gone.
+ * Each controller's /end reads its bearer synchronously when it starts,
+ * before the account's tokens are cleared. An account switch starts the ends;
+ * sign-out and account delete also wait for them, within a bound (review
+ * r404 a; 3b593301c F21).
  */
 type End = () => Promise<void>
 
@@ -27,8 +28,11 @@ export function endOpenLiveSessions(): void {
   }
 }
 
-/** How long deleting the account waits for Agent Live's /end. */
-export const LIVE_END_BEFORE_DELETE_MS = 8_000
+/** How long sign-out and deleting the account wait for Agent Live's /end. */
+export const LIVE_END_WAIT_MS = 8_000
+
+/** Is any live session registered (sign-out waits only then)? */
+export const hasOpenLiveSessions = () => open.size > 0
 
 /**
  * End every open live session and wait for the ends, at most `timeoutMs`
