@@ -377,9 +377,9 @@ export function createLiveSessionController({
   // The session whose /end gave up, for retryEnd.
   let endPending: Session | null = null
   // The /end out now, from any path (finish, Cancel while starting,
-  // retryEnd): sign-out and delete wait for it to settle rather than return
-  // while it is still in flight (review 826fdac63 M1).
-  let endInFlight: {sid: string; done: Promise<void>} | null = null
+  // retryEnd): delete waits for it to settle rather than return while it is
+  // still in flight (review 826fdac63 M1). Sign-out starts it, not waits.
+  let endInFlight: {done: Promise<void>} | null = null
   // The session ended or left: unregister from the sign-out hook.
   let unregister: (() => void) | null = null
   // The screen has gone (detach): a /end give-up is reported, not shown.
@@ -416,21 +416,29 @@ export function createLiveSessionController({
   const live = () =>
     phase() === 'connected' && !!session && !!room && !rejoining
 
+  // The begin() run, while its start call may still be out: an end() that
+  // Cancels it waits for the answer and the /end that follows (review
+  // r392 M3).
+  let beginRun: Promise<void> | null = null
+
   /**
    * The runtime's /end, retried; the session is the account's that started
-   * it. One at a time: a second call for the same session joins the first.
+   * it. One at a time: a second call joins the first (a controller has one
+   * session).
    */
   async function endOnRuntime(s: Session): Promise<void> {
-    const prev = endInFlight
-    if (prev?.sid === s.sid) return prev.done
-    const done = (async () => {
-      if (prev) await prev.done
-      await sendEnd(s)
-    })().finally(() => {
+    if (endInFlight) return endInFlight.done
+    const done = sendEnd(s).finally(() => {
       if (endInFlight?.done === done) endInFlight = null
     })
-    endInFlight = {sid: s.sid, done}
+    endInFlight = {done}
     return done
+  }
+
+  /** A Cancel while starting: the start answered and its /end settled. */
+  async function startSettled() {
+    if (state.stopping) await beginRun
+    await endSettled()
   }
 
   /** Every /end still out has settled. */
@@ -1091,12 +1099,19 @@ export function createLiveSessionController({
     }
     const key = await deps.getDeviceKey(auth.ownerDid)
     if (phase() !== 'starting') return
+    // Registered before the start call: a delete or sign-out while it is
+    // out Cancels it, and the delete waits for the answer (review r392 M3).
+    unregister = registerLiveSession(async () => {
+      await controller.end()
+      await startSettled()
+    })
     const res = await api.startLiveSession({
       agentDid,
       auth,
       devicePubKey: key?.publicKey ?? null,
     })
     if (!res.ok) {
+      unregister?.()
       if (phase() === 'starting') {
         set({phase: 'failed', error: res.error.kind})
       }
@@ -1113,6 +1128,7 @@ export function createLiveSessionController({
     session = {sid, wsUrl, auth, key, join: j, reused}
     // Sign-out / switch: end it, or send the /end that is still owed (a
     // /end that gave up, F5, or a session the screen left running).
+    unregister?.()
     unregister = registerLiveSession(() =>
       endPending ? controller.retryEnd() : controller.end(),
     )
@@ -1146,8 +1162,10 @@ export function createLiveSessionController({
   const controller: LiveSessionController = {
     async begin() {
       endedCreated = false
+      const run = beginSession()
+      beginRun = run.catch(() => {})
       try {
-        await beginSession()
+        await run
       } finally {
         // However the start ended, a pending Cancel is now settled (F18). If
         // this device made a session, it was ended ("Live session ended.");
@@ -1308,8 +1326,9 @@ export function createLiveSessionController({
     async end() {
       if (phase() === 'ended' || phase() === 'failed') {
         if (ending) await ending
-        // Cancel while starting sends its /end outside `ending` (M1).
-        await endSettled()
+        // A Cancel while starting is settled by begin(): its /end goes out
+        // when the start is answered, outside `ending` (M1, r392 M3).
+        await startSettled()
         return
       }
       // A session not created yet: `begin` ends it when the runtime answers.
@@ -1325,7 +1344,8 @@ export function createLiveSessionController({
           endReason: onPanel ? 'left_open' : 'local',
           ...(stopping ? {stopping: true} : {}),
         },
-        {endRuntime: !onPanel, owner: true},
+        // Stays registered until begin() settles the start (r392 M3).
+        {endRuntime: !onPanel, owner: true, keepRegistered: stopping},
       )
     },
 

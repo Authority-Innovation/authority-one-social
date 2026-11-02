@@ -1649,8 +1649,10 @@ describe('review 679a9d48', () => {
       waited = true
     })
     await flush()
-    // The /end is still out: the wait has not returned.
+    // The /end is still out: the wait has not returned, and the screen
+    // still says "stopping" (r392 L8).
     expect(waited).toBe(false)
+    expect(env.last()).toMatchObject({stopping: true, ending: true})
     h.answerEnd()
     await waiting
     await begun
@@ -1685,6 +1687,61 @@ describe('review 679a9d48', () => {
     // The four that gave up, then the one retry: the wait sent none.
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(5)
     expect(env.last()).toMatchObject({ending: false, endFailed: false})
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
+  it('M3 (r392): delete while the start call is out, after Cancel, waits for the answer and its /end', async () => {
+    const env = setup()
+    const h = holdCalls(env)
+    h.held.end = false
+    env.rt.on('/live/sessions', 'startAwaitingConsent')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const begun = env.c.begin()
+    await flush()
+    expect(openLiveSessionCount()).toBe(1)
+    await env.c.end()
+    let waited = false
+    const waiting = endOpenLiveSessionsAndWait(8000).then(() => {
+      waited = true
+    })
+    await flush()
+    expect(waited).toBe(false)
+    h.answerStart()
+    await waiting
+    await begun
+    expect(h.held.endsAsked).toBe(1)
+    expect(env.last()).toMatchObject({phase: 'ended', endReason: 'local'})
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
+  it('M3 (r392): delete while the start call is out, no Cancel, ends what the start makes before it returns', async () => {
+    const env = setup()
+    const h = holdCalls(env)
+    h.held.end = false
+    env.rt.on('/live/sessions', 'startAwaitingConsent')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const begun = env.c.begin()
+    await flush()
+    let waited = false
+    const waiting = endOpenLiveSessionsAndWait(8000).then(() => {
+      waited = true
+    })
+    await flush()
+    expect(waited).toBe(false)
+    h.answerStart()
+    await waiting
+    await begun
+    // Not left at consent: the session it made was ended, once.
+    expect(h.held.endsAsked).toBe(1)
+    expect(env.last()).toMatchObject({phase: 'ended', stopping: false})
+    expect(openLiveSessionCount()).toBe(0)
+  })
+
+  it('M3 (r392): a start that fails unregisters; a delete then has nothing to end', async () => {
+    const env = setup()
+    env.rt.on('/live/sessions', E503)
+    await env.c.begin()
+    expect(env.last().phase).toBe('failed')
     expect(openLiveSessionCount()).toBe(0)
   })
 
