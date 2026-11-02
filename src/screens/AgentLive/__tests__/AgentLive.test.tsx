@@ -1199,6 +1199,31 @@ describe('session screen (flag on)', () => {
     expect(mockGoBack).toHaveBeenCalledTimes(1)
   })
 
+  it('F18 (3b593301c): Cancel while starting, and the start found an open session: no “ended” copy, no /end', async () => {
+    const {getByTestId} = await open()
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const real = rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname === '/live/sessions') await gate
+      return real(u, i)
+    }
+    rt.on('/live/sessions', 'startReused')
+    await press(getByTestId('agentLiveBeginButton'))
+    await press(getByTestId('agentLiveCancelButton'))
+    release()
+    await flush()
+    expect(rt.to('/live/sessions/:sid/end')).toEqual([])
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+    expect(() => getByTestId('agentLiveFinishedMessage')).not.toThrow()
+    expect(getByTestId('agentLiveFinishedMessage')).not.toHaveTextContent(
+      /ended/,
+    )
+  })
+
   it('F1: Cancel while the session is starting ends it, then goes back', async () => {
     const {getByTestId} = await open()
     let release!: () => void

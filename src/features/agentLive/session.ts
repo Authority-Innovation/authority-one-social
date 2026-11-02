@@ -106,6 +106,11 @@ export type LiveEndReason =
   | 'refused'
   /** Rejoins refused until the ladder ran out; no /end (it runs on). */
   | 'refused_reconnect'
+  /**
+   * Cancel while starting, and this device created no session to end (the
+   * start found one already open, or failed): nothing to say (3b593301c F18).
+   */
+  | 'cancelled'
 
 /** Something that went wrong without ending the session. */
 export type LiveNotice =
@@ -377,6 +382,8 @@ export function createLiveSessionController({
   let detached = false
   // The screen went away without the owner ending (leave()).
   let screenLeft = false
+  // Cancel while starting: begin ended the session this device created.
+  let endedCreated = false
   let onScreen = true
   // This give-up was already reported off-screen (toast): not again on detach.
   let giveUpReported = false
@@ -1092,7 +1099,10 @@ export function createLiveSessionController({
       if (reused) unregister?.()
       // The screen went away (not Cancel): keep it owed to sign-out, P3.
       else if (screenLeft) endPending = s
-      else await endOnRuntime(s)
+      else {
+        endedCreated = true
+        await endOnRuntime(s)
+      }
       return
     }
     set({consentRequired, recordPolicy})
@@ -1110,11 +1120,19 @@ export function createLiveSessionController({
 
   const controller: LiveSessionController = {
     async begin() {
+      endedCreated = false
       try {
         await beginSession()
       } finally {
-        // However the start ended, a pending Cancel is now settled (F18).
-        if (state.stopping) set({stopping: false})
+        // However the start ended, a pending Cancel is now settled (F18). If
+        // this device made a session, it was ended ("Live session ended.");
+        // if not, there is nothing to say (review 3b593301c F18).
+        if (state.stopping) {
+          set({
+            stopping: false,
+            ...(endedCreated ? {} : {endReason: 'cancelled' as const}),
+          })
+        }
       }
     },
 

@@ -16,8 +16,10 @@ const SRC = fs.readFileSync(
 )
 
 describe('deleting the account ends Agent Live first', () => {
-  it('calls endOpenLiveSessions before the server deleteAccount', () => {
-    const end = SRC.indexOf('endOpenLiveSessions()')
+  it('awaits the end (bounded) before the server deleteAccount (3b593301c F21)', () => {
+    const end = SRC.indexOf(
+      'await endOpenLiveSessionsAndWait(LIVE_END_BEFORE_DELETE_MS)',
+    )
     const del = SRC.indexOf('agent.com.atproto.server.deleteAccount(')
     expect(end).toBeGreaterThan(-1)
     expect(del).toBeGreaterThan(-1)

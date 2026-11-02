@@ -27,6 +27,20 @@ export function endOpenLiveSessions(): void {
   }
 }
 
+/**
+ * End every open live session and wait for the ends, at most `timeoutMs`
+ * (review 3b593301c F21: deleting the account must not race its /end; the
+ * bearer may stop working once the account is gone). Never rejects.
+ */
+export function endOpenLiveSessionsAndWait(timeoutMs: number): Promise<void> {
+  const ends = Promise.allSettled([...open].map(end => end())).then(() => {})
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<void>(resolve => {
+    timer = setTimeout(resolve, timeoutMs)
+  })
+  return Promise.race([ends, timeout]).finally(() => clearTimeout(timer))
+}
+
 /** For tests. */
 export const openLiveSessionCount = () => open.size
 /** For tests: forget sessions a previous test left open. */

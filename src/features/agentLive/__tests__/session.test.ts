@@ -1577,6 +1577,36 @@ describe('review 679a9d48', () => {
     await begun
     expect(env.last().stopping).toBe(false)
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    // It made the session and ended it: that is what the screen says.
+    expect(env.last().endReason).toBe('local')
+  })
+
+  it('F18 (3b593301c): Cancel while starting, and the start found an open session: no /end, nothing said', async () => {
+    const env = setup({held: true})
+    let answer!: () => void
+    const gate = new Promise<void>(r => (answer = r))
+    const fetch = env.rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname === '/live/sessions') await gate
+      return fetch(u, i)
+    }
+    env.rt.on('/live/sessions', 'startReused')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const begun = env.c.begin()
+    await flush()
+    await env.c.end()
+    answer()
+    await begun
+    await flush()
+    expect(env.rt.to('/live/sessions/:sid/end')).toEqual([])
+    expect(env.last()).toMatchObject({
+      phase: 'ended',
+      endReason: 'cancelled',
+      stopping: false,
+    })
   })
 
   it('F18: a start that fails after Cancel also clears “stopping”', async () => {
@@ -1598,6 +1628,8 @@ describe('review 679a9d48', () => {
     answer()
     await begun
     expect(env.last().stopping).toBe(false)
+    // Nothing was made, so nothing is said.
+    expect(env.last().endReason).toBe('cancelled')
   })
 
   describe('build 43 on-device failure: the step is named, logged and shown', () => {

@@ -24,7 +24,7 @@ import {Loader} from '#/components/Loader'
 import * as Prompt from '#/components/Prompt'
 import * as toast from '#/components/Toast'
 import {Span, Text} from '#/components/Typography'
-import {endOpenLiveSessions} from '#/features/agentLive/registry'
+import {endOpenLiveSessionsAndWait} from '#/features/agentLive/registry'
 import {resetToTab} from '#/Navigation'
 
 const WHITESPACE_RE = /\s/gu
@@ -44,6 +44,9 @@ enum EmailState {
 function isPasswordValid(password: string) {
   return password.length >= PASSWORD_MIN_LENGTH
 }
+
+/** How long the delete waits for Agent Live's /end before going ahead. */
+const LIVE_END_BEFORE_DELETE_MS = 8_000
 
 export function DeleteAccountDialog({
   control,
@@ -121,9 +124,10 @@ function DeleteAccountDialogInner({
         throw new Error('Failed to inform chat service of account deletion')
       }
       // Agent Live: deleting the account is a sign-out (Dispatch ruling on
-      // review 784dbc925 F21). End a held live session now, while this
-      // account's bearer still works; after the delete it may not.
-      endOpenLiveSessions()
+      // review 784dbc925 F21). End a held live session and wait for it (at
+      // most LIVE_END_BEFORE_DELETE_MS), while this account's bearer still
+      // works; after the delete it may not (review 3b593301c F21).
+      await endOpenLiveSessionsAndWait(LIVE_END_BEFORE_DELETE_MS)
       await agent.com.atproto.server.deleteAccount({
         did: currentAccount.did,
         password,
