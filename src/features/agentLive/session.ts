@@ -376,6 +376,10 @@ export function createLiveSessionController({
   let rejoinDrop: LiveConnectionEvent | null = null
   // The session whose /end gave up, for retryEnd.
   let endPending: Session | null = null
+  // The /end out now, from any path (finish, Cancel while starting,
+  // retryEnd): sign-out and delete wait for it to settle rather than return
+  // while it is still in flight (review 826fdac63 M1).
+  let endInFlight: {sid: string; done: Promise<void>} | null = null
   // The session ended or left: unregister from the sign-out hook.
   let unregister: (() => void) | null = null
   // The screen has gone (detach): a /end give-up is reported, not shown.
@@ -412,8 +416,29 @@ export function createLiveSessionController({
   const live = () =>
     phase() === 'connected' && !!session && !!room && !rejoining
 
-  /** The runtime's /end, retried; the session is the account's that started it. */
-  async function endOnRuntime(s: Session) {
+  /**
+   * The runtime's /end, retried; the session is the account's that started
+   * it. One at a time: a second call for the same session joins the first.
+   */
+  async function endOnRuntime(s: Session): Promise<void> {
+    const prev = endInFlight
+    if (prev?.sid === s.sid) return prev.done
+    const done = (async () => {
+      if (prev) await prev.done
+      await sendEnd(s)
+    })().finally(() => {
+      if (endInFlight?.done === done) endInFlight = null
+    })
+    endInFlight = {sid: s.sid, done}
+    return done
+  }
+
+  /** Every /end still out has settled. */
+  async function endSettled() {
+    while (endInFlight) await endInFlight.done
+  }
+
+  async function sendEnd(s: Session) {
     set({ending: true, endSlow: false, endFailed: false})
     giveUpReported = false
     const cancelSlow = deps.setTimer(END_SLOW_MS, () => {
@@ -1283,6 +1308,8 @@ export function createLiveSessionController({
     async end() {
       if (phase() === 'ended' || phase() === 'failed') {
         if (ending) await ending
+        // Cancel while starting sends its /end outside `ending` (M1).
+        await endSettled()
         return
       }
       // A session not created yet: `begin` ends it when the runtime answers.
@@ -1332,7 +1359,8 @@ export function createLiveSessionController({
 
     async retryEnd() {
       const s = endPending
-      if (!s || state.ending) return
+      // A /end already out: wait for it, not return while it is (M1).
+      if (!s || state.ending) return endSettled()
       await endOnRuntime(s)
     },
 

@@ -64,6 +64,7 @@ import {
 } from '../pop'
 import {
   endOpenLiveSessions,
+  endOpenLiveSessionsAndWait,
   forgetLiveSessionsForTests,
   openLiveSessionCount,
 } from '../registry'
@@ -1607,6 +1608,84 @@ describe('review 679a9d48', () => {
       endReason: 'cancelled',
       stopping: false,
     })
+  })
+
+  /** Hold the start call and/or /end until the test answers them. */
+  function holdCalls(env: Env) {
+    let answerStart!: () => void
+    let answerEnd!: () => void
+    const startGate = new Promise<void>(r => (answerStart = r))
+    const endGate = new Promise<void>(r => (answerEnd = r))
+    const held = {start: true, end: true, endsAsked: 0}
+    const fetch = env.rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      const path = new URL(u).pathname
+      if (path === '/live/sessions' && held.start) await startGate
+      if (path.endsWith('/end')) {
+        held.endsAsked++
+        if (held.end) await endGate
+      }
+      return fetch(u, i)
+    }
+    return {held, answerStart, answerEnd}
+  }
+
+  it('M1 (826fdac63): delete waits for the /end that Cancel while starting sent', async () => {
+    const env = setup()
+    const h = holdCalls(env)
+    env.rt.on('/live/sessions', 'startAwaitingConsent')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const begun = env.c.begin()
+    await flush()
+    await env.c.end()
+    h.answerStart()
+    await flush()
+    expect(h.held.endsAsked).toBe(1)
+    let waited = false
+    const waiting = endOpenLiveSessionsAndWait(8000).then(() => {
+      waited = true
+    })
+    await flush()
+    // The /end is still out: the wait has not returned.
+    expect(waited).toBe(false)
+    h.answerEnd()
+    await waiting
+    await begun
+    expect(waited).toBe(true)
+    // One /end, not a second from the wait.
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(env.last()).toMatchObject({phase: 'ended', ending: false})
+  })
+
+  it('M1 (826fdac63): delete waits for a retried /end the screen already sent', async () => {
+    const env = setup()
+    await toLive(env)
+    env.rt.on('/live/sessions/:sid/end', E503, E503, E503, E503)
+    await env.c.end()
+    expect(env.last()).toMatchObject({endFailed: true})
+    const h = holdCalls(env)
+    h.held.start = false
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const retried = env.c.retryEnd()
+    await flush()
+    expect(env.last().ending).toBe(true)
+    let waited = false
+    const waiting = endOpenLiveSessionsAndWait(8000).then(() => {
+      waited = true
+    })
+    await flush()
+    expect(waited).toBe(false)
+    h.answerEnd()
+    await waiting
+    await retried
+    expect(waited).toBe(true)
+    // The four that gave up, then the one retry: the wait sent none.
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(5)
+    expect(env.last()).toMatchObject({ending: false, endFailed: false})
+    expect(openLiveSessionCount()).toBe(0)
   })
 
   it('F18: a start that fails after Cancel also clears “stopping”', async () => {
