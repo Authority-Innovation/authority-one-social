@@ -15,6 +15,8 @@
  */
 import {ed25519} from '@noble/curves/ed25519'
 
+import {utf8Decode} from '#/lib/utf8'
+
 export type DeviceKey = {
   /** Raw 32-byte Ed25519 public key, base64url without padding (43 chars). */
   publicKey: string
@@ -75,32 +77,6 @@ export function joinProofMessage({
 export function joinProof(key: DeviceKey, token: string): string | null {
   const claims = joinClaimsOf(token)
   return claims ? key.sign(joinProofMessage(claims)) : null
-}
-
-/** UTF-8 bytes to a string, with no dependency on a global TextDecoder. */
-export function utf8Decode(bytes: Uint8Array): string {
-  let out = ''
-  for (let i = 0; i < bytes.length; ) {
-    const b = bytes[i++]
-    let cp: number
-    if (b < 0x80) {
-      cp = b
-    } else if (b >= 0xc0 && b < 0xe0) {
-      cp = ((b & 0x1f) << 6) | (bytes[i++] & 0x3f)
-    } else if (b >= 0xe0 && b < 0xf0) {
-      cp = ((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f)
-    } else if (b >= 0xf0 && b < 0xf8) {
-      cp =
-        ((b & 0x07) << 18) |
-        ((bytes[i++] & 0x3f) << 12) |
-        ((bytes[i++] & 0x3f) << 6) |
-        (bytes[i++] & 0x3f)
-    } else {
-      cp = 0xfffd
-    }
-    out += String.fromCodePoint(cp)
-  }
-  return out
 }
 
 const ALPHABET =

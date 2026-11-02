@@ -5,6 +5,7 @@
  */
 import {describe, expect, it} from '@jest/globals'
 
+import {utf8Decode} from '#/lib/utf8'
 import {DEVICE_SEED, LIVE, tokenOf} from '../__fixtures__/runtimeLive'
 import {
   b64urlDecode,
@@ -13,7 +14,6 @@ import {
   joinClaimsOf,
   joinProof,
   joinProofMessage,
-  utf8Decode,
 } from '../pop'
 
 const key = deviceKeyFromSeed(DEVICE_SEED)
