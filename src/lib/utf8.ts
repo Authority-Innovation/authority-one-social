@@ -1,9 +1,14 @@
 /**
- * UTF-8 decoding that needs no global TextDecoder. Hermes (React Native) has
- * TextEncoder but no TextDecoder, and fast-text-encoding then installs
- * neither, so `new TextDecoder()` throws on iOS and Android while Jest (Node)
- * passes (build 43: every Agent Live join failed this way).
- * `installTextDecoder()` (src/platform/polyfills.ts) fills the global.
+ * A spec-shaped UTF-8 TextDecoder for React Native. Hermes has no native
+ * TextDecoder, and the one fast-text-encoding installs throws on the `fatal`
+ * and `stream` options. livekit-client builds
+ * `new TextDecoder('utf-8', {fatal: true})` at module scope, so the SDK
+ * failed to load on the phone: Metro evaluates it lazily, at the first
+ * `new Room()`, which was Agent Live's "(code: room-setup)" (builds 43, 44).
+ * Chat streaming decodes with {stream: true} too. `installTextDecoder()`
+ * (src/platform/polyfills.ts) installs this one when the global is missing or
+ * can't do both options; Node, the web and any engine with a full
+ * TextDecoder keep theirs.
  */
 
 const REPLACEMENT = 0xfffd
@@ -17,8 +22,14 @@ function seqLength(b: number): number {
   return 0
 }
 
-/** UTF-8 bytes to a string; malformed input becomes U+FFFD. */
-export function utf8Decode(bytes: Uint8Array): string {
+/** UTF-8 bytes to a string; malformed input becomes U+FFFD, or throws if `fatal`. */
+export function utf8Decode(bytes: Uint8Array, fatal = false): string {
+  const bad = () => {
+    if (fatal) {
+      throw new TypeError('The encoded data was not valid for encoding utf-8')
+    }
+    return String.fromCharCode(REPLACEMENT)
+  }
   let out = ''
   for (let i = 0; i < bytes.length; ) {
     const b = bytes[i]
@@ -29,7 +40,7 @@ export function utf8Decode(bytes: Uint8Array): string {
       continue
     }
     if (n === 0 || i + n > bytes.length) {
-      out += String.fromCharCode(REPLACEMENT)
+      out += bad()
       i++
       continue
     }
@@ -44,7 +55,7 @@ export function utf8Decode(bytes: Uint8Array): string {
       cp = (cp << 6) | (c & 0x3f)
     }
     if (!ok || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
-      out += String.fromCharCode(REPLACEMENT)
+      out += bad()
       i++
       continue
     }
@@ -112,7 +123,7 @@ export class Utf8TextDecoder {
         bytes = bytes.subarray(0, bytes.length - tail)
       }
     }
-    let text = utf8Decode(bytes)
+    let text = utf8Decode(bytes, this.fatal)
     if (!this.ignoreBOM && !this.bomSeen && text.length) {
       if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
       this.bomSeen = true
@@ -122,11 +133,36 @@ export class Utf8TextDecoder {
   }
 }
 
-/** Installs Utf8TextDecoder as the global TextDecoder when there is none. */
+type DecoderCtor = new (
+  label?: string,
+  options?: {fatal?: boolean},
+) => {decode(input?: Uint8Array, options?: {stream?: boolean}): string}
+
+/** The TextDecoder can do what the app and livekit-client ask of it. */
+export function isCapableTextDecoder(TD: unknown): boolean {
+  if (typeof TD !== 'function') return false
+  try {
+    const Ctor = TD as DecoderCtor
+    new Ctor('utf-8', {fatal: true})
+    const d = new Ctor()
+    // The first two bytes of "✓": a stream decoder holds them back.
+    return (
+      d.decode(new Uint8Array([0xe2, 0x9c]), {stream: true}) === '' &&
+      d.decode(new Uint8Array([0x93])) === '✓'
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Installs Utf8TextDecoder as the global TextDecoder when there is none, or
+ * when the one there can't do `fatal` and `stream` (fast-text-encoding's).
+ */
 export function installTextDecoder(
   scope: {TextDecoder?: unknown} = globalThis,
 ): boolean {
-  if (typeof scope.TextDecoder !== 'undefined') return false
+  if (isCapableTextDecoder(scope.TextDecoder)) return false
   scope.TextDecoder = Utf8TextDecoder
   return true
 }

@@ -1615,6 +1615,7 @@ describe('review 679a9d48', () => {
         phase: 'failed',
         error: 'bad_proof',
         failStep: 'proof',
+        failError: 'JoinError:bad_proof',
       })
       expect(env.rt.to('/live/join/prove')).toEqual([])
     })
@@ -1644,6 +1645,7 @@ describe('review 679a9d48', () => {
           phase: 'failed',
           error: 'connect',
           failStep: stepName,
+          failError: 'Error',
         })
         const line = warn.mock.calls.find(
           c => c[0] === 'agentLive: join step failed',

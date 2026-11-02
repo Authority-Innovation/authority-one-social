@@ -159,6 +159,8 @@ export type LiveSessionState = {
    * as a short code so a screenshot names it.
    */
   failStep: LiveConnectStep | null
+  /** The error's name at that step (e.g. TypeError), shown with it. */
+  failError: string | null
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
   /**
@@ -189,6 +191,7 @@ export const initialLiveSessionState: LiveSessionState = {
   leftRunning: false,
   stopping: false,
   failStep: null,
+  failError: null,
   canTakeOver: false,
   reuseBound: false,
   ending: false,
@@ -522,14 +525,28 @@ export function createLiveSessionController({
     return ending
   }
 
-  const fail = (error: LiveFailure, failStep: LiveConnectStep | null = null) =>
-    finish({phase: 'failed', error, failStep}, {endRuntime: true})
+  const fail = (
+    error: LiveFailure,
+    failStep: LiveConnectStep | null = null,
+    failError: string | null = null,
+  ) => finish({phase: 'failed', error, failStep, failError}, {endRuntime: true})
 
-  /** One line per failed join step: the step, the error's name and message. */
-  function logStepFailure(step: LiveConnectStep, e: unknown) {
-    const name = e instanceof Error ? e.name : typeof e
+  /**
+   * One line per failed join step: the step, the error's name and message.
+   * Returns the name (shown on screen with the step).
+   */
+  function logStepFailure(step: LiveConnectStep, e: unknown): string {
+    const name =
+      e instanceof JoinError
+        ? `JoinError:${e.kind}`
+        : e instanceof Error
+          ? e.name
+          : typeof e === 'string'
+            ? e
+            : typeof e
     const message = scrub(e instanceof Error ? e.message : String(e))
     logger.warn('agentLive: join step failed', {step, name, message})
+    return name
   }
 
   /**
@@ -944,12 +961,13 @@ export function createLiveSessionController({
       if (over()) return
       if (!t.ok) {
         noteRefusal(s, t.error)
-        logStepFailure(step, t.error.kind)
+        const name = logStepFailure(step, t.error.kind)
         await fail(
           t.error.kind === 'consent_required'
             ? 'consent_incomplete'
             : t.error.kind,
           step,
+          name,
         )
         return
       }
@@ -968,9 +986,9 @@ export function createLiveSessionController({
     } catch (e) {
       const where = e instanceof LiveStepError ? e.step : step
       const cause = e instanceof LiveStepError ? e.cause : e
-      logStepFailure(where, cause)
+      const name = logStepFailure(where, cause)
       if (!over() && !rejoining) {
-        await fail(e instanceof JoinError ? e.kind : 'connect', where)
+        await fail(e instanceof JoinError ? e.kind : 'connect', where, name)
       }
       return
     }

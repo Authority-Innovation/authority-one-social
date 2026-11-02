@@ -1,6 +1,31 @@
+/* eslint-disable import-x/no-nodejs-modules -- loads fast-text-encoding's source */
+import * as fs from 'node:fs'
+import * as vm from 'node:vm'
+
 import {afterEach, beforeEach, describe, expect, it} from '@jest/globals'
 
-import {installTextDecoder, utf8Decode, Utf8TextDecoder} from '../utf8'
+import {
+  installTextDecoder,
+  isCapableTextDecoder,
+  utf8Decode,
+  Utf8TextDecoder,
+} from '../utf8'
+
+/**
+ * fast-text-encoding's decoder, as React Native gets it: the polyfill
+ * installs onto `window` (RN defines one) when there is no TextDecoder.
+ */
+function fastTextEncodingDecoder(): unknown {
+  const src = fs.readFileSync(
+    require.resolve('fast-text-encoding/text.min.js'),
+    'utf8',
+  )
+  const fakeWindow: {TextEncoder?: unknown; TextDecoder?: unknown} = {
+    TextEncoder: globalThis.TextEncoder,
+  }
+  vm.runInNewContext(src, {window: fakeWindow, Uint8Array, Uint16Array})
+  return fakeWindow.TextDecoder
+}
 
 // Node's own decoder is the reference; the tests then run without it, as on
 // Hermes (no global TextDecoder).
@@ -37,10 +62,39 @@ describe('installTextDecoder (src/platform/polyfills.ts)', () => {
     for (const t of TEXTS) expect(new TD().decode(enc(t))).toBe(t)
   })
 
-  it('leaves an existing TextDecoder alone', () => {
+  it('leaves a full TextDecoder alone (Node, web)', () => {
     const scope = {TextDecoder: NodeDecoder as unknown}
     expect(installTextDecoder(scope)).toBe(false)
     expect(scope.TextDecoder).toBe(NodeDecoder)
+  })
+
+  it('replaces fast-text-encoding’s decoder, which throws on {fatal: true} (builds 43/44, code room-setup)', () => {
+    const FTE = fastTextEncodingDecoder() as new (
+      l?: string,
+      o?: {fatal?: boolean},
+    ) => unknown
+    expect(typeof FTE).toBe('function')
+    // What livekit-client 2.23.0 does at module scope:
+    expect(() => new FTE('utf-8', {fatal: true})).toThrow(/fatal/)
+    expect(isCapableTextDecoder(FTE)).toBe(false)
+    const scope = {TextDecoder: FTE as unknown}
+    expect(installTextDecoder(scope)).toBe(true)
+    expect(scope.TextDecoder).toBe(Utf8TextDecoder)
+    const TD = scope.TextDecoder as typeof Utf8TextDecoder
+    expect(() => new TD('utf-8', {fatal: true})).not.toThrow()
+  })
+
+  it('fatal: malformed input throws a TypeError, as the platform decoder does', () => {
+    const bad = new Uint8Array([0x61, 0xff])
+    expect(() =>
+      new Utf8TextDecoder('utf-8', {fatal: true}).decode(bad),
+    ).toThrow(TypeError)
+    expect(() => new NodeDecoder('utf-8', {fatal: true}).decode(bad)).toThrow(
+      TypeError,
+    )
+    expect(
+      new Utf8TextDecoder('utf-8', {fatal: true}).decode(enc('ok ✓')),
+    ).toBe('ok ✓')
   })
 })
 

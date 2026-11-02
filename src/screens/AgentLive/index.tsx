@@ -601,7 +601,7 @@ function Finished({
         {/* The failed step, so a screenshot names it (not translated: it is
             a code). */}
         {state.phase === 'failed' && state.failStep
-          ? ` (code: ${state.failStep})`
+          ? ` (code: ${state.failStep}${state.failError ? `/${state.failError}` : ''})`
           : null}
       </Text>
       {state.leftRunning ? (
