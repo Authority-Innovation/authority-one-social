@@ -1552,6 +1552,51 @@ describe('review 679a9d48', () => {
     expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
   })
 
+  it('F18: Cancel while the start call is out is “stopping” until the start is answered and ended', async () => {
+    const env = setup()
+    let answer!: () => void
+    const gate = new Promise<void>(r => (answer = r))
+    const fetch = env.rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname === '/live/sessions') await gate
+      return fetch(u, i)
+    }
+    env.rt.on('/live/sessions', 'startAwaitingConsent')
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    const begun = env.c.begin()
+    await flush()
+    await env.c.end()
+    expect(env.last()).toMatchObject({phase: 'ended', stopping: true})
+    answer()
+    await begun
+    expect(env.last().stopping).toBe(false)
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+  })
+
+  it('F18: a start that fails after Cancel also clears “stopping”', async () => {
+    const env = setup()
+    let answer!: () => void
+    const gate = new Promise<void>(r => (answer = r))
+    const fetch = env.rt.fetch
+    ;(globalThis as {fetch: unknown}).fetch = async (
+      u: string,
+      i: RequestInit,
+    ) => {
+      if (new URL(u).pathname === '/live/sessions') await gate
+      return fetch(u, i)
+    }
+    env.rt.on('/live/sessions', E503)
+    const begun = env.c.begin()
+    await flush()
+    await env.c.end()
+    answer()
+    await begun
+    expect(env.last().stopping).toBe(false)
+  })
+
   describe('c23bdc031: F3, F4, F6, F10', () => {
     it.each([
       ['network', new Error('offline')],

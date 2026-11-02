@@ -326,6 +326,11 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         method: 'removeAccount',
         account,
       })
+      // Agent Live: removing the current account (deleting it) is a sign-out
+      // (review 784dbc925 F21): end its live session first, as logout does.
+      if (account.did === store.getState().currentAgentState.did) {
+        endOpenLiveSessions()
+      }
       cancelPendingTask()
       store.dispatch({
         type: 'removed-account',

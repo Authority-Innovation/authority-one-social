@@ -1215,6 +1215,12 @@ describe('session screen (flag on)', () => {
     rt.on('/live/sessions/:sid/end', 'end')
     await press(getByTestId('agentLiveBeginButton'))
     await press(getByTestId('agentLiveCancelButton'))
+    // F18: nothing has ended yet, so it says "stopping", with no Done.
+    expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+      'Stopping the live session.',
+    )
+    expect(() => getByTestId('agentLiveDoneButton')).toThrow()
+    expect(mockGoBack).not.toHaveBeenCalled()
     release()
     await flush()
     expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)

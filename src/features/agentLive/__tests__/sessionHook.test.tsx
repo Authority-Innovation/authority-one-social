@@ -288,6 +288,23 @@ describe('sign-out and account switch end open live sessions first', () => {
     expect(order).toEqual([])
   })
 
+  it('removing the current account (a delete) ends them first, as sign-out does (784dbc925 F21)', async () => {
+    const api = setup()
+    await signedInAs(api)
+    act(() => api().removeAccount(account('alice').account))
+    expect(order.slice(0, 2)).toEqual([
+      'endOpenLiveSessions',
+      'removed-account',
+    ])
+  })
+
+  it('removing another account (not the current one) ends nothing', async () => {
+    const api = setup()
+    await signedInAs(api)
+    act(() => api().removeAccount(account('carol').account))
+    expect(order).not.toContain('endOpenLiveSessions')
+  })
+
   it('resumeSession without a switch (app start) ends nothing', async () => {
     const api = setup()
     agentModule.createAgentAndResume.mockResolvedValueOnce(account('alice'))

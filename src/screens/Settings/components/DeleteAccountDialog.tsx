@@ -24,6 +24,7 @@ import {Loader} from '#/components/Loader'
 import * as Prompt from '#/components/Prompt'
 import * as toast from '#/components/Toast'
 import {Span, Text} from '#/components/Typography'
+import {endOpenLiveSessions} from '#/features/agentLive/registry'
 import {resetToTab} from '#/Navigation'
 
 const WHITESPACE_RE = /\s/gu
@@ -119,6 +120,10 @@ function DeleteAccountDialogInner({
       if (!success) {
         throw new Error('Failed to inform chat service of account deletion')
       }
+      // Agent Live: deleting the account is a sign-out (Dispatch ruling on
+      // review 784dbc925 F21). End a held live session now, while this
+      // account's bearer still works; after the delete it may not.
+      endOpenLiveSessions()
       await agent.com.atproto.server.deleteAccount({
         did: currentAccount.did,
         password,

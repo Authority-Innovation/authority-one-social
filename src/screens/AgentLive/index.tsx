@@ -175,6 +175,7 @@ function LiveSession({
   const ended =
     (state.phase === 'ended' || state.phase === 'failed') &&
     !state.ending &&
+    !state.stopping &&
     !state.endFailed
   useEffect(() => {
     if ((leaveWhenEnded && ended) || leaveAnyway) leave()
@@ -582,7 +583,9 @@ function Finished({
         if (state.leftRunning) {
           return l`The connection to the live session closed.`
         }
-        // Not "ended" while /end is out or after it gave up (F12).
+        // Not "ended" while /end is out or after it gave up (F12), nor while
+        // a Cancel waits on the start call (F18).
+        if (state.stopping) return l`Stopping the live session.`
         if (state.ending) return l`Ending the live session.`
         if (state.endFailed) return l`The live session may not have ended.`
         return l`Live session ended.`
@@ -671,7 +674,7 @@ function Finished({
       ) : null}
       {/* No Done while /end is out: leaving now would hide its answer (F1).
           A slow one offers Leave anyway above (d8f8f16e H2). */}
-      {state.ending ? null : (
+      {state.ending || state.stopping ? null : (
         <Button
           testID="agentLiveDoneButton"
           label={state.endFailed ? l`Leave anyway` : l`Done`}

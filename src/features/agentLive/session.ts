@@ -145,6 +145,12 @@ export type LiveSessionState = {
    * runtime session may run on to its time limit. The screen says so.
    */
   leftRunning: boolean
+  /**
+   * Cancel came while the start call was out (review 784dbc925 F18): the
+   * session it makes is ended when the runtime answers. Until then nothing
+   * has ended, and the screen says it is stopping.
+   */
+  stopping: boolean
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
   /**
@@ -173,6 +179,7 @@ export const initialLiveSessionState: LiveSessionState = {
   blindOn: false,
   stage: null,
   leftRunning: false,
+  stopping: false,
   canTakeOver: false,
   reuseBound: false,
   ending: false,
@@ -984,71 +991,79 @@ export function createLiveSessionController({
     await rejoin(false, !!session?.refused)
   }
 
+  async function beginSession() {
+    if (phase() !== 'idle') return
+    set({phase: 'starting', error: null})
+    // Asked before anything exists on the runtime: no session for a person
+    // who said no.
+    if ((await deps.requestMicAccess()) !== 'granted') {
+      if (phase() === 'starting') set({phase: 'failed', error: 'mic_denied'})
+      return
+    }
+    const auth = await api.captureLiveAuth()
+    if (!auth) {
+      if (phase() === 'starting') set({phase: 'failed', error: 'signed_out'})
+      return
+    }
+    const key = await deps.getDeviceKey(auth.ownerDid)
+    if (phase() !== 'starting') return
+    const res = await api.startLiveSession({
+      agentDid,
+      auth,
+      devicePubKey: key?.publicKey ?? null,
+    })
+    if (!res.ok) {
+      if (phase() === 'starting') {
+        set({phase: 'failed', error: res.error.kind})
+      }
+      return
+    }
+    const {
+      sid,
+      wsUrl,
+      join: j,
+      consentRequired,
+      recordPolicy,
+      reused,
+    } = res.data
+    session = {sid, wsUrl, auth, key, join: j, reused}
+    // Sign-out / switch: end it, or send the /end that is still owed (a
+    // /end that gave up, F5, or a session the screen left running).
+    unregister = registerLiveSession(() =>
+      endPending ? controller.retryEnd() : controller.end(),
+    )
+    // Left before the runtime answered: end the session it just made (not a
+    // reused one, which may be live on another device).
+    if (phase() !== 'starting') {
+      const s = session
+      session = null
+      if (reused) unregister?.()
+      // The screen went away (not Cancel): keep it owed to sign-out, P3.
+      else if (screenLeft) endPending = s
+      else await endOnRuntime(s)
+      return
+    }
+    set({consentRequired, recordPolicy})
+    if (reused) {
+      // R3 replaces a held participant only with the SAME key, proven, and
+      // keys never leave a device: offer "Take over here" only when this
+      // device held this session itself (review 563477989 R1).
+      const canTakeOver = !!key && (await deps.wasHeldHere(auth.ownerDid, sid))
+      if (phase() !== 'starting') return
+      set({phase: 'reuse', canTakeOver, reuseBound: !!key})
+      return
+    }
+    await afterStart()
+  }
+
   const controller: LiveSessionController = {
     async begin() {
-      if (phase() !== 'idle') return
-      set({phase: 'starting', error: null})
-      // Asked before anything exists on the runtime: no session for a person
-      // who said no.
-      if ((await deps.requestMicAccess()) !== 'granted') {
-        if (phase() === 'starting') set({phase: 'failed', error: 'mic_denied'})
-        return
+      try {
+        await beginSession()
+      } finally {
+        // However the start ended, a pending Cancel is now settled (F18).
+        if (state.stopping) set({stopping: false})
       }
-      const auth = await api.captureLiveAuth()
-      if (!auth) {
-        if (phase() === 'starting') set({phase: 'failed', error: 'signed_out'})
-        return
-      }
-      const key = await deps.getDeviceKey(auth.ownerDid)
-      if (phase() !== 'starting') return
-      const res = await api.startLiveSession({
-        agentDid,
-        auth,
-        devicePubKey: key?.publicKey ?? null,
-      })
-      if (!res.ok) {
-        if (phase() === 'starting') {
-          set({phase: 'failed', error: res.error.kind})
-        }
-        return
-      }
-      const {
-        sid,
-        wsUrl,
-        join: j,
-        consentRequired,
-        recordPolicy,
-        reused,
-      } = res.data
-      session = {sid, wsUrl, auth, key, join: j, reused}
-      // Sign-out / switch: end it, or send the /end that is still owed (a
-      // /end that gave up, F5, or a session the screen left running).
-      unregister = registerLiveSession(() =>
-        endPending ? controller.retryEnd() : controller.end(),
-      )
-      // Left before the runtime answered: end the session it just made (not a
-      // reused one, which may be live on another device).
-      if (phase() !== 'starting') {
-        const s = session
-        session = null
-        if (reused) unregister?.()
-        // The screen went away (not Cancel): keep it owed to sign-out, P3.
-        else if (screenLeft) endPending = s
-        else await endOnRuntime(s)
-        return
-      }
-      set({consentRequired, recordPolicy})
-      if (reused) {
-        // R3 replaces a held participant only with the SAME key, proven, and
-        // keys never leave a device: offer "Take over here" only when this
-        // device held this session itself (review 563477989 R1).
-        const canTakeOver =
-          !!key && (await deps.wasHeldHere(auth.ownerDid, sid))
-        if (phase() !== 'starting') return
-        set({phase: 'reuse', canTakeOver, reuseBound: !!key})
-        return
-      }
-      await afterStart()
     },
 
     async continueHere() {
@@ -1204,8 +1219,15 @@ export function createLiveSessionController({
       // Leaving the open-session panel leaves the session alone: it may be
       // live on the owner's other device (and says so, P6).
       const onPanel = phase() === 'reuse'
+      // Cancel while the start call is out: begin ends what it makes when
+      // the runtime answers; until then the screen says "stopping" (F18).
+      const stopping = phase() === 'starting'
       await finish(
-        {phase: 'ended', endReason: onPanel ? 'left_open' : 'local'},
+        {
+          phase: 'ended',
+          endReason: onPanel ? 'left_open' : 'local',
+          ...(stopping ? {stopping: true} : {}),
+        },
         {endRuntime: !onPanel, owner: true},
       )
     },
