@@ -42,6 +42,7 @@ jest.mock('../permissions', () => ({
 }))
 
 import {getAgentRuntimeAccessToken} from '#/lib/agent-runtime/authToken'
+import {logger} from '#/logger'
 import * as persisted from '#/state/persisted'
 import {createFakeRoom} from '../__fixtures__/fakeRoom'
 import LEGACY from '../__fixtures__/legacy-ac11bd0.json'
@@ -66,6 +67,7 @@ import {
   forgetLiveSessionsForTests,
   openLiveSessionCount,
 } from '../registry'
+import {LiveStepError} from '../room/types'
 import {
   createLiveSessionController,
   END_RETRY_DELAYS_MS,
@@ -73,6 +75,7 @@ import {
   type LiveDeps,
   type LiveSessionState,
   REJOIN_BACKOFF_MS,
+  scrub,
   STAGE_WAIT_MS,
 } from '../session'
 
@@ -1595,6 +1598,70 @@ describe('review 679a9d48', () => {
     answer()
     await begun
     expect(env.last().stopping).toBe(false)
+  })
+
+  describe('build 43 on-device failure: the step is named, logged and shown', () => {
+    it('a proof that can’t be made locally (no claims) fails at step proof, with no network', async () => {
+      const env = setup()
+      await toConsent(env)
+      env.rt.on('/live/sessions/:sid/consent', {
+        status: 200,
+        body: {...reply('consentAdmitted').body, token: 'not.a-jwt.x'},
+      })
+      env.rt.on('/live/sessions/:sid/end', 'end')
+      await env.c.submitConsent({ai_process: true})
+      await flush()
+      expect(env.last()).toMatchObject({
+        phase: 'failed',
+        error: 'bad_proof',
+        failStep: 'proof',
+      })
+      expect(env.rt.to('/live/join/prove')).toEqual([])
+    })
+
+    it.each<['audio-session' | 'room-connect', string]>([
+      ['audio-session', 'AudioSession refused'],
+      ['room-connect', 'could not establish signal connection'],
+    ])(
+      'a binding step error (%s) is named, and logged without tokens',
+      async (stepName, msg) => {
+        const env = setup()
+        env.fake.room.connect = () => {
+          throw new LiveStepError(
+            stepName,
+            new Error(`${msg} wss://x/rtc?access_token=eyJabc.eyJdef.sig&x=1`),
+          )
+        }
+        const warn = logger.warn as jest.Mock
+        warn.mockClear()
+        await toConsent(env)
+        env.rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+        env.rt.on('/live/join/prove', 'proveExchange')
+        env.rt.on('/live/sessions/:sid/end', 'end')
+        await env.c.submitConsent({ai_process: true})
+        await flush()
+        expect(env.last()).toMatchObject({
+          phase: 'failed',
+          error: 'connect',
+          failStep: stepName,
+        })
+        const line = warn.mock.calls.find(
+          c => c[0] === 'agentLive: join step failed',
+        )
+        expect(line?.[1]).toMatchObject({step: stepName, name: 'Error'})
+        const logged = JSON.stringify(warn.mock.calls)
+        expect(logged).not.toMatch(/eyJ/)
+        expect(logged).toContain('access_token=<redacted>')
+      },
+    )
+
+    it('scrub removes JWTs and token query values and caps the length', () => {
+      expect(scrub('a eyJhbGc.eyJzdWI.sig b')).toBe('a <jwt> b')
+      expect(scrub('u?token=abc&access_token=def ok')).toBe(
+        'u?token=<redacted>&access_token=<redacted> ok',
+      )
+      expect(scrub('x'.repeat(500))).toHaveLength(200)
+    })
   })
 
   describe('c23bdc031: F3, F4, F6, F10', () => {

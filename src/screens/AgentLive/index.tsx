@@ -598,6 +598,11 @@ function Finished({
         testID="agentLiveFinishedMessage"
         style={[a.text_md, {color: ON_STAGE_TEXT}]}>
         {message}
+        {/* The failed step, so a screenshot names it (not translated: it is
+            a code). */}
+        {state.phase === 'failed' && state.failStep
+          ? ` (code: ${state.failStep})`
+          : null}
       </Text>
       {state.leftRunning ? (
         <Text

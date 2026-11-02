@@ -1092,7 +1092,7 @@ describe('session screen (flag on)', () => {
     await press(r.getByTestId('agentLiveConsentSubmit'))
     await flush()
     expect(r.getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
-      'Live needs a server update that isn’t available yet, so Live stopped on this device. Try again after the update.',
+      'Live needs a server update that isn’t available yet, so Live stopped on this device. Try again after the update. (code: proof)',
     )
   })
 

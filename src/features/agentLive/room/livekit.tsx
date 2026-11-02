@@ -39,9 +39,11 @@ import {disconnectReasonOf as reasonOf, reasonName} from '../rejoin'
 import {LIVE_IOS_AUDIO_POLICY} from './audioSession'
 import {
   type LiveConnectionEvent,
+  type LiveConnectStep,
   type LiveDisconnectReason,
   type LiveRoom,
   type LiveRoomFactory,
+  LiveStepError,
   type StageRef,
 } from './types'
 
@@ -91,18 +93,31 @@ export function disconnectReasonOf(
   return reasonOf(reasonName(reason, DisconnectReason))
 }
 
+/** Runs a synchronous setup step, naming it if it throws. */
+function step<T>(name: LiveConnectStep, run: () => T): T {
+  try {
+    return run()
+  } catch (e) {
+    throw new LiveStepError(name, e)
+  }
+}
+
 export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
   if (!globalsRegistered) {
     // Our own iOS audio policy instead of the SDK default, which leaves
     // playAndRecord whenever the mic is off (see ./audioSession). A no-op off
     // iOS.
-    registerGlobals({autoConfigureAudioSession: false})
-    setupIOSAudioManagement(true, LIVE_IOS_AUDIO_POLICY)
+    step('webrtc-globals', () =>
+      registerGlobals({autoConfigureAudioSession: false}),
+    )
+    step('audio-policy', () =>
+      setupIOSAudioManagement(true, LIVE_IOS_AUDIO_POLICY),
+    )
     globalsRegistered = true
   }
   const agentPrefix = `agent:${sid}:`
   const isAgent = (p: Participant) => p.identity.startsWith(agentPrefix)
-  const room = new Room(LIVE_ROOM_OPTIONS)
+  const room = step('room-setup', () => new Room(LIVE_ROOM_OPTIONS))
   const stageListeners = new Set<(stage: StageRef | null) => void>()
   const connListeners = new Set<(e: LiveConnectionEvent) => void>()
   let audioOn = false
@@ -179,7 +194,11 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
   return {
     async connect({wsUrl, token}) {
       if (!audioOn) {
-        await AudioSession.startAudioSession()
+        try {
+          await AudioSession.startAudioSession()
+        } catch (e) {
+          throw new LiveStepError('audio-session', e)
+        }
         audioOn = true
       }
       try {
@@ -187,7 +206,7 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
       } catch (e) {
         // A failed join must not leave the audio session running.
         await stopAudio()
-        throw e
+        throw new LiveStepError('room-connect', e)
       }
       allowAgents()
       room.remoteParticipants.forEach(p =>

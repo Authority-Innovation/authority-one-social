@@ -2,6 +2,32 @@ import {type ComponentType} from 'react'
 import {type StyleProp, type ViewStyle} from 'react-native'
 
 /**
+ * The step of the first join that failed, shown to the owner as a short code
+ * ("(code: audio-session)") and logged with the error's name and message, so
+ * a screenshot names the step (build 43, review of the on-device failure).
+ */
+export type LiveConnectStep =
+  | 'webrtc-globals'
+  | 'audio-policy'
+  | 'room-setup'
+  | 'token'
+  | 'proof'
+  | 'audio-session'
+  | 'room-connect'
+  | 'mic'
+
+/** An error from a named join step; `cause` is the original error. */
+export class LiveStepError extends Error {
+  constructor(
+    readonly step: LiveConnectStep,
+    readonly cause: unknown,
+  ) {
+    super(`agentLive: ${step} failed`)
+    this.name = 'LiveStepError'
+  }
+}
+
+/**
  * The agent's stage video, as the binding found it. Opaque outside the
  * binding: only `StageVideo` reads it.
  */

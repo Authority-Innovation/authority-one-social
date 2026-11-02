@@ -2,6 +2,7 @@ import {type LiveRoomFactory} from './types'
 
 export type {
   LiveConnectionEvent,
+  LiveConnectStep,
   LiveDisconnectReason,
   LiveRoom,
   LiveRoomFactory,

@@ -13,6 +13,7 @@ import {
   joinClaimsOf,
   joinProof,
   joinProofMessage,
+  utf8Decode,
 } from '../pop'
 
 const key = deviceKeyFromSeed(DEVICE_SEED)
@@ -51,6 +52,40 @@ describe('join proof', () => {
   it('a token without claims gets no proof', () => {
     expect(joinProof(key, 'a.b.c')).toBeNull()
     expect(joinProof(key, 'nope')).toBeNull()
+  })
+})
+
+describe('on Hermes: no global TextDecoder (build 43, “Couldn’t start”)', () => {
+  // Hermes has TextEncoder but no TextDecoder, and the app's polyfill then
+  // installs neither. Every bound join failed as a local bad_proof.
+  const withoutTextDecoder = (run: () => void) => {
+    const g = globalThis as {TextDecoder?: unknown}
+    const saved = g.TextDecoder
+    delete g.TextDecoder
+    try {
+      expect(typeof (globalThis as {TextDecoder?: unknown}).TextDecoder).toBe(
+        'undefined',
+      )
+      run()
+    } finally {
+      g.TextDecoder = saved
+    }
+  }
+
+  it('reads the claims and signs exactly as the runtime accepted', () => {
+    withoutTextDecoder(() => {
+      expect(joinClaimsOf(tokenOf('tokenForJoin'))).not.toBeNull()
+      for (const name of ['tokenForJoin', 'tokenCamera']) {
+        expect(joinProof(key, tokenOf(name))).toBe(LIVE.proofs[name])
+      }
+    })
+  })
+
+  it('utf8Decode matches TextDecoder on ASCII and multi-byte text', () => {
+    for (const text of ['{"sub":"owner:ls_x"}', 'café ✓ 𝄞 ü', '']) {
+      const bytes = new TextEncoder().encode(text)
+      expect(utf8Decode(bytes)).toBe(new TextDecoder().decode(bytes))
+    }
   })
 })
 

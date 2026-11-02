@@ -63,10 +63,13 @@ import {registerLiveSession} from './registry'
 import {REJOIN_BACKOFF_MS, REJOIN_REFUSED_GRACE_S} from './rejoin'
 import {
   type LiveConnectionEvent,
+  type LiveConnectStep,
   type LiveRoom,
   type LiveRoomFactory,
   type StageRef,
 } from './room'
+// Directly, not via ./room (whose loader screen tests mock).
+import {LiveStepError} from './room/types'
 
 export type LivePhase =
   | 'idle'
@@ -151,6 +154,11 @@ export type LiveSessionState = {
    * has ended, and the screen says it is stopping.
    */
   stopping: boolean
+  /**
+   * The first join's step that failed (`failed` only): the screen shows it
+   * as a short code so a screenshot names it.
+   */
+  failStep: LiveConnectStep | null
   /** The runtime's /end is still being sent (retried). */
   ending: boolean
   /**
@@ -180,6 +188,7 @@ export const initialLiveSessionState: LiveSessionState = {
   stage: null,
   leftRunning: false,
   stopping: false,
+  failStep: null,
   canTakeOver: false,
   reuseBound: false,
   ending: false,
@@ -319,6 +328,17 @@ type Session = {
    * is an outage (with /end) only if no rung of THAT ladder was refused.
    */
   refused?: boolean
+}
+
+/**
+ * A log-safe error message: no tokens (JWTs, access_token / token query
+ * values), at most 200 characters.
+ */
+export function scrub(message: string): string {
+  return message
+    .replace(/eyJ[\w-]+\.[\w-]+\.[\w-]*/g, '<jwt>')
+    .replace(/((?:access_)?token=)[^&\s"']+/gi, '$1<redacted>')
+    .slice(0, 200)
 }
 
 export function createLiveSessionController({
@@ -502,8 +522,15 @@ export function createLiveSessionController({
     return ending
   }
 
-  const fail = (error: LiveFailure) =>
-    finish({phase: 'failed', error}, {endRuntime: true})
+  const fail = (error: LiveFailure, failStep: LiveConnectStep | null = null) =>
+    finish({phase: 'failed', error, failStep}, {endRuntime: true})
+
+  /** One line per failed join step: the step, the error's name and message. */
+  function logStepFailure(step: LiveConnectStep, e: unknown) {
+    const name = e instanceof Error ? e.name : typeof e
+    const message = scrub(e instanceof Error ? e.message : String(e))
+    logger.warn('agentLive: join step failed', {step, name, message})
+  }
 
   /**
    * A failure that is an outage of this device's own session (the network,
@@ -639,13 +666,6 @@ export function createLiveSessionController({
       throw new JoinError(proved.error.kind)
     }
     return proved.data.token
-  }
-
-  /** The proof, then the join. Throws on failure. */
-  async function join(s: Session, j: LiveJoin) {
-    const token = await prove(s, j)
-    if (over()) throw new JoinError('connect')
-    await room!.connect({wsUrl: s.wsUrl, token})
   }
 
   /**
@@ -912,31 +932,45 @@ export function createLiveSessionController({
   /** The owner's token is in hand: join and turn the mic on. */
   async function connect(s: Session) {
     set({phase: 'connecting'})
+    // The step under way, for the log and the screen's code (build 43: the
+    // first join failed on the phone with nothing to say where).
+    let step: LiveConnectStep = 'room-setup'
     try {
       const r = roomFactory({sid: s.sid})
       room = r
       watchRoom(r)
+      step = 'token'
       const t = await freshJoin(s, false)
       if (over()) return
       if (!t.ok) {
         noteRefusal(s, t.error)
+        logStepFailure(step, t.error.kind)
         await fail(
           t.error.kind === 'consent_required'
             ? 'consent_incomplete'
             : t.error.kind,
+          step,
         )
         return
       }
       // The owner's intent is mic on, also for a rejoin that starts while
       // this call is out (it restores wantMic, review 30f293f4 G4).
       wantMic = true
-      await join(s, t.data)
+      step = 'proof'
+      const token = await prove(s, t.data)
+      if (over()) throw new JoinError('connect')
+      step = 'room-connect'
+      await r.connect({wsUrl: s.wsUrl, token})
       if (over() || rejoining) return
+      step = 'mic'
       set({micOn: true})
       await r.setMicrophoneEnabled(true)
     } catch (e) {
+      const where = e instanceof LiveStepError ? e.step : step
+      const cause = e instanceof LiveStepError ? e.cause : e
+      logStepFailure(where, cause)
       if (!over() && !rejoining) {
-        await fail(e instanceof JoinError ? e.kind : 'connect')
+        await fail(e instanceof JoinError ? e.kind : 'connect', where)
       }
       return
     }

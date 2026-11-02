@@ -38,7 +38,11 @@ export function joinClaimsOf(token: string): JoinClaims | null {
   try {
     const part = token.split('.')[1]
     if (!part) return null
-    const c = JSON.parse(new TextDecoder().decode(b64urlDecode(part))) as {
+    // Not TextDecoder: Hermes has no global one (it has TextEncoder, so the
+    // app's fast-text-encoding polyfill installs neither). The lookup threw,
+    // the catch below read it as "no claims", and every bound join failed as
+    // a local bad_proof before /prove (build 43, "Couldn't start").
+    const c = JSON.parse(utf8Decode(b64urlDecode(part))) as {
       sub?: unknown
       jti?: unknown
       video?: {room?: unknown}
@@ -71,6 +75,32 @@ export function joinProofMessage({
 export function joinProof(key: DeviceKey, token: string): string | null {
   const claims = joinClaimsOf(token)
   return claims ? key.sign(joinProofMessage(claims)) : null
+}
+
+/** UTF-8 bytes to a string, with no dependency on a global TextDecoder. */
+export function utf8Decode(bytes: Uint8Array): string {
+  let out = ''
+  for (let i = 0; i < bytes.length; ) {
+    const b = bytes[i++]
+    let cp: number
+    if (b < 0x80) {
+      cp = b
+    } else if (b >= 0xc0 && b < 0xe0) {
+      cp = ((b & 0x1f) << 6) | (bytes[i++] & 0x3f)
+    } else if (b >= 0xe0 && b < 0xf0) {
+      cp = ((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f)
+    } else if (b >= 0xf0 && b < 0xf8) {
+      cp =
+        ((b & 0x07) << 18) |
+        ((bytes[i++] & 0x3f) << 12) |
+        ((bytes[i++] & 0x3f) << 6) |
+        (bytes[i++] & 0x3f)
+    } else {
+      cp = 0xfffd
+    }
+    out += String.fromCodePoint(cp)
+  }
+  return out
 }
 
 const ALPHABET =
