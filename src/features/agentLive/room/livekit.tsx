@@ -62,6 +62,9 @@ export const NO_SDK_RECONNECT: ReconnectPolicy = {
   nextRetryDelayInMs: () => null,
 }
 
+/** The owner's microphone track, by name (the runtime listens for it). */
+export const OWNER_MIC_TRACK = 'owner-mic'
+
 /**
  * The Room's options. `singlePeerConnection: false` joins on `/rtc` (v0)
  * directly, never `/rtc/v1` with join_request in the query string.
@@ -220,7 +223,11 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
       emitStage()
     },
     async setMicrophoneEnabled(on) {
-      await room.localParticipant.setMicrophoneEnabled(on)
+      // A named track: the SDK otherwise publishes the mic unnamed, which the
+      // runtime's hearing check rejected (build 46).
+      await room.localParticipant.setMicrophoneEnabled(on, undefined, {
+        name: OWNER_MIC_TRACK,
+      })
     },
     async setCameraEnabled(on) {
       if (on) {

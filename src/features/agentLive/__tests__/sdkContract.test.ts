@@ -67,6 +67,13 @@ describe('livekit-client behaviours the join gate relies on', () => {
     )
   })
 
+  it('setMicrophoneEnabled passes its publish options (the track name) to the publish (build 46)', () => {
+    expect(SDK).toMatch(
+      /setMicrophoneEnabled\(enabled, options, publishOptions\) \{\s*return this\.setTrackEnabled\(Track\.Source\.Microphone, enabled, options, publishOptions\);/,
+    )
+    expect(SDK).toMatch(/this\.publishTrack\(localTrack, publishOptions\)/)
+  })
+
   it('a null retry delay gives up at once and emits Disconnected', () => {
     expect(SDK).toMatch(
       /let delay = this\.getNextRetryDelay\([\s\S]{0,120}if \(delay === null\) \{\s*disconnect\(duration\);/,

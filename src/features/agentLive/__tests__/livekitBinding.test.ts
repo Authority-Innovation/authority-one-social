@@ -97,6 +97,7 @@ import {
   disconnectReasonOf,
   LIVE_ROOM_OPTIONS,
   NO_SDK_RECONNECT,
+  OWNER_MIC_TRACK,
 } from '../room/livekit'
 
 const SID = 'ls_01JBX8M4Q2T7V9WZ3K5N6P8R0S'
@@ -184,6 +185,19 @@ describe('subscriptions [L6]', () => {
 })
 
 describe('connection', () => {
+  it('publishes the owner mic with a track name (build 46: the runtime rejected an unnamed one)', async () => {
+    const {live, room} = make()
+    expect(OWNER_MIC_TRACK).toBe('owner-mic')
+    await live.setMicrophoneEnabled(true)
+    await live.setMicrophoneEnabled(false)
+    const calls = (room.localParticipant.setMicrophoneEnabled as jest.Mock).mock
+      .calls
+    expect(calls).toEqual([
+      [true, undefined, {name: 'owner-mic'}],
+      [false, undefined, {name: 'owner-mic'}],
+    ])
+  })
+
   it('joins on /rtc directly: singlePeerConnection off (build 44, Dev edge /rtc/v1 query-size 400)', () => {
     const {room} = make()
     expect(room.options.singlePeerConnection).toBe(false)
