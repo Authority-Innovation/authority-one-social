@@ -80,7 +80,7 @@
       "distribution": "internal",
       "channel": "development",
       "ios": {
-        "simulator": true,
+        "simulator": false,
         "resourceClass": "large"
       },
       "env": {
