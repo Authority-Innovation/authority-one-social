@@ -73,7 +73,9 @@ its own; it says the session was refused and wasn't ended (`refused`,
 `refused_reconnect`). The record is per reconnect ladder: the 16 s give-up is
 an outage, with `/end` on this device's own session, only if no rung of that
 ladder was refused. Only the owner's own actions end a session this device
-holds: End, deliberately going back, Cancel, sign-out or an account switch.
+holds: End, deliberately going back, Cancel, sign-out or an account switch
+(from the switcher, the login screen or creating an account; a switch a
+notification tap starts is not one: a tap never ends Live).
 Being covered (a push, a notification), backgrounded or unmounted by the OS
 does not: Live keeps running (an unmount leaves the room, so no mic is live
 with no screen, and the session stays owed to sign-out). Any other failure

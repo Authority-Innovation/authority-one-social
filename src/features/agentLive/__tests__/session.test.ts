@@ -1517,6 +1517,41 @@ describe('review 679a9d48', () => {
     })
   })
 
+  it('F17: a refusal in a ladder that recovered does not carry into a later camera ladder', async () => {
+    const env = setup({camera: 'granted'})
+    await toLive(env)
+    // A refused rung, then a recovery.
+    env.rt.on('/live/sessions/:sid/token', 'tokenForJoin', 'tokenForJoin')
+    env.rt.on(
+      '/live/join/prove',
+      {status: 401, body: {error: 'bad_proof'}},
+      'proveExchange',
+    )
+    env.fake.drop('network')
+    await flush(400)
+    expect(env.last().phase).toBe('connected')
+    // Then a camera swap that fails (not a refusal), and outages after.
+    env.rt.on('/live/sessions/:sid/token', 'tokenCamera')
+    env.rt.on('/live/join/prove', 'proveExchange')
+    env.rt.on('/live/sessions/:sid/token', E503, E503, E503, E503, E503)
+    env.rt.on('/live/sessions/:sid/end', 'end')
+    env.fake.fail('connect')
+    await env.c.setCamera(true)
+    for (
+      let i = 0;
+      i < 60 && !['ended', 'failed'].includes(env.last().phase);
+      i++
+    ) {
+      await flush(40)
+    }
+    await flush()
+    expect(env.last()).toMatchObject({
+      phase: 'failed',
+      error: 'reconnect_failed',
+    })
+    expect(env.rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+  })
+
   describe('c23bdc031: F3, F4, F6, F10', () => {
     it.each([
       ['network', new Error('offline')],

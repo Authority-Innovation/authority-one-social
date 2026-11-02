@@ -540,7 +540,10 @@ function Finished({
         case 'server_outdated':
           return l`Live needs a server update that isn’t available yet, so Live stopped on this device. Try again after the update.`
         case 'reconnect_failed':
-          return l`Couldn’t reconnect, so the live session has ended.`
+          // Not "has ended" while /end is out or after it gave up (F12).
+          return state.ending || state.endFailed
+            ? l`Couldn’t reconnect.`
+            : l`Couldn’t reconnect, so the live session has ended.`
         case 'no_join':
           return l`Couldn’t reach your agent. Try again later.`
         case 'agent_unavailable':
@@ -576,9 +579,13 @@ function Finished({
         return l`The live session has ended.`
       default:
         // A drop we didn't ask for ends nothing (P4): don't say it ended.
-        return state.leftRunning
-          ? l`The connection to the live session closed.`
-          : l`Live session ended.`
+        if (state.leftRunning) {
+          return l`The connection to the live session closed.`
+        }
+        // Not "ended" while /end is out or after it gave up (F12).
+        if (state.ending) return l`Ending the live session.`
+        if (state.endFailed) return l`The live session may not have ended.`
+        return l`Live session ended.`
     }
   })()
   return (

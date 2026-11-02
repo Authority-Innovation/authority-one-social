@@ -868,6 +868,9 @@ export function createLiveSessionController({
           rejoinLive = false
           connectedAt = deps.nowS()
           connFromRejoin = true
+          // This ladder recovered: its refusals don't carry into a later one
+          // (review 27020b222 F17; the record is per ladder).
+          s.refused = false
           set({phase: 'connected'})
           if (s.key) void deps.markHeldHere(s.auth.ownerDid, s.sid)
           armTakeover(s)

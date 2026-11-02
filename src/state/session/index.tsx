@@ -142,6 +142,9 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       if (signal.aborted) {
         return
       }
+      // Agent Live: a new account is an account switch (review 27020b222
+      // F11): end the old account's live session first, as login does.
+      endOpenLiveSessions()
       store.dispatch({
         type: 'switched-to-account',
         newAgent: agent,

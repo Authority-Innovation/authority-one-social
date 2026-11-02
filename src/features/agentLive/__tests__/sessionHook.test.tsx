@@ -39,6 +39,7 @@ jest.mock('#/state/session/agent', () => {
     ...actual,
     createAgentAndLogin: jest.fn(),
     createAgentAndResume: jest.fn(),
+    createAgentAndCreateAccount: jest.fn(),
   }
 })
 jest.mock('#/state/session/util', () => ({
@@ -89,6 +90,7 @@ type Created = {agent: BskyAgent; account: SessionAccount}
 const agentModule = jest.requireMock<{
   createAgentAndLogin: jest.Mock<() => Promise<Created>>
   createAgentAndResume: jest.Mock<() => Promise<Created>>
+  createAgentAndCreateAccount: jest.Mock<() => Promise<Created>>
 }>('#/state/session/agent')
 
 function account(name: string): Created {
@@ -147,10 +149,13 @@ async function signedInAs(api: () => ReturnType<typeof useSessionApi>) {
   order.length = 0
 }
 
+const METRICS = {signupDuration: 0, fieldErrorsTotal: 0, backgroundCount: 0}
+
 beforeEach(() => {
   order.length = 0
   agentModule.createAgentAndLogin.mockReset()
   agentModule.createAgentAndResume.mockReset()
+  agentModule.createAgentAndCreateAccount.mockReset()
 })
 
 describe('sign-out and account switch end open live sessions first', () => {
@@ -232,6 +237,55 @@ describe('sign-out and account switch end open live sessions first', () => {
       api().resumeSession(account('bob').account, true, {keepLive: true}),
     )
     expect(order).toEqual(['switched-to-account'])
+  })
+
+  it('createAccount is an account switch: ends them after the account exists, before the switch (27020b222 F11)', async () => {
+    const api = setup()
+    await signedInAs(api)
+    agentModule.createAgentAndCreateAccount.mockImplementationOnce(() => {
+      order.push('createAgentAndCreateAccount')
+      return Promise.resolve(account('bob'))
+    })
+    await act(() =>
+      api().createAccount(
+        {
+          service: 'https://bob.test',
+          email: 'bob@bob.test',
+          password: 'x',
+          handle: 'bob.test',
+          birthDate: new Date(2000, 0, 1),
+        },
+        METRICS,
+      ),
+    )
+    expect(order).toEqual([
+      'createAgentAndCreateAccount',
+      'endOpenLiveSessions',
+      'switched-to-account',
+    ])
+  })
+
+  it('a failed createAccount ends nothing', async () => {
+    const api = setup()
+    await signedInAs(api)
+    agentModule.createAgentAndCreateAccount.mockRejectedValueOnce(
+      new Error('taken'),
+    )
+    await act(async () => {
+      await api()
+        .createAccount(
+          {
+            service: 'https://bob.test',
+            email: 'bob@bob.test',
+            password: 'x',
+            handle: 'bob.test',
+            birthDate: new Date(2000, 0, 1),
+          },
+          METRICS,
+        )
+        .catch(() => {})
+    })
+    expect(order).toEqual([])
   })
 
   it('resumeSession without a switch (app start) ends nothing', async () => {

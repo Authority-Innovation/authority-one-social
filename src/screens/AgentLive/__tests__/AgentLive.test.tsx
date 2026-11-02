@@ -660,6 +660,55 @@ describe('session screen (flag on)', () => {
     expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(text)
   })
 
+  it('F12: End with /end failing: never “ended” while ending or after it gave up', async () => {
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const {getByTestId} = await goLive()
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      await press(getByTestId('agentLiveEndButton'))
+      expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+        'Ending the live session.',
+      )
+      for (const ms of [1000, 3000, 7000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveEndFailed')).toBeTruthy()
+      expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+        'The live session may not have ended.',
+      )
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('F12: a reconnect that gave up while /end fails says “Couldn’t reconnect.”, not “has ended”', async () => {
+    const {getByTestId, fake} = await goLive()
+    jest.useFakeTimers({doNotFake: ['Date']})
+    try {
+      const e503 = {status: 503, body: {error: 'unavailable'}}
+      rt.on('/live/sessions/:sid/token', e503, e503, e503, e503, e503)
+      rt.on('/live/sessions/:sid/end', e503, e503, e503, e503)
+      act(() => fake.drop('network'))
+      await flush()
+      for (const ms of [1000, 2000, 4000, 8000, 16000, 1000, 3000, 7000]) {
+        act(() => {
+          jest.advanceTimersByTime(ms)
+        })
+        await flush()
+      }
+      expect(getByTestId('agentLiveEndFailed')).toBeTruthy()
+      expect(getByTestId('agentLiveFinishedMessage')).toHaveTextContent(
+        'Couldn’t reconnect.',
+      )
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('a drop it can’t recover from: “Reconnecting”, then “reconnect failed” after the backoff', async () => {
     const {getByTestId, queryByTestId, fake} = await goLive()
     jest.useFakeTimers({doNotFake: ['Date']})
