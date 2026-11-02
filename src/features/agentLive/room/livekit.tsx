@@ -10,6 +10,11 @@
  * Connection: the SDK's own resume and reconnect are off (NO_SDK_RECONNECT).
  * A drop is reported once with its reason (types.ts), and the session decides
  * what to do (a full rejoin with a fresh token, or end).
+ *
+ * Signal path: the join goes straight to `/rtc` (singlePeerConnection off).
+ * The SDK's default first tries `/rtc/v1` with the whole join_request in the
+ * query string; the Dev edge's query-size rule answered that 400, which the
+ * SDK treats as final, so Live never started (build 44).
  */
 import {
   AudioSession,
@@ -25,6 +30,7 @@ import {
   type RemoteTrackPublication,
   Room,
   RoomEvent,
+  type RoomOptions,
   Track,
   type TrackPublication,
 } from 'livekit-client'
@@ -52,6 +58,17 @@ let globalsRegistered = false
  */
 export const NO_SDK_RECONNECT: ReconnectPolicy = {
   nextRetryDelayInMs: () => null,
+}
+
+/**
+ * The Room's options. `singlePeerConnection: false` joins on `/rtc` (v0)
+ * directly, never `/rtc/v1` with join_request in the query string.
+ */
+export const LIVE_ROOM_OPTIONS: RoomOptions = {
+  adaptiveStream: true,
+  dynacast: true,
+  reconnectPolicy: NO_SDK_RECONNECT,
+  singlePeerConnection: false,
 }
 
 type StageTrackRef = {
@@ -85,11 +102,7 @@ export const createLiveKitRoom: LiveRoomFactory = ({sid}) => {
   }
   const agentPrefix = `agent:${sid}:`
   const isAgent = (p: Participant) => p.identity.startsWith(agentPrefix)
-  const room = new Room({
-    adaptiveStream: true,
-    dynacast: true,
-    reconnectPolicy: NO_SDK_RECONNECT,
-  })
+  const room = new Room(LIVE_ROOM_OPTIONS)
   const stageListeners = new Set<(stage: StageRef | null) => void>()
   const connListeners = new Set<(e: LiveConnectionEvent) => void>()
   let audioOn = false

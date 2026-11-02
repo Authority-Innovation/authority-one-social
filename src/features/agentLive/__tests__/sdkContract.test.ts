@@ -11,6 +11,10 @@
  * 2. A reconnect policy that returns null stops every retry and reports the
  *    loss as Disconnected at once (room/livekit.tsx NO_SDK_RECONNECT), so the
  *    session's full rejoin is the only reconnect.
+ * 3. `singlePeerConnection: false` (room/livekit.tsx LIVE_ROOM_OPTIONS) joins
+ *    on `/rtc` with plain query params, never `/rtc/v1` with the join_request
+ *    in the query: the Dev edge answered that 400, which the SDK treats as
+ *    final (build 44). With it, item 1's fallback is not needed.
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -43,6 +47,23 @@ describe('livekit-client behaviours the join gate relies on', () => {
   it('ServiceNotFound retries the same join on the v0 path (/rtc)', () => {
     expect(SDK).toMatch(
       /e\.reason === ConnectionErrorReason\.ServiceNotFound\)[\s\S]{0,400}return _this2\.join\(url, token, opts, abortSignal, true\)/,
+    )
+  })
+
+  it('singlePeerConnection off joins on the v0 path (/rtc), with no join_request in the query (build 44)', () => {
+    // The option defaults to true, so the app must set it.
+    expect(SDK).toMatch(/singlePeerConnection: true\b/)
+    // Room.connect passes !singlePeerConnection as useV0Path...
+    expect(SDK).toMatch(
+      /abortController\.signal, !roomOptions\.singlePeerConnection\)/,
+    )
+    // ...which builds plain connection params (not createJoinRequestConnectionParams)...
+    expect(SDK).toMatch(
+      /const params = useV0Path \? createConnectionParams\(token, clientInfo, opts\) : yield createJoinRequestConnectionParams/,
+    )
+    // ...and the /rtc URL, not /rtc/v1.
+    expect(SDK).toMatch(
+      /function createRtcUrl\(url, searchParams\) \{[\s\S]{0,200}if \(useV0Path\) \{\s*return v0Url;\s*\} else \{\s*return appendUrlPath\(v0Url, 'v1'\);/,
     )
   })
 

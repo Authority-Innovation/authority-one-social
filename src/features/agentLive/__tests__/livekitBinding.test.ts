@@ -45,7 +45,10 @@ class MockRoom {
     unpublishTrack: jest.fn(() => Promise.resolve()),
     publishData: jest.fn(() => Promise.resolve()),
   }
-  options: {reconnectPolicy?: {nextRetryDelayInMs(c: object): number | null}}
+  options: {
+    reconnectPolicy?: {nextRetryDelayInMs(c: object): number | null}
+    singlePeerConnection?: boolean
+  }
   constructor(options: MockRoom['options']) {
     this.options = options
     mockRooms.push(this)
@@ -92,6 +95,7 @@ import {type LiveConnectionEvent} from '../room'
 import {
   createLiveKitRoom,
   disconnectReasonOf,
+  LIVE_ROOM_OPTIONS,
   NO_SDK_RECONNECT,
 } from '../room/livekit'
 
@@ -180,6 +184,12 @@ describe('subscriptions [L6]', () => {
 })
 
 describe('connection', () => {
+  it('joins on /rtc directly: singlePeerConnection off (build 44, Dev edge /rtc/v1 query-size 400)', () => {
+    const {room} = make()
+    expect(room.options.singlePeerConnection).toBe(false)
+    expect(room.options).toBe(LIVE_ROOM_OPTIONS)
+  })
+
   it('the SDK never resumes or reconnects on its own (join gate R1/R2)', () => {
     const {room} = make()
     expect(room.options.reconnectPolicy).toBe(NO_SDK_RECONNECT)
