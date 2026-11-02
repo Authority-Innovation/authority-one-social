@@ -3,6 +3,7 @@ import {afterEach, describe, expect, it, jest} from '@jest/globals'
 import {
   endOpenLiveSessionsAndWait,
   forgetLiveSessionsForTests,
+  LIVE_END_BEFORE_DELETE_MS,
   registerLiveSession,
 } from '../registry'
 
@@ -52,6 +53,21 @@ describe('endOpenLiveSessionsAndWait (review 3b593301c F21: delete waits for /en
 
   it('a failing end does not reject the wait', async () => {
     registerLiveSession(() => Promise.reject(new Error('503')))
-    await expect(endOpenLiveSessionsAndWait(8000)).resolves.toBeUndefined()
+    await expect(endOpenLiveSessionsAndWait(8000)).resolves.toBe('settled')
+  })
+
+  it('says whether the ends settled or the bound expired (r392 L7)', async () => {
+    registerLiveSession(() => Promise.resolve())
+    await expect(endOpenLiveSessionsAndWait(8000)).resolves.toBe('settled')
+    forgetLiveSessionsForTests()
+    jest.useFakeTimers()
+    registerLiveSession(() => new Promise<void>(() => {}))
+    const waiting = endOpenLiveSessionsAndWait(8000)
+    jest.advanceTimersByTime(8000)
+    await expect(waiting).resolves.toBe('timed_out')
+  })
+
+  it('the delete bound is 8 s (r392 L10)', () => {
+    expect(LIVE_END_BEFORE_DELETE_MS).toBe(8_000)
   })
 })

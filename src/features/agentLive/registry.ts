@@ -27,16 +27,24 @@ export function endOpenLiveSessions(): void {
   }
 }
 
+/** How long deleting the account waits for Agent Live's /end. */
+export const LIVE_END_BEFORE_DELETE_MS = 8_000
+
 /**
  * End every open live session and wait for the ends, at most `timeoutMs`
  * (review 3b593301c F21: deleting the account must not race its /end; the
- * bearer may stop working once the account is gone). Never rejects.
+ * bearer may stop working once the account is gone). Never rejects; says
+ * whether the ends settled or the bound expired first (review r392 L7).
  */
-export function endOpenLiveSessionsAndWait(timeoutMs: number): Promise<void> {
-  const ends = Promise.allSettled([...open].map(end => end())).then(() => {})
+export function endOpenLiveSessionsAndWait(
+  timeoutMs: number,
+): Promise<'settled' | 'timed_out'> {
+  const ends = Promise.allSettled([...open].map(end => end())).then(
+    () => 'settled' as const,
+  )
   let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<void>(resolve => {
-    timer = setTimeout(resolve, timeoutMs)
+  const timeout = new Promise<'timed_out'>(resolve => {
+    timer = setTimeout(() => resolve('timed_out'), timeoutMs)
   })
   return Promise.race([ends, timeout]).finally(() => clearTimeout(timer))
 }
