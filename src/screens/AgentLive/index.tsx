@@ -49,6 +49,7 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {IS_ANDROID} from '#/env'
 import {AGENT_LIVE_ENABLED} from '#/features/agentLive/flag'
+import {useLiveKeepAwake} from '#/features/agentLive/keepAwake'
 import {loadLiveRoomFactory} from '#/features/agentLive/room'
 import {
   createLiveSessionController,
@@ -192,6 +193,8 @@ function LiveSession({
     state.phase !== 'idle' &&
     state.phase !== 'ended' &&
     state.phase !== 'failed'
+  // The screen stays on while the session is open (feedback on build 47).
+  useLiveKeepAwake(state.phase)
   const [passThrough, setPassThrough] = useState<NavigationAction | null>(null)
   usePreventRemove(
     (open || state.ending) && !leaveAnyway && !passThrough,

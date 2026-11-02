@@ -86,6 +86,19 @@ jest.mock('#/components/icons/Microphone', () => ({
   Microphone_Stroke2_Corner0_Rounded: () => null,
 }))
 jest.mock('#/lib/agent-runtime', () => ({}))
+// The idle-timer tags held right now (build 47: the screen slept mid-session).
+const mockAwake = {held: new Set<string>(), activations: 0}
+jest.mock('expo-keep-awake', () => ({
+  activateKeepAwakeAsync: jest.fn((tag: string) => {
+    mockAwake.held.add(tag)
+    mockAwake.activations++
+    return Promise.resolve()
+  }),
+  deactivateKeepAwake: jest.fn((tag: string) => {
+    mockAwake.held.delete(tag)
+    return Promise.resolve()
+  }),
+}))
 const mockToastShow = jest.fn()
 jest.mock('#/components/Toast', () => ({
   show: (...args: unknown[]) => mockToastShow(...args),
@@ -273,6 +286,7 @@ import {
 } from '#/features/agentLive/__fixtures__/runtimeLive'
 import {getDeviceKey} from '#/features/agentLive/deviceKey'
 import {GoLiveButton} from '#/features/agentLive/GoLiveButton'
+import {LIVE_KEEP_AWAKE_TAG} from '#/features/agentLive/keepAwake'
 import {
   requestCameraAccess,
   requestMicAccess,
@@ -329,6 +343,8 @@ beforeEach(() => {
   forgetLiveSessionsForTests()
   mockFlag.on = false
   mockEnv.android = false
+  mockAwake.held.clear()
+  mockAwake.activations = 0
   mockOwned.agent = OWNED
   mockOwned.loading = false
   mockNav.canGoBack = true
@@ -461,6 +477,42 @@ describe('session screen (flag on)', () => {
     expect(rt.sent).toEqual([])
     expect(mockMic).not.toHaveBeenCalled()
     expect(fake.calls).toEqual([])
+  })
+
+  it('keep awake: off on arrival, on from the tap through the session, off once ended', async () => {
+    const r = await open()
+    expect(mockAwake.activations).toBe(0)
+    rt.on('/live/sessions', 'startAwaitingConsent')
+    await press(r.getByTestId('agentLiveBeginButton'))
+    expect([...mockAwake.held]).toEqual([LIVE_KEEP_AWAKE_TAG])
+    rt.on('/live/sessions/:sid/consent', 'consentAdmitted')
+    rt.on('/live/join/prove', 'proveExchange')
+    await press(r.getByTestId('agentLiveConsent-ai_process'))
+    await press(r.getByTestId('agentLiveConsentSubmit'))
+    expect(r.getByTestId('agentLiveMicIndicator')).toBeTruthy()
+    expect([...mockAwake.held]).toEqual([LIVE_KEEP_AWAKE_TAG])
+    // Held once across starting, consent, connecting and connected.
+    expect(mockAwake.activations).toBe(1)
+    rt.on('/live/sessions/:sid/end', 'end')
+    await press(r.getByTestId('agentLiveEndButton'))
+    expect(rt.to('/live/sessions/:sid/end')).toHaveLength(1)
+    expect(mockAwake.held.size).toBe(0)
+  })
+
+  it('keep awake: released when the screen goes with the session open', async () => {
+    const r = await goLive()
+    expect(mockAwake.held.has(LIVE_KEEP_AWAKE_TAG)).toBe(true)
+    r.unmount()
+    await flush()
+    expect(mockAwake.held.size).toBe(0)
+  })
+
+  it('keep awake: released on a failed start', async () => {
+    mockMic.mockResolvedValue('denied')
+    const r = await open()
+    await press(r.getByTestId('agentLiveBeginButton'))
+    expect(r.getByTestId('agentLiveFailed')).toBeTruthy()
+    expect(mockAwake.held.size).toBe(0)
   })
 
   it('Continue asks for the mic, starts with {agentDid}, and shows the sheet with every kind off', async () => {
