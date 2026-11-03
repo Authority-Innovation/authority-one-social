@@ -12,8 +12,9 @@ import * as TextField from '#/components/forms/TextField'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {aoClient, aoPdsBroker} from '../controller'
-import {aoSignatureErrorWords} from '../errors'
+import {AOSignatureError, aoSignatureErrorWords} from '../errors'
 import {connectCommunityAccount, needsCommunityConnect} from '../pdsBroker'
+import {noteAOEnrollmentRequired} from '../session'
 import {type AORecord} from '../store'
 
 type Phase =
@@ -21,6 +22,10 @@ type Phase =
   | {name: 'ready'}
   | {name: 'connect'}
   | {name: 'failed'; error: unknown}
+
+function isEnrollmentRequired(e: unknown): boolean {
+  return e instanceof AOSignatureError && e.code === 'enrollment-required'
+}
 
 /**
  * The Community timeline for a Signature-only person: asks the runtime for a
@@ -46,6 +51,9 @@ export function AOConnectCommunity({record}: {record: AORecord}) {
       () => live && setPhase({name: 'ready'}),
       e => {
         if (!live) return
+        // Per-app enrollment: the runtime no longer counts Community's terms
+        // as accepted (e.g. a new version) — back to the terms screen.
+        if (isEnrollmentRequired(e)) noteAOEnrollmentRequired(record.token)
         setPhase(
           needsCommunityConnect(e)
             ? {name: 'connect'}
@@ -79,6 +87,7 @@ export function AOConnectCommunity({record}: {record: AORecord}) {
       setAttempt(n => n + 1)
     } catch (e) {
       setPassword('')
+      if (isEnrollmentRequired(e)) noteAOEnrollmentRequired(record.token)
       setError(e)
     } finally {
       setBusy(false)

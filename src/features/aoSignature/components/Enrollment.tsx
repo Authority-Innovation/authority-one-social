@@ -61,9 +61,11 @@ export function AOEnrollment({token, sid}: {token: string; sid: string}) {
       await adoptEnrollment(sid)
     } catch (e) {
       setError(e)
-      // A stale screen (terms changed meanwhile): load the new ask, untick.
+      // A stale screen (terms changed meanwhile): load the new ask, untick
+      // every box, the optional ones included.
       setTerms(false)
       setPrivacy(false)
+      setConsents({})
       setAttempt(n => n + 1)
     } finally {
       setBusy(false)

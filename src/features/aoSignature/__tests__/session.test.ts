@@ -103,6 +103,19 @@ describe('session store', () => {
     expect(decodeRecord(null)).toBeNull()
   })
 
+  it('review edcf058f8 M3: only an explicit enrolled:true survives a reload; anything else re-asks the terms', () => {
+    const r = record({enrolled: true})
+    expect(decodeRecord(JSON.stringify(r))?.enrolled).toBe(true)
+    const {enrolled: _drop, ...noField} = r
+    expect(decodeRecord(JSON.stringify(noField))?.enrolled).toBe(false)
+    expect(
+      decodeRecord(JSON.stringify({...r, enrolled: 'true'}))?.enrolled,
+    ).toBe(false)
+    expect(decodeRecord(JSON.stringify({...r, enrolled: 1}))?.enrolled).toBe(
+      false,
+    )
+  })
+
   it('an unreadable stored record is cleared at boot (signed out, not stale)', async () => {
     mockStored.value = '{"v":1,"token":"x"}'
     _resetAOStoreForTests({loaded: false})
