@@ -1,86 +1,104 @@
-# Re-review: Signature P5 Community, `edcf058f8..905706c1b` (round 425b)
+# Re-review: Signature P5 Community, `edcf058f8..905706c1b` (round 425b, re-kick)
 
-Independent, read-only re-review of `sig/community-signin` @ `905706c1b`. The range is one commit with 8 files. Baseline: `review/edcf058f8-sig-p5-r419` (HIGH 3, MED 3, LOW 4).
+Independent, read-only, static re-review of `sig/community-signin` @ `905706c1b`. The range is one commit with 8 files. Baseline: `review/edcf058f8-sig-p5-r419` (HIGH 3, MED 3, LOW 4).
 
-**Verdict: NOT CLEAN, because verification is incomplete. No test was run and no RED was shown. I found no BLOCKER, HIGH or MED by reading the code.**
+**Verdict: CLEAN on the BLOCKER or HIGH gate, static only. BLOCKER 0, HIGH 0, MED 0, LOW 8.**
 
-## The main limit: this is a static review
+**H1 and H2 are fixed in the code, but not proven closed.** No test or mutation ran in this round, so no RED was shown. Six of the nine checks are PARTIAL for that reason. Run the list under "Still to run" before relying on this verdict for release.
 
-The task asks me to show each test going RED. I could not do that, so **no test, mutation, type check or lint ran in this round.**
+## What changed from the earlier report on this branch
 
-- **Why:** the only approved install is `npm ci`. The repo has only `pnpm-lock.yaml`, pnpm is not on this machine, and npm refuses with `EBADDEVENGINES` (Node 24.14.0, repo wants ^24.15.0).
-- **What I asked:** whether I could link `node_modules` by junction from another worktree, as round 419 did (qid `2a66a1cf`). There was no answer after about 30 minutes of waiting.
-- **What I did:** I did not make the junction. It reaches outside this worktree, the install rule is binding, and no one approved it.
-- **To finish:** approve that route or provide an install, then run the mutations listed under "Still to run". They are the only thing keeping this from a full result.
+This replaces the report from run `b9f31f64` (`d36eed806`, still in this branch's history).
 
-"Expected RED" below means I traced the revert through the test by hand. The builder's report claims 14 of 14 mutations go RED and 2762 tests pass. I did not reproduce either figure.
+| | `b9f31f64` | This run |
+|---|---|---|
+| Verdict | NOT CLEAN, because verification was incomplete | CLEAN on the gate, with the same limit stated |
+| Findings | No BLOCKER, HIGH or MED; LOW 7 | No BLOCKER, HIGH or MED; LOW 8 (adds L8) |
+| Checks 3 and 8 | PASS | Check 3 is PARTIAL; check 8 stays PASS |
+
+The evidence did not get stronger. The verdict differs because this task sets the gate at BLOCKER or HIGH and tells me to report dependency-bound checks as PARTIAL. Missing test runs therefore show as PARTIAL, not as a failed gate. **If you want "CLEAN" to require RED evidence, treat this as NOT CLEAN until the list below has run.**
 
 ## Check results
 
-| # | Check | Result | Code | Test that should go RED on revert (not run) |
+"Expected RED" means I traced the revert through the test by hand. Nothing was run.
+
+| # | Check | Result | Code | Test expected to go RED on revert |
 |---|---|---|---|---|
-| 1 | H1: committed tests render both screens | **PARTIAL**: tests exist and look sound, RED not shown | `screens.test.tsx` | `every box starts UNTICKED…` (`:170`); `never self-mints on mount…` (`:257`) |
-| 2 | H2: gate honours `enrolled` | **PARTIAL**: fix is correct, RED not shown | `hooks.ts:44` | `a PDS session for the SAME person…` (`shellPickerKey.test.tsx:157`) |
-| 3 | H3: nothing else in the rename changes dark behaviour | **PASS** by reading; config not resolved | `app.config.js:233-235`, `:548-549` | Existing `brandConfig` golden, not re-run |
-| 4 | Terms unticked and before self-mint | **PARTIAL**: code holds, RED not shown | `Enrollment.tsx:31-33`, `Shell.tsx:51` | `screens.test.tsx:170`; `Shell order…` (`shellPickerKey.test.tsx:123`) |
-| 5 | Self-mint only after an explicit action | **PARTIAL**: code holds, RED not shown | `ConnectCommunity.tsx:69-72`, `:168` | `screens.test.tsx:257`; `self-mint runs only on press…` (`:266`) |
-| 6 | Dark with the env empty | **PARTIAL**: code holds, tests not re-run | `hooks.ts:37`, `config.ts` | `dark.test.tsx:66`, `:71`, `:77`, `:89`, `:95` |
-| 7 | Lexicon hash unchanged | **PASS**: measured | `lexicon.test.ts:114-115` | Pre-existing failure, not new |
-| 8 | Per-app enrollment, link never merge | **PASS** by reading, with baseline RED evidence | `Shell.tsx:51`, `pdsBroker.ts:136`, `wire.ts:128-131` | Round 419 mutations M4, M7, M8, M9, M16 |
+| 1 | H1: committed tests render both screens | **PARTIAL**: tests exist, RED not shown | `Enrollment.tsx:31-33`, `ConnectCommunity.tsx:69-72` | `screens.test.tsx:170`, `:257` |
+| 2 | H2: gate honours `enrolled` | **PARTIAL**: fix is correct, RED not shown | `hooks.ts:44` | `shellPickerKey.test.tsx:157` |
+| 3 | H3: nothing else in the rename changes dark behaviour | **PARTIAL**: no finding from the full diff, config and prebuild not run | `app.config.js:113`, `:233-235`, `:549` | Brand golden, regenerated in the rename (see check 3) |
+| 4 | Terms unticked, before self-mint | **PARTIAL**: code holds, RED not shown | `Enrollment.tsx:31-33`, `Shell.tsx:51`, `:69` | `screens.test.tsx:170`; `shellPickerKey.test.tsx:123` |
+| 5 | Self-mint only after a person acts | **PARTIAL**: code holds, RED not shown | `ConnectCommunity.tsx:69-72`, `:168` | `screens.test.tsx:257`, `:266` |
+| 6 | Dark with the env empty | **PARTIAL**: code holds, tests not re-run | `config.ts:207`, `hooks.ts:37` | `dark.test.tsx:66`, `:77`, `:89`, `:95` |
+| 7 | Lexicon hash unchanged | **PASS**: measured | `lexicon.test.ts:115` | Pre-existing failure, not new |
+| 8 | Per-app enrollment, link never merge | **PASS**: code unchanged since baseline, RED carried from round 419 | `Shell.tsx:51`, `pdsBroker.ts:136`, `wire.ts:128-131`, `store.ts:97` | `community.test.ts:309`, `:122`, `:106`; `wire.test.ts:84` |
 | 9 | Reflections untouched, no secrets | **PASS**: scanned | whole diff | n/a |
 
 ## Evidence by check
 
-### 1. H1 render tests
-`screens.test.tsx` renders the real `AOEnrollment` and `AOConnectCommunity`, with the UI kit stubbed by host elements that keep a toggle's value and a button's disabled state.
+### 1. H1: render tests
+`screens.test.tsx` renders the real `AOEnrollment` and `AOConnectCommunity`. The UI kit is stubbed with host elements that keep a toggle's value and a button's disabled state.
 
-Expected RED, traced by hand:
+| Revert | Test expected to go RED | Why |
+|---|---|---|
+| Terms, privacy or marketing pre-ticked (`Enrollment.tsx:31-33`) | `every box starts UNTICKED and Continue is disabled` (`:170`) | Reads all three values and expects `false` |
+| `disabled` removed (`Enrollment.tsx:180`) | Same test | `continueDisabled()` expects `true` |
+| Tick guard removed (`Enrollment.tsx:56`) | `the press handler itself refuses without both ticks…` (`:204`) | Calls the raw handler past `disabled` |
+| Mint on mount that calls `connectCommunityAccount` directly | `never self-mints on mount…` (`:257`) | `mockConnect` must not be called |
+| Credential guard removed (`ConnectCommunity.tsx:72`) | `self-mint runs only on press…` (`:266`) | Presses with a handle and no password |
 
-| Revert | Test |
-|---|---|
-| Terms, privacy or marketing pre-ticked (`Enrollment.tsx:31-33`) | `every box starts UNTICKED and Continue is disabled` (`:170`) reads all three values |
-| `disabled` removed (`Enrollment.tsx:180`) | Same test, through `continueDisabled()` |
-| Tick guard removed (`Enrollment.tsx:56`) | `the press handler itself refuses…` (`:204`) calls the raw handler past `disabled` |
-| Auto-mint on mount (`ConnectCommunity.tsx:46-67`) | `never self-mints on mount…` (`:257`) expects `mockConnect` not called |
-| Credential guard removed (`ConnectCommunity.tsx:72`) | `self-mint runs only on press…` (`:266`) presses with a handle and no password |
+Two limits:
+- **Auto-mint mutation:** adding a bare `void connect()` to the mount effect stays green, because the guard at `:72` stops it with empty fields and nothing is minted. A valid RED mutation has to skip that guard, as baseline M6 did.
+- **Stubs:** the tests prove state and handlers, not the real `Toggle` or what appears on screen.
 
-Limit: the UI kit is stubbed, so these tests prove state and handlers, not the real `Toggle` or pixels.
-
-### 2. H2 gate
-`hooks.ts:44` now reads `currentDid === r.did && (!r.enrolled || r.needsAgent)`. The path is correct when read end to end:
+### 2. H2: gate
+`hooks.ts:44` now reads `currentDid === r.did && (!r.enrolled || r.needsAgent)`. I traced the path by reading:
 
 1. The gate returns `'shell'`.
-2. `createNativeStackNavigatorWithAuth.tsx:142-143` renders `AOSignatureShell`.
-3. `Shell.tsx:51` renders `AOEnrollment`.
-4. Accepting calls `adoptEnrollment`, which sets `enrolled: true`, and the gate returns `null`.
+2. `createNativeStackNavigatorWithAuth.tsx:142-143` renders `AOSignatureShell`. A guest game link skips this gate, which is an existing waiver.
+3. `Shell.tsx:51` renders `AOEnrollment` before the picker or self-mint.
+4. Accepting calls `adoptEnrollment` (`session.ts:274`, reached from `Enrollment.tsx:61`), which sets `enrolled: true`, and the gate returns `null`.
 
-- **Tests:** `shellPickerKey.test.tsx:157` (gate), `:164` (enrolled and other-account controls), `:123` (Shell order) and `screens.test.tsx:182` (can enrol). They cover the path piece by piece; no single test walks all of it.
-- **No dead end from the fix:** this gate now replaces the social app for a person with a PDS session. If the runtime is down, they still have Try again (`Enrollment.tsx:81`) and sign-out. `signOutAO` clears the record even when the server call fails (`session.ts:160-165`), and that returns the gate to `null`.
+Tests:
+- `shellPickerKey.test.tsx:157`: same person with an agent, not enrolled, gets `'shell'`. Reverting `:44` to `r.needsAgent` returns `null`, so this should go RED.
+- `shellPickerKey.test.tsx:164`: controls for an enrolled person and for another account.
+- `screens.test.tsx:182`: the person can enrol.
 
-### 3. H3 as far as the code goes
-The range does not touch `app.config.js`, `brands/`, `plugins/` or the golden. Reading `git diff 985d2d93b..905706c1b` on those files, the rename changes these env-independent items:
+These cover the path piece by piece. No single test walks all of it.
 
-- `expo.name`, `CFBundleDisplayName` and the Android label plugin. These are the known flag and are not rated.
-- `brand.signature.schemes`. Only `scripts/lint-brand-config.js:131` reads it, so it has no dark effect.
-- The scheme allow-list in `app.config.js:113`. It applies only when `EXPO_PUBLIC_AO_SIGNATURE_SCHEME` is set. With it unset, `scheme` stays `'one'` (`app.config.js:233-235`).
+**No new dead end:** if the runtime is down, the person has Try again (`Enrollment.tsx:81`) and sign-out (`AccountActions.tsx:59`). `signOutAO` clears the record even when the server call fails, which returns the gate to `null`.
 
-Bundle id, slug, `scheme` and `owner` are unchanged. `src/` has no reader of the app name for behaviour (no `applicationName` hit).
+### 3. H3: the rest of the rename
+The display name is not rated. See Questions.
 
-Two things I could not confirm:
+The range itself does not touch `app.config.js`, `brands/`, `plugins/` or the golden, so I read `git diff 985d2d93b..905706c1b` on those files. Beyond the name fields, it changes only:
 
-- **Config not resolved.** `app.config.js:8` needs a dependency, so I could not run it. The builder's "exactly three fields" table matches the baseline's table and my reading, but I did not reproduce it this round.
-- **Prebuild not run.** As far as I know, Expo derives the iOS project and target name from `expo.name`, so `.app` and project paths would change. `withUISceneLifecycle.js:253`, `:262` look the name up rather than hardcoding it. The only hardcoded `AuthorityOne` in `plugins/` is a test fixture. I found nothing that breaks, but a prebuild should confirm it.
+- **Signature schemes:** `brand.signature.schemes` is read only by `scripts/lint-brand-config.js:131`.
+- **Scheme allow-list:** `app.config.js:113` matters only when `EXPO_PUBLIC_AO_SIGNATURE_SCHEME` is set. Unset, `scheme` stays `'one'` (`:233-235`).
+- **Android label plugin:** `plugins/withAndroidAppLabelPlugin.js` writes only the `app_name` string, and it is part of the known name flag.
+
+Bundle id, slug, `owner`, `.github/` and `eas.json` have no diff. `src/` has no reader of the app name for behaviour.
+
+**Why PARTIAL:**
+- `app.config.js` needs dependencies, so I could not resolve it. The builder's "exactly three fields" table matches my reading and round 419's measured table, but I did not reproduce it.
+- The golden cannot show dark equivalence with the pre-rollout build, because the rename regenerated every `signature=off` hash. It only pins the new state.
+- No prebuild ran. `expo.name` should also change the generated iOS project name. `withUISceneLifecycle.js:253`, `:262` look that name up instead of hardcoding it, and the only hardcoded `AuthorityOne` in `plugins/` is in tests and fixtures. I found nothing that breaks.
+- `.github/workflows/build-submit-ios.yml:153`, `:160` hardcode `Bluesky.ipa` and `Bluesky.app.dSYM.zip`. They predate this work and are not in the diff. I cannot tell without a build whether those paths match the real output, so check them at the first native build.
 
 ### 4 and 5. Terms and self-mint
-- **Terms first:** `Shell.tsx:51` checks `!record.enrolled` before the self-mint branch at `:69`.
-- **Ticks do not carry over:** `key={record.sid}` at `Shell.tsx:54`, and `setConsents({})` now clears marketing on a failed accept (`Enrollment.tsx:68`, test `screens.test.tsx:217`).
-- **Self-mint:** `connect` (`ConnectCommunity.tsx:69`) is reached only from the button at `:168`. On mount the screen only calls `b.get` (`:50`).
-- **M1 closed in code:** `ConnectCommunity.tsx:56`, `:90`, tests `screens.test.tsx:292`, `:302`.
+- **Unticked:** `Enrollment.tsx:31-33`.
+- **Terms first:** `Shell.tsx:51` checks `!record.enrolled` before the self-mint branch at `:69`. Test: `Shell order…` (`shellPickerKey.test.tsx:123`). Changing `:51` to apply only when `needsAgent` should go RED at `:135`.
+- **Ticks do not carry to a new session:** `key={record.sid}` at `Shell.tsx:54`. L8 covers a narrower case.
+- **Stale reload (M2):** `Enrollment.tsx:68`, test `screens.test.tsx:217`.
+- **Self-mint:** `connect` (`ConnectCommunity.tsx:69`) is reached only from the button at `:168`. On mount the screen calls only `b.get` (`:50`), and `pdsBroker.ts:38-59` shows that call asks for a session and sends no credential.
+- **M1:** `ConnectCommunity.tsx:56`, `:90`, tests `screens.test.tsx:292`, `:302`.
 
 ### 6. Dark
-- `hooks.ts:37` returns `null` before the new clause at `:44`, so H2 cannot act while dark.
-- `dark.test.tsx` is unchanged in the range.
-- Round 419 found that removing `hooks.ts:37` alone stays green, because a dark store never holds a record. That makes it a second layer, and it is still true.
+- **The switch:** `AO_SIGNATURE_CONFIG` (`config.ts:207`) is null when the env is empty, and every path below depends on it.
+- **Gate:** `hooks.ts:37` returns `null` before the new clause at `:44`, so H2 cannot act while dark.
+- **Runtime client:** `agentsClient.ts:18` returns before the new `enrollment-required` branch at `:24`.
+- **Tests:** `dark.test.tsx:66` (no config), `:71` (renders nothing), `:77` (gate always null), `:89` (bearer is the PDS token), `:95` (store inert). The file has no diff in this range.
+- **Second layer only:** removing `hooks.ts:37` alone should stay green, as round 419's M14 showed, because a dark store never holds a record. `dark.test.tsx:77` therefore does not pin that line by itself.
 
 ### 7. Lexicon hash
 SHA-256 of the committed `lexicons/com/authorityone/group/post.json`:
@@ -92,58 +110,68 @@ SHA-256 of the committed `lexicons/com/authorityone/group/post.json`:
 | `905706c1b` | `79c0a46be3f8d8e6…` |
 | Expected by `lexicon.test.ts:115` | `678fa536825aac19…` |
 
-`lexicons/` and `src/lib/lexicon` have no diff in `985d2d93b..905706c1b`. This is unchanged from the baseline's pre-existing finding.
+The range has no change to `lexicons/` or `src/lib/lexicon`. This matches the pre-existing finding from round 419, which traced it to `b424c48a6`.
 
 ### 8. Enrollment and link
-`pdsBroker.ts`, `wire.ts`, `store.ts` and `Shell.tsx` have no diff in this range, so the baseline's evidence still applies. Only an explicit `enrolled: true` survives a reload (`store.ts:97`, `wire.ts:146`). A different DID is refused (`pdsBroker.ts:136`, `wire.ts:128-131`). No merge code was added. Server-side refusal is not in this repo's range and is not verified.
+`pdsBroker.ts`, `wire.ts`, `store.ts`, `signIn.ts` and `Shell.tsx` have no diff in this range, so round 419's RED evidence applies to the same code. I did not re-run it.
+
+- Only an explicit `enrolled: true` survives (`store.ts:97`, `wire.ts:146`). `session.test.ts` adds a test for this in the range.
+- A different DID is refused before the runtime is called (`pdsBroker.ts:136`, `community.test.ts:309`).
+- A session answer must name the same DID (`decodePdsSession`, `community.test.ts:122`).
+- A link must come back `linked` to the exact DID (`wire.ts:128-131`, `wire.test.ts:84`).
+- The range adds no merge code. Server-side refusal is not in this repo's range and is not verified.
 
 ### 9. Reflections and secrets
 - **Reflections:** no changed path matches, and no added line in `985d2d93b..905706c1b` mentions it.
-- **Secrets:** I scanned added lines for AWS, GitHub, OpenAI-style and Slack keys, JWTs and private-key shapes, with no hits. The only password value is the fake `'pw'` in tests.
+- **Secrets:** added lines have no hits for AWS, GitHub, OpenAI-style or Slack keys, JWTs or private-key blocks. A wider `password`, `secret` and `token` search on the range found only test code and report prose. The only password value is the fake `'pw'`.
 
 ## Findings
 
-No BLOCKER, HIGH or MED.
+No BLOCKER, HIGH or MED. All LOWs come from reading the code and none were observed running.
 
-### LOW, new in this round
+### LOW, new since baseline
 
-- **L5. `AgentPicker`'s send-back is still untested (the rest of baseline M3).** Nothing renders `AgentPicker`, so removing `AgentPicker.tsx:42` should stay green. The builder's report discloses this but argues `agentsClient` pins the routing. That test does not exercise this line, so "every MED is fixed" overstates it slightly. The call itself is correct.
-- **L6. The password clear on success has no test.** `screens.test.tsx:289` covers only the failure path (`ConnectCommunity.tsx:89`). Removing `:85` should stay green. The value stays in state only until the screen remounts.
-- **L7. The social app can render before the stored record is read (armed only).** With a PDS session and `loaded: false`, `hooks.ts:38-40` returns `null`, so an unenrolled person may briefly see the social app before the gate flips. This is from reading the code and I did not see it happen. The `hooks.ts:42` comment says "before the social app renders", which does not hold in that window.
+- **L5. `AgentPicker`'s send-back is still untested (the remainder of baseline M3).** The only test importing `AgentPicker` mocks it, so removing `AgentPicker.tsx:42` should stay green. The builder's report discloses the gap, but its "every MED is fixed" overstates it slightly. The call itself is correct.
+- **L6. The password clear on success has no test.** `screens.test.tsx:289` covers only the failure path (`ConnectCommunity.tsx:89`), so removing `:85` should stay green. The value would stay in memory until the screen remounts.
+- **L7. The social app can render before the stored record is read (armed only).** With a PDS session and `loaded: false`, `hooks.ts:38-40` returns `null`, so an unenrolled person may briefly see the social app before the gate flips. This contradicts the comment at `hooks.ts:42-43` and the `Enrollment.tsx` docblock. The runtime refusal is the backstop, but it is not in this range.
+- **L8. Ticks made during a stale reload carry onto the newer terms (armed only).** After a failed accept, `Enrollment.tsx:66-69` unticks the boxes and reloads, but the old ask stays on screen with live toggles until the answer arrives. If the person re-ticks in that window, the `setAsk` at `:45` swaps in the newer ask without clearing the ticks, and Continue accepts versions they did not tick against. The window is one network round trip, and the links do point to the new ask by then. `screens.test.tsx:217` does not cover it. Fix: untick again whenever a new ask loads, or hide the boxes until it does.
 
 ### LOW, carried from baseline and unchanged
 - **L1.** `pdsBroker.ts` `xrpc` has no timeout.
-- **L2.** Connected-copy wording and the stale `Shell.tsx:22-23` docblock. The navigator comment at `createNativeStackNavigatorWithAuth.tsx:123-124` is also now out of date, because it does not mention the terms.
-- **L3.** `ask.app` is not checked.
-- **L4.** `_(msg)` style.
+- **L2.** Connected-copy wording and the stale `Shell.tsx:22-23` docblock. The comment at `createNativeStackNavigatorWithAuth.tsx:123-124` also no longer mentions the terms.
+- **L3.** `decodeEnrollmentAsk` does not check `ask.app`.
+- **L4.** `_(msg)` style and em dashes in `errors.ts`.
 
 ## Questions (not rated)
 
-**For Elliott:** should dark builds carry the new display name? This is the known flag, recorded here only as a question. A related point is that `CFBundleSpokenName` is still `Authority One` (`app.config.js:292`), which may also need deciding.
-
-**Still unverified from round 419:** whether tapping a terms or privacy link inside a box's label also ticks that box. This needs a device.
+- **For Elliott:** should dark builds carry the new display name? This is the known flag, recorded only as a question. A related point: `CFBundleSpokenName` is still `Authority One` (`app.config.js:292`).
+- **Needs a device:** does tapping a terms or privacy link inside a box's label also tick that box? This is still open from round 419. The stubs drop label content, so the new tests cannot answer it.
 
 ## Still to run
 
-Once dependencies are available:
+These need dependencies, which this round was barred from installing.
 
-1. The full suite, `tsc`, `tsgo` and eslint at `905706c1b`.
-2. These reverts, each expected RED:
+1. The full suite, `tsc`, `tsgo` and eslint at `905706c1b`. Round 419 saw 3 further failing suites on this Windows machine, from missing compiled locales and suspected line endings. Compare against those rather than expecting only the lexicon failure.
+2. Reverts expected to go RED:
    - `Enrollment.tsx:31`, `:32`, `:33` pre-ticked
    - `Enrollment.tsx:56` guard removed
    - `Enrollment.tsx:68` reset removed
    - `Enrollment.tsx:180` disabled removed
-   - `ConnectCommunity.tsx:72` guard removed, plus a mint on mount
+   - `ConnectCommunity.tsx:72` guard removed
+   - a direct `connectCommunityAccount` call on mount
    - `ConnectCommunity.tsx:56` and `:90` removed
    - `hooks.ts:44` reverted to `r.needsAgent`
    - `Shell.tsx:51` terms only when `needsAgent`
-3. These reverts, expected GREEN, which would confirm L5 and L6: `AgentPicker.tsx:42` and `ConnectCommunity.tsx:85`.
+3. Reverts expected to stay GREEN, which would confirm L5 and L6: `AgentPicker.tsx:42` and `ConnectCommunity.tsx:85`.
+4. Resolve `app.config.js` with the Signature env empty at `985d2d93b` and `905706c1b` and diff the output, then run one prebuild.
+
+The builder's report claims 14 of 14 mutations went RED and 2762 tests pass. I did not reproduce either figure.
 
 ## How this was run
 
-- **Branch:** this worktree's local `sig/community-signin` was stale at `571924785`, so I cut this report branch from `905706c1b`, verified on origin.
-- **Commands:** only git, grep and Node's built-in `crypto`. One throwaway script tried to resolve `app.config.js` from a temp folder inside this worktree. It failed on a missing dependency and the folder was removed.
-- **`npm ci --dry-run`:** I ran this once to confirm the failure. It installed nothing.
+- **Commands:** only git, read-only shell tools and `sha256sum`. I ran no install, no `npm ci` dry run, no junction and no package scripts.
+- **Spec conflict:** the task body allows "the approved npm ci", but the binding constraint says no install of any kind (Dispatch r427). I followed the constraint.
+- **Branches:** this worktree's local `sig/community-signin` was stale at `571924785`. `905706c1b` is what origin has, and I read that code. `review/905706c1b-sig-p5-r425b` is still checked out in the `b9f31f64` worktree, so I committed on a local branch and fast-forwarded the named remote branch.
 - **No live activity:** no deploy, upload, live call, flag arming, account change or token use.
 
-VERDICT: NOT CLEAN (verification incomplete: no test run, no RED shown). BLOCKER 0, HIGH 0, MED 0, LOW 7.
+VERDICT: CLEAN (static only; gate BLOCKER or HIGH; no test run, no RED shown; checks 1-6 PARTIAL). BLOCKER 0, HIGH 0, MED 0, LOW 8.
