@@ -53,6 +53,7 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {AgentAvatar} from '#/features/agentGrid/AgentAvatar'
 import {LiveBadge} from '#/features/agentGrid/LiveBadge'
+import {GoLiveButton} from '#/features/agentLive/GoLiveButton'
 import {AssetGalleryTab} from './AssetGalleryTab'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'AgentHub'>
@@ -174,6 +175,8 @@ function AgentHubInner({agentRef}: {agentRef: string}) {
             </Text>
           </View>
         ) : null}
+        {/* Agent Live: renders nothing unless the flag is on and it's owned. */}
+        {owned ? <GoLiveButton agent={agent} /> : null}
       </View>
 
       <HubTabBar tab={tab} onSelect={setTab} showSettings={owned} />

@@ -57,6 +57,7 @@ exports[`route table keeps every pre-existing route unchanged 1`] = `
   "AgentBilling /settings/agents/billing",
   "GroupConversations /settings/agents/groups",
   "AgentHub /agents/undefined",
+  "AgentLive /agents/undefined/live",
   "ChatList /chats",
   "GameRoom /game",
   "GameRoom /game/undefined",

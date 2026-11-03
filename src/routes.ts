@@ -67,6 +67,7 @@ const routes: Record<keyof AllNavigatableRoutes, string | string[]> = {
   AgentBilling: '/settings/agents/billing',
   GroupConversations: '/settings/agents/groups',
   AgentHub: '/agents/:agent',
+  AgentLive: '/agents/:agent/live',
   ChatList: '/chats',
   // Plain path FIRST (same pattern as PersonaSettings): URL building picks the
   // first form; a match id rides the second.

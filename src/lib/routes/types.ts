@@ -114,6 +114,9 @@ export type CommonNavigatorParams = {
   // Authority One: per-agent hub — 1:1 chat + owner management (posts, profile,
   // settings) for ONE owned agent. `agent` = the agent's full handle (or DID).
   AgentHub: {agent: string}
+  // Authority One: Agent Live session with ONE owned agent (`agent` = its
+  // handle). Dark behind EXPO_PUBLIC_AGENT_LIVE_ENABLED.
+  AgentLive: {agent: string}
   // Authority One: Context Engine (Phase 1, location-only) opt-in + log.
   ContextEngineSettings: undefined
   ContextLog: undefined
