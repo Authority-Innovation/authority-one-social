@@ -15,7 +15,7 @@ const AO_SIGNATURE_ON = {
     'https://authority-one-agent-runtime.e-479.workers.dev/',
   EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS: 'ao-ios',
   EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID: 'ao-android',
-  EXPO_PUBLIC_AO_SIGNATURE_SCHEME: 'authorityone-dev',
+  EXPO_PUBLIC_AO_SIGNATURE_SCHEME: 'community-dev',
   EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI:
     'https://app-dev.test/auth/janus/app-callback',
 }

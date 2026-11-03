@@ -66,6 +66,10 @@ function client(over: Partial<AOClient>): AOClient {
     listAgents: no,
     createAgent: no,
     choosePrimary: no,
+    enrollment: no,
+    enroll: no,
+    pdsSession: no,
+    pdsCredential: no,
     ...over,
   }
 }

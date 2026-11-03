@@ -110,7 +110,7 @@ function aoSignatureNativeScheme(rawEnv, platform) {
   const authorizeBase = env('EXPO_PUBLIC_AO_SIGNATURE_AUTHORIZE_BASE')
   if (authorizeBase && !httpsUrl(authorizeBase)) return null
   const scheme = env('EXPO_PUBLIC_AO_SIGNATURE_SCHEME')
-  if (!['authorityone', 'authorityone-dev'].includes(scheme)) return null
+  if (!['community', 'community-dev'].includes(scheme)) return null
   const redirect = httpsUrl(env('EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI'))
   if (
     !redirect ||
@@ -220,12 +220,11 @@ function appConfigForBrand(BRAND) {
   return {
     expo: {
       version: VERSION,
-      // Authority One: display name (Expo maps this to CFBundleDisplayName).
-      // Was 'One' — too generic and rejected by App Store Connect as a bundle/
-      // display name already taken. Renamed to the unique 'Authority One'.
-      // Note: CFBundleName is NOT set explicitly, so Expo derives it from this
-      // name too ("Authority One"), which is likewise unique. Bundle identifier
-      // stays com.authorityone.app (unchanged).
+      // Community (Signature rollout D2, Elliott 2026-11-03): the STORE name
+      // is "Signature Community" (BRAND.appStoreName); the label under the icon
+      // is "Community" (BRAND.displayName → CFBundleDisplayName on iOS, and
+      // app_name on Android via withAndroidAppLabelPlugin). CFBundleName is
+      // derived from this `name`. Bundle identifier stays com.authorityone.app.
       name: BRAND.appStoreName,
       slug: BRAND.slug,
       // Signature sign-in (P2b, dark): the runtime bounce's app scheme is
@@ -264,10 +263,10 @@ function appConfigForBrand(BRAND) {
         infoPlist: {
           // Home-screen label shown UNDER the app icon. This is the on-device
           // app name and is intentionally distinct from the App Store listing
-          // name ("Authority-One", set via `name`) and from CFBundleSpokenName.
-          // "One" was rejected at upload with ITMS-90129 (name already taken),
-          // so this is now the lowercase "authority-one". If Apple rejects this
-          // too, it's a one-line swap to try another.
+          // name ("Signature Community", set via `name`). Now "Community"
+          // (Elliott, 2026-11-03). "One" was once rejected at upload with
+          // ITMS-90129 (name already taken); if Apple refuses "Community" too,
+          // it's a one-line swap in brands/authority-one/brand.json.
           CFBundleDisplayName: BRAND.displayName,
           CADisableMinimumFrameDurationOnPhone: true,
           // BACKGROUND LOCATION IS OFF IN CODE (2026-10-23; derive.ts
@@ -546,6 +545,8 @@ function appConfigForBrand(BRAND) {
         './plugins/withAndroidManifestIntentQueriesPlugin.js',
         './plugins/withAndroidStylesAccentColorPlugin.js',
         './plugins/withAndroidNoJitpackPlugin.js',
+        // Community: Android's label under the icon = brand displayName (not expo.name).
+        ['./plugins/withAndroidAppLabelPlugin.js', {label: BRAND.displayName}],
         // Authority One: iOS UIScene lifecycle adoption (UIApplicationSceneManifest +
         // SceneDelegate). Required since builds moved to the iOS 27 SDK: without it UIKit
         // traps on background (Non-UI) launches. See plugins/uiSceneLifecycle.

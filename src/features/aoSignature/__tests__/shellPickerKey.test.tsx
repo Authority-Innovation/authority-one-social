@@ -37,6 +37,17 @@ jest.mock('#/view/com/auth/LoggedOut', () => ({LoggedOut: () => null}))
 jest.mock('../components/AccountActions', () => ({
   AOAccountActions: () => null,
 }))
+// Per-app enrollment (rollout P1): the terms screen renders before the picker.
+const mockEnrollmentRenders: string[] = []
+jest.mock('../components/Enrollment', () => ({
+  AOEnrollment: ({sid}: {sid: string}) => {
+    mockEnrollmentRenders.push(sid)
+    return null
+  },
+}))
+jest.mock('../components/ConnectCommunity', () => ({
+  AOConnectCommunity: () => null,
+}))
 // Every render logs WHICH component instance rendered which sid. The instance
 // id comes from a useState initializer, so it belongs to the instance: a
 // remount (new key) gets new ids, a mere re-render keeps the old one.
@@ -68,6 +79,7 @@ function needsAgent(sid: string) {
     ),
     needsAgent: true,
     primary: null,
+    enrolled: true,
   }
 }
 
@@ -90,5 +102,16 @@ describe('Shell picker per session', () => {
     expect(b.size).toBeGreaterThan(0)
     // sid-b never renders in an instance that rendered sid-a.
     expect([...b].filter(id => a.has(id))).toEqual([])
+  })
+
+  it("an unenrolled session shows Community's terms first, never the picker", async () => {
+    mockRenders.length = 0
+    mockEnrollmentRenders.length = 0
+    await act(async () => {
+      await setAORecord({...needsAgent('sid-c'), enrolled: false})
+    })
+    render(<AOSignatureShell gate="shell" />)
+    expect(mockEnrollmentRenders).toContain('sid-c')
+    expect(mockRenders.filter(r => r.sid === 'sid-c')).toEqual([])
   })
 })

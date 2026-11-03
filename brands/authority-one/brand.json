@@ -1,6 +1,6 @@
 {
-  "displayName": "authority-one",
-  "appStoreName": "Authority-One",
+  "displayName": "Community",
+  "appStoreName": "Signature Community",
   "slug": "one",
   "scheme": "one",
   "bundleId": "com.authorityone.app",
@@ -25,7 +25,7 @@
     "support": "https://authority-one.com/support"
   },
   "signature": {
-    "schemes": ["authorityone", "authorityone-dev"],
+    "schemes": ["community", "community-dev"],
     "clientIdIos": "",
     "clientIdAndroid": "",
     "clientIdWeb": ""

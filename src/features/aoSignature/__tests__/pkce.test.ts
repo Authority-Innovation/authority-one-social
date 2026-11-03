@@ -43,7 +43,7 @@ describe('PKCE flow', () => {
     const parts = f.state.split('.')
     expect(parts).toHaveLength(3)
     expect(parts[0]).toBe('as')
-    expect(parts[1]).toBe('authorityone-dev')
+    expect(parts[1]).toBe('community-dev')
     expect(parts[2]).toMatch(/^[A-Za-z0-9_-]{1,128}$/)
     expect(mintState({scheme: null}, 'abc')).toBe('abc')
     expect(() => mintState({scheme: null}, 'a.b')).toThrow()
@@ -66,7 +66,7 @@ describe('PKCE flow', () => {
       response_type: 'code',
       client_id: 'ao-social-ios-dev',
       redirect_uri: IOS_CFG.redirectUri,
-      scope: 'openid email profile',
+      scope: 'openid email',
       state: f.state,
       nonce: f.nonce,
       code_challenge: f.challenge,
@@ -79,7 +79,7 @@ describe('PKCE flow', () => {
     it('accepts exactly one matching state + one code', async () => {
       const f = await createFlow(IOS_CFG, nodeCrypto, 1000)
       const cb = checkCallback(
-        `authorityone-dev://auth/janus/app-callback?code=C1&state=${f.state}`,
+        `community-dev://auth/janus/app-callback?code=C1&state=${f.state}`,
         f,
         2000,
       )

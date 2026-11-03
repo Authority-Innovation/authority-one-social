@@ -28,7 +28,9 @@ import {
 import {type AOClient} from '../client'
 import {AOSignatureError} from '../errors'
 import {
+  adoptEnrollment,
   LIVENESS_MS,
+  noteAOEnrollmentRequired,
   noteAONotProvisioned,
   onPdsLogout,
   recordFromRedeem,
@@ -68,6 +70,10 @@ function fakeClient(over: Partial<AOClient> = {}): AOClient {
     listAgents: no,
     createAgent: no,
     choosePrimary: no,
+    enrollment: no,
+    enroll: no,
+    pdsSession: no,
+    pdsCredential: no,
     ...over,
   }
 }
@@ -239,6 +245,21 @@ describe('refresh outcomes', () => {
     noteAONotProvisioned(getAOState().record!.token)
     await Promise.resolve()
     expect(getAOState().record).toMatchObject({needsAgent: true, primary: null})
+  })
+
+  it("a 403 enrollment-required (to THIS bearer only) sends the person back to Community's terms; acceptance adopts for the same sid only", async () => {
+    await setAORecord(record({enrolled: true}))
+    noteAOEnrollmentRequired('PDS_TOKEN_OF_SOMEONE_ELSE')
+    noteAOEnrollmentRequired(undefined)
+    await Promise.resolve()
+    expect(getAOState().record?.enrolled).toBe(true)
+    noteAOEnrollmentRequired(getAOState().record!.token)
+    await Promise.resolve()
+    expect(getAOState().record?.enrolled).toBe(false)
+    await adoptEnrollment('some-other-sid')
+    expect(getAOState().record?.enrolled).toBe(false)
+    await adoptEnrollment(getAOState().record!.sid)
+    expect(getAOState().record?.enrolled).toBe(true)
   })
 })
 

@@ -12,10 +12,11 @@ export const IOS_CFG: AOSignatureConfig = {
   clientId: 'ao-social-ios-dev',
   runtimeUrl: RUNTIME,
   redirectUri: 'https://app-dev.test/auth/janus/app-callback',
-  scheme: 'authorityone-dev',
-  callbackUrl: 'authorityone-dev://auth/janus/app-callback',
+  scheme: 'community-dev',
+  callbackUrl: 'community-dev://auth/janus/app-callback',
+  sessionPath: '/auth/janus/community-ios/session',
   audience: null,
-  scopes: 'openid email profile',
+  scopes: 'openid email',
 }
 
 function b64url(s: string): string {

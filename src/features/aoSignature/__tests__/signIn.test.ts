@@ -127,7 +127,7 @@ describe('native sign-in', () => {
     const h = harness({
       browser: () => ({
         type: 'success',
-        url: `${IOS_CFG.callbackUrl}?code=C&state=as.authorityone-dev.evil`,
+        url: `${IOS_CFG.callbackUrl}?code=C&state=as.community-dev.evil`,
       }),
     })
     expect(await kindOf(signInNative(h.deps, h.browser))).toBe('janus')

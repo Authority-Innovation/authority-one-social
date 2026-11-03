@@ -176,3 +176,34 @@ The code fixes of round 2 were right, but two regression tests passed with the f
 7. **`/public/chat`.** It gets the `aos1.` bearer as its optional viewer bearer for AO users. Confirm the runtime ignores or accepts it (that path is fail-open).
 8. **Notices.** `GET /auth/ao/notices` (`signature-linked`) isn't shown yet. Studio doesn't show it either.
 9. **Silent reverify.** The same as Studio: reverify is the ordinary sheet (one tap, non-ephemeral), not a silent refresh.
+
+## Signature rollout P5: Community (branch `sig/community-signin`, 2026-11-03)
+Pushed for PC review only. Nothing was merged, no EAS/TestFlight build was made, and nothing was sent to Beau. It's still dark behind `EXPO_PUBLIC_AO_SIGNATURE_*`.
+
+Base: `origin/fix/agent-live-review-2026-11-01` @ 985d2d93b, the latest PUSHED build line. It already contains P2b (#2), W1-T4 (#7) and W2 brand config (#13). The newer builds 46–48 live only on another lane's local branches, so rebase onto the build line once those are pushed.
+
+- **Names (Elliott):**
+  - App Store name "Signature Community" (`brand.appStoreName` → `expo.name`).
+  - Home-screen name "Community": `brand.displayName` → iOS `CFBundleDisplayName`, and Android `app_name` via the new `plugins/withAndroidAppLabelPlugin.js`. Without the plugin, Android would label the icon with `expo.name`.
+  - Bundle/package `com.authorityone.app` is unchanged.
+  - The brand golden (`scripts/brand-config/base-config.golden.json`) was regenerated deliberately for this rename; the only non-hash changes are the name, the display name and the plugin entry.
+- **Schemes:** `community` / `community-dev`, with state `as.community(-dev).<random>` (the runtime bounce allows them). `authorityone(-dev)` now belongs to the Authority One app.
+- **Lanes:** each platform redeems at its own runtime door: `/auth/janus/community-ios/session`, `/community-android/session`, `/community-web/session`. The runtime exchanges the code as that lane's client. Scopes `openid email` (Janus refuses `profile`).
+- **Per-app enrollment:** after the redeem, `enrolled !== true` shows Community's own terms screen (`components/Enrollment.tsx`) before the picker:
+  - two separate unticked boxes (terms, privacy) linking to the runtime's ask;
+  - an optional unticked marketing box;
+  - `POST /auth/ao/enroll` with the exact versions; a stale ask reloads and unticks.
+
+  A 403 `enrollment-required` to this session's bearer (picker calls, `/app/agents`) sends the person back to the terms screen.
+- **Timeline for Signature-only people:**
+  - `pdsBroker.ts` gets a short-lived PDS accessJwt from `POST /auth/ao/pds-session` (cached until a minute before expiry, one request at a time, dropped on invalidate or a session change).
+  - A 409 `pds-credential-unavailable` shows "Connect your Community account" (`components/ConnectCommunity.tsx`). That does one full password sign-in, hands it to `POST /auth/ao/pds-credential` (runtime branch `sig/rollout-p5-custody`), then ends it with `deleteSession`. The password and the full session are never stored.
+- **Tests:**
+  - aoSignature + brand/scripts suites: 23 suites, 225 tests, all pass (new: `community.test.ts`, `androidAppLabel.test.js`; enrollment cases added to session and shell tests).
+  - Full jest: 2747 pass, 1 fail. The failure is `src/lib/lexicon` (`group/post.json` hash vs the spike copy), and it fails identically on the base with these changes stashed.
+  - `tsgo` (tsconfig.check) and `tsc` (tsconfig.communities) are clean; eslint and prettier are clean on the changed files.
+- **Open:**
+  1. **Feeding the brokered token into the atproto session agent.** The timeline view still uses the app's normal PDS login. The broker and connect flow are built and tested, but the session store needs an accessJwt-only account that refreshes through the broker rather than a refresh token. Next integration step.
+  2. **Janus clients.** Community iOS/Android/web Dev client ids aren't issued yet (draft Beau ask, not sent).
+  3. **"Community" as `CFBundleDisplayName`** could still hit ITMS-90129 at upload. If so, it's a one-line swap in brand.json.
+  4. **`CFBundleName`** derives from `expo.name` ("Signature Community", 19 characters). Apple suggests ≤ 15; that's a warning only.

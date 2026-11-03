@@ -4,10 +4,14 @@
 import {AOSignatureError, runtimeErrorCode} from './errors'
 import {type AOGrant} from './pkce'
 import {
+  type AOEnrollmentAsk,
   type AOMintedSession,
+  type AOPdsSession,
   type AOPickerList,
   type AORedeemResult,
+  decodeEnrollmentAsk,
   decodeMintedSession,
+  decodePdsSession,
   decodePickerList,
   decodeRedeem,
 } from './wire'
@@ -56,6 +60,18 @@ export interface AOClient {
     input: {handle: string; name: string},
   ): Promise<{handle: string; primary: string | null}>
   choosePrimary(token: string, handle: string): Promise<string>
+  /** Community's own terms: the ask and whether they're accepted. */
+  enrollment(token: string): Promise<{enrolled: boolean; ask: AOEnrollmentAsk}>
+  /** Accept Community's terms + privacy (exact versions) and optional consents. */
+  enroll(
+    token: string,
+    input: {ask: AOEnrollmentAsk; consents: Record<string, boolean>},
+  ): Promise<void>
+  /** A short-lived PDS accessJwt for this Signature session's DID. */
+  pdsSession(token: string, did: string): Promise<AOPdsSession>
+  /** Self-mint the custodied Community credential once, from a FULL PDS
+   *  sign-in (`fullAccessJwt`), which the runtime uses for this call only. */
+  pdsCredential(token: string, fullAccessJwt: string): Promise<void>
 }
 
 /** Every runtime call is leashed: a hung request is `transport` (and aborted)
@@ -120,9 +136,11 @@ function aoBearer(token: string): Record<string, string> {
 export function createAOClient(
   runtimeUrl: string,
   doFetch: AOFetch,
-  opts: {timeoutMs?: number} = {},
+  opts: {timeoutMs?: number; sessionPath?: string} = {},
 ): AOClient {
   const base = runtimeUrl.replace(/\/+$/, '')
+  // The per-lane session door (config.ts AO_SIGNATURE_SESSION_PATHS).
+  const sessionPath = opts.sessionPath ?? '/auth/janus/session'
   const ctx: CallCtx = {
     doFetch,
     timeoutMs: opts.timeoutMs ?? AO_REQUEST_TIMEOUT_MS,
@@ -141,7 +159,7 @@ export function createAOClient(
       if (link) body.link_code = link.linkCode
       const json = await call(
         ctx,
-        `${base}/auth/janus/session`,
+        `${base}${sessionPath}`,
         'POST',
         headers,
         body,
@@ -251,6 +269,60 @@ export function createAOClient(
         typeof json?.primary === 'string' && json.primary ? json.primary : null
       if (!primary) throw new AOSignatureError('refused', 502, 'unavailable')
       return primary
+    },
+
+    async enrollment(token) {
+      const json = (await call(
+        ctx,
+        `${base}/auth/ao/enrollment`,
+        'GET',
+        aoBearer(token),
+      )) as Record<string, unknown> | null
+      const ask = decodeEnrollmentAsk(json?.ask)
+      if (!ask) throw new AOSignatureError('refused', 502, 'unavailable')
+      return {enrolled: json?.enrolled === true, ask}
+    },
+
+    async enroll(token, {ask, consents}) {
+      const known = new Set(ask.consents.map(c => c.name))
+      const sent: Record<string, boolean> = {}
+      for (const [k, v] of Object.entries(consents))
+        if (known.has(k)) sent[k] = v
+      const json = (await call(
+        ctx,
+        `${base}/auth/ao/enroll`,
+        'POST',
+        aoBearer(token),
+        {
+          accept_terms: true,
+          accept_privacy: true,
+          terms_version: ask.termsVersion,
+          privacy_version: ask.privacyVersion,
+          consents: sent,
+        },
+      )) as Record<string, unknown> | null
+      if (json?.enrolled !== true) {
+        throw new AOSignatureError('refused', 502, 'unavailable')
+      }
+    },
+
+    async pdsSession(token, did) {
+      const s = decodePdsSession(
+        await call(ctx, `${base}/auth/ao/pds-session`, 'POST', aoBearer(token)),
+        did,
+      )
+      if (!s) throw new AOSignatureError('refused', 502, 'unavailable')
+      return s
+    },
+
+    async pdsCredential(token, fullAccessJwt) {
+      const json = (await call(ctx, `${base}/auth/ao/pds-credential`, 'POST', {
+        ...aoBearer(token),
+        'X-PDS-Authorization': `Bearer ${fullAccessJwt}`,
+      })) as Record<string, unknown> | null
+      if (json?.custodied !== true) {
+        throw new AOSignatureError('refused', 502, 'unavailable')
+      }
     },
   }
 }
