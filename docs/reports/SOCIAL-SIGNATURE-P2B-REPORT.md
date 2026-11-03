@@ -244,4 +244,8 @@ Elliott decided on 2026-11-03 (D2, relayed by Dispatch in round 419): App Store 
 - The plugin writes only the Android `app_name` string resource, and only when given a label.
 - The JS behaviour is dark: `AO_SIGNATURE_CONFIG` is null, and `dark.test.tsx` passes.
 
-**The display name itself is NOT dark.** A dark build shows "Community" under the icon and carries "Signature Community" as its store and bundle name. It can't be gated on the Signature env without splitting the decision: a dark build would keep the old name, and the arming build would rename it. That contradicts "rename and Signature ship together", so I left it ungated. **Flag for Elliott:** confirm that dark builds carry the new names. If not, gating is a few lines (read `brand.displayName` / `appStoreName` only when the Signature env is set), plus a golden regeneration.
+**The display name itself is NOT dark.** A dark build shows "Community" under the icon and carries "Signature Community" as its store and bundle name. It can't be gated on the Signature env without splitting the decision: a dark build would keep the old name, and the arming build would rename it. That contradicts "rename and Signature ship together", so I left it ungated. **Decided by Elliott (2026-11-03):** dark builds carry the new names; see below.
+
+#### Elliott's decision: the display name in dark builds (2026-11-03, relayed by Dispatch)
+**Accepted.** Community's names ("Community" on the home screen, "Signature Community" as the store and bundle name) may show in dark builds. The rename stays ungated, as built; only the sign-in behaviour is dark. No code change.
+
