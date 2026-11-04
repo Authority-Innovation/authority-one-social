@@ -105,6 +105,7 @@ describe('Signature lane with config UNSET', () => {
       needsAgent: true,
       refreshedAt: 0,
       reverify: false,
+      enrolled: true,
     })
     expect(getAOState().record).toBeNull()
     captureAOSignatureWebCallback()

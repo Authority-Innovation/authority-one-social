@@ -95,10 +95,15 @@ export interface AORedeemResult {
   session: AOMintedSession
   primary: string | null
   needsAgent: boolean
+  /** Community's OWN terms are accepted (Signature rollout P1, per-app
+   *  enrollment). The runtime answers `enrolled: false|true|null`; anything but
+   *  an explicit `true` is not enrolled — the terms screen shows, and an
+   *  already-enrolled person just sees "accepted" when it loads. */
+  enrolled: boolean
 }
 
 /**
- * POST /auth/janus/session → the AO session, or a thrown AOSignatureError.
+ * POST /auth/janus/<lane>/session → the AO session, or a thrown AOSignatureError.
  * `linkDid`: in link mode the answer must be `linked` to exactly the DID the
  * link code was minted for.
  */
@@ -138,6 +143,79 @@ export function decodeRedeem(
     primary,
     // No primary ⇒ the picker, whatever the flag says (fail toward the picker).
     needsAgent: r.needsAgent === true || !primary,
+    enrolled: r.enrolled === true,
+  }
+}
+
+export interface AOEnrollmentAsk {
+  app: string
+  termsUrl: string
+  privacyUrl: string
+  termsVersion: string
+  privacyVersion: string
+  /** Optional consents, each shown UNTICKED. */
+  consents: {name: string; version: string}[]
+}
+
+function httpsOrNull(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  try {
+    return new URL(v).protocol === 'https:' ? v : null
+  } catch {
+    return null
+  }
+}
+
+/** The runtime's enrollment ask (GET /auth/ao/enrollment `ask`, or a 403
+ *  `enrollment-required` body). FAIL-CLOSED: null unless every field is there. */
+export function decodeEnrollmentAsk(raw: unknown): AOEnrollmentAsk | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const termsUrl = httpsOrNull(r.termsUrl)
+  const privacyUrl = httpsOrNull(r.privacyUrl)
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+  const app = str(r.app)
+  const termsVersion = str(r.termsVersion)
+  const privacyVersion = str(r.privacyVersion)
+  if (!app || !termsUrl || !privacyUrl || !termsVersion || !privacyVersion) {
+    return null
+  }
+  const consents = (Array.isArray(r.consents) ? r.consents : []).flatMap(c => {
+    const o = c && typeof c === 'object' ? (c as Record<string, unknown>) : {}
+    const name = str(o.name)
+    const version = str(o.version)
+    return name && version ? [{name, version}] : []
+  })
+  return {app, termsUrl, privacyUrl, termsVersion, privacyVersion, consents}
+}
+
+export interface AOPdsSession {
+  did: string
+  handle: string | null
+  accessJwt: string
+  /** ms; null when the runtime could not state it (treat as short-lived). */
+  expiresAt: number | null
+}
+
+/** POST /auth/ao/pds-session → a short-lived PDS accessJwt for `did`. A
+ *  refresh token is never part of this answer and is never read. */
+export function decodePdsSession(
+  json: unknown,
+  did: string,
+): AOPdsSession | null {
+  if (!json || typeof json !== 'object') return null
+  const r = json as Record<string, unknown>
+  if (r.ok !== true || r.did !== did) return null
+  if (typeof r.accessJwt !== 'string' || r.accessJwt.split('.').length !== 3) {
+    return null
+  }
+  const exp =
+    typeof r.accessExpiresAt === 'string' ? Date.parse(r.accessExpiresAt) : NaN
+  return {
+    did,
+    handle: typeof r.handle === 'string' && r.handle ? r.handle : null,
+    accessJwt: r.accessJwt,
+    expiresAt: Number.isFinite(exp) ? exp : null,
   }
 }
 

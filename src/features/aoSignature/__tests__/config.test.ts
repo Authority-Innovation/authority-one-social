@@ -13,7 +13,7 @@ const full = {
   clientIdIos: 'ao-ios',
   clientIdAndroid: 'ao-android',
   clientIdWeb: 'ao-web',
-  scheme: 'authorityone-dev',
+  scheme: 'community-dev',
   appRedirectUri: 'https://app-dev.test/auth/janus/app-callback',
   webRedirectUri: 'https://web.test/auth/janus/callback',
 }
@@ -37,10 +37,10 @@ describe('AO Signature config (dark by default)', () => {
       clientId: 'ao-ios',
       runtimeUrl: 'https://runtime.test',
       redirectUri: 'https://app-dev.test/auth/janus/app-callback',
-      scheme: 'authorityone-dev',
-      callbackUrl: 'authorityone-dev://auth/janus/app-callback',
+      scheme: 'community-dev',
+      callbackUrl: 'community-dev://auth/janus/app-callback',
       authorizeUrl: 'https://janus.test/auth/v1/oauth/authorize',
-      scopes: 'openid email profile',
+      scopes: 'openid email',
     })
   })
 
@@ -54,7 +54,7 @@ describe('AO Signature config (dark by default)', () => {
       RT,
     )
     expect(c?.clientId).toBe('ao-android')
-    expect(c?.callbackUrl).toBe('authorityone-dev://auth/janus/app-callback')
+    expect(c?.callbackUrl).toBe('community-dev://auth/janus/app-callback')
   })
 
   it('web uses the web client + the web callback, no scheme', () => {

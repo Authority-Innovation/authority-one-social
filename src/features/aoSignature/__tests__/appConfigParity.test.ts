@@ -18,7 +18,7 @@ const full: Record<string, string> = {
   EXPO_PUBLIC_AO_SIGNATURE_RUNTIME_URL: `${RT}/`,
   EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS: 'ao-ios',
   EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID: 'ao-android',
-  EXPO_PUBLIC_AO_SIGNATURE_SCHEME: 'authorityone-dev',
+  EXPO_PUBLIC_AO_SIGNATURE_SCHEME: 'community-dev',
   EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI:
     'https://app-dev.test/auth/janus/app-callback',
 }
@@ -38,7 +38,7 @@ function toEnv(raw: Record<string, string | undefined>): AOSignatureEnv {
 const cases: Array<[string, Record<string, string | undefined>]> = [
   ['full', full],
   ['unset', {}],
-  ['scheme only', {EXPO_PUBLIC_AO_SIGNATURE_SCHEME: 'authorityone-dev'}],
+  ['scheme only', {EXPO_PUBLIC_AO_SIGNATURE_SCHEME: 'community-dev'}],
   [
     'android-callback path',
     {
@@ -113,7 +113,7 @@ const cases: Array<[string, Record<string, string | undefined>]> = [
   ],
 ]
 
-const D = 'authorityone-dev'
+const D = 'community-dev'
 const OFF = [null, null, null] as const
 /** The EXPECTED scheme per case: [iOS build, Android build, local prebuild].
  *  Agreement alone could be two copies of the same bug, so pin the answers. */

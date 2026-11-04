@@ -34,7 +34,7 @@ const rules = errors => [...new Set(errors.map(e => e.rule))]
 
 describe('lint-brand-config', () => {
   it('reads the Signature allow-list from the P2b config', () => {
-    expect(signatureSchemes).toEqual(['authorityone', 'authorityone-dev'])
+    expect(signatureSchemes).toEqual(['community', 'community-dev'])
   })
 
   it('passes on the default brand and the repo eas.json', () => {

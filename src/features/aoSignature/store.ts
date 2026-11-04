@@ -28,6 +28,9 @@ export interface AORecord {
   /** The runtime said `janus-reverify`: the token works until its exp, but it
    *  can no longer slide without a fresh Signature sign-in. */
   reverify: boolean
+  /** Community's own terms are accepted (per-app enrollment). False ⇒ the
+   *  terms screen, before the picker or anything else. */
+  enrolled: boolean
 }
 
 export interface AOState {
@@ -89,6 +92,9 @@ export function decodeRecord(
       r.needsAgent === true || !(typeof r.primary === 'string' && r.primary),
     refreshedAt: typeof r.refreshedAt === 'number' ? r.refreshedAt : 0,
     reverify: r.reverify === true,
+    // Only an explicit true survives a reload; anything else re-asks (the
+    // runtime would refuse with enrollment-required anyway).
+    enrolled: r.enrolled === true,
   }
 }
 

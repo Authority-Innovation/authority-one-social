@@ -20,7 +20,7 @@
 //                                            is only ever sent there)
 //   iOS:     EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS
 //   Android: EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID
-//   native:  EXPO_PUBLIC_AO_SIGNATURE_SCHEME       authorityone | authorityone-dev
+//   native:  EXPO_PUBLIC_AO_SIGNATURE_SCHEME       community | community-dev
 //            EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI   the runtime bounce (https)
 //   web:     EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_WEB
 //            EXPO_PUBLIC_AO_SIGNATURE_WEB_REDIRECT_URI   this web app's callback (https)
@@ -32,14 +32,27 @@ import {Platform} from 'react-native'
 
 import {AGENT_RUNTIME_BASE_URL} from '#/lib/agent-runtime/config'
 
-/** The bounce allow-list on the runtime (src/janus-bounce.js) for this app. */
-export const AO_SIGNATURE_SCHEMES = [
-  'authorityone',
-  'authorityone-dev',
-] as const
+/** The bounce allow-list on the runtime (src/janus-bounce.js) for this app.
+ *  Community (the renamed social app, Signature rollout D2) owns
+ *  `community(-dev)`; `authorityone(-dev)` now belongs to the Authority One
+ *  app (ex-Studio). */
+export const AO_SIGNATURE_SCHEMES = ['community', 'community-dev'] as const
 export type AOSignatureScheme = (typeof AO_SIGNATURE_SCHEMES)[number]
 
 export type AOSignaturePlatform = 'ios' | 'android' | 'web'
+
+/** The runtime's per-lane session door for each platform (Signature rollout
+ *  P1: one Janus client per lane; the door exchanges as THAT lane's client and
+ *  stamps the session's app = `community`). */
+export const AO_SIGNATURE_SESSION_PATHS: Record<AOSignaturePlatform, string> = {
+  ios: '/auth/janus/community-ios/session',
+  android: '/auth/janus/community-android/session',
+  web: '/auth/janus/community-web/session',
+}
+
+/** Janus enforces each client's registered scope allowlist: `openid email`
+ *  only (an extra `profile` is refused — Janus Dev handoff 2026-10-26). */
+export const AO_SIGNATURE_SCOPES = 'openid email'
 
 export interface AOSignatureConfig {
   platform: AOSignaturePlatform
@@ -56,6 +69,8 @@ export interface AOSignatureConfig {
   scheme: AOSignatureScheme | null
   /** Native only: what the in-app browser session waits for. */
   callbackUrl: string | null
+  /** The runtime session door this platform redeems at. */
+  sessionPath: string
   audience: string | null
   scopes: string
 }
@@ -182,8 +197,9 @@ export function parseAOSignatureConfig(
     redirectUri,
     scheme,
     callbackUrl,
+    sessionPath: AO_SIGNATURE_SESSION_PATHS[platform],
     audience,
-    scopes: 'openid email profile',
+    scopes: AO_SIGNATURE_SCOPES,
   }
 }
 

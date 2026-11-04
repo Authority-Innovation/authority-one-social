@@ -16,8 +16,8 @@ const grant: AOGrant = {
   code_verifier: 'v'.repeat(43),
   code_challenge_method: 'S256',
   redirect_uri: 'https://app-dev.test/auth/janus/app-callback',
-  state: 'as.authorityone-dev.r',
-  callback_state: 'as.authorityone-dev.r',
+  state: 'as.community-dev.r',
+  callback_state: 'as.community-dev.r',
   client_id: 'ao-social-ios-dev',
 }
 

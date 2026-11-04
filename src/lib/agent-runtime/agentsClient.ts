@@ -1,6 +1,9 @@
 import {logger} from '#/logger'
 import {isAOSignatureArmed} from '#/features/aoSignature/config'
-import {noteAONotProvisioned} from '#/features/aoSignature/session'
+import {
+  noteAOEnrollmentRequired,
+  noteAONotProvisioned,
+} from '#/features/aoSignature/session'
 import {getSupabaseAccessToken} from './authToken'
 import {AGENTS_ENDPOINT, AGENTS_PAUSE_ENDPOINT} from './config'
 
@@ -13,7 +16,15 @@ async function noteAONotProvisionedFrom(
   sentToken: string | undefined,
 ): Promise<void> {
   if (!isAOSignatureArmed()) return
-  const body = (await res.json().catch(() => null)) as {code?: unknown} | null
+  const body = (await res.json().catch(() => null)) as {
+    code?: unknown
+    error?: unknown
+  } | null
+  // Per-app enrollment (rollout P1): Community's terms come first.
+  if (body?.error === 'enrollment-required') {
+    noteAOEnrollmentRequired(sentToken)
+    return
+  }
   if (body?.code !== 'not-provisioned') return
   noteAONotProvisioned(sentToken)
 }

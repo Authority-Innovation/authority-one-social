@@ -111,6 +111,20 @@ export function aoSignatureErrorWords(error: unknown): MessageDescriptor {
       return msg`Authority One couldn't set up your account just now — nothing was created. Try again in a moment.`
     case 'janus-reverify':
       return msg`Continue with Authority Signature to stay signed in.`
+    case 'enrollment-required':
+      return msg`Accept Community's terms to continue.`
+    case 'terms-version-stale':
+      return msg`Community's terms were just updated — review them and accept again.`
+    case 'terms-not-accepted':
+      return msg`Tick both boxes to accept Community's terms and privacy policy.`
+    case 'pds-credential-unavailable':
+      return msg`Connect your Community account once to see your timeline.`
+    case 'full-sign-in-required':
+      return msg`Use your account password here, not an app password.`
+    case 'not-your-account':
+      return msg`That's a different account from the one you signed in with.`
+    case 'pds-session-invalid':
+      return msg`That sign-in didn't work — check your handle and password.`
     case 'unavailable':
     case 'ao-session-unavailable':
     case 'session-unavailable':

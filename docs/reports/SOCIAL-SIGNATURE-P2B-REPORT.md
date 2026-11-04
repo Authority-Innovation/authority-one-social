@@ -176,3 +176,76 @@ The code fixes of round 2 were right, but two regression tests passed with the f
 7. **`/public/chat`.** It gets the `aos1.` bearer as its optional viewer bearer for AO users. Confirm the runtime ignores or accepts it (that path is fail-open).
 8. **Notices.** `GET /auth/ao/notices` (`signature-linked`) isn't shown yet. Studio doesn't show it either.
 9. **Silent reverify.** The same as Studio: reverify is the ordinary sheet (one tap, non-ephemeral), not a silent refresh.
+
+## Signature rollout P5: Community (branch `sig/community-signin`, 2026-11-03)
+Pushed for PC review only. Nothing was merged, no EAS/TestFlight build was made, and nothing was sent to Beau. It's still dark behind `EXPO_PUBLIC_AO_SIGNATURE_*`.
+
+Base: `origin/fix/agent-live-review-2026-11-01` @ 985d2d93b, the latest PUSHED build line. It already contains P2b (#2), W1-T4 (#7) and W2 brand config (#13). The newer builds 46–48 live only on another lane's local branches, so rebase onto the build line once those are pushed.
+
+- **Names (Elliott):**
+  - App Store name "Signature Community" (`brand.appStoreName` → `expo.name`).
+  - Home-screen name "Community": `brand.displayName` → iOS `CFBundleDisplayName`, and Android `app_name` via the new `plugins/withAndroidAppLabelPlugin.js`. Without the plugin, Android would label the icon with `expo.name`.
+  - Bundle/package `com.authorityone.app` is unchanged.
+  - The brand golden (`scripts/brand-config/base-config.golden.json`) was regenerated deliberately for this rename; the only non-hash changes are the name, the display name and the plugin entry.
+- **Schemes:** `community` / `community-dev`, with state `as.community(-dev).<random>` (the runtime bounce allows them). `authorityone(-dev)` now belongs to the Authority One app.
+- **Lanes:** each platform redeems at its own runtime door: `/auth/janus/community-ios/session`, `/community-android/session`, `/community-web/session`. The runtime exchanges the code as that lane's client. Scopes `openid email` (Janus refuses `profile`).
+- **Per-app enrollment:** after the redeem, `enrolled !== true` shows Community's own terms screen (`components/Enrollment.tsx`) before the picker:
+  - two separate unticked boxes (terms, privacy) linking to the runtime's ask;
+  - an optional unticked marketing box;
+  - `POST /auth/ao/enroll` with the exact versions; a stale ask reloads and unticks.
+
+  A 403 `enrollment-required` to this session's bearer (picker calls, `/app/agents`) sends the person back to the terms screen.
+- **Timeline for Signature-only people:**
+  - `pdsBroker.ts` gets a short-lived PDS accessJwt from `POST /auth/ao/pds-session` (cached until a minute before expiry, one request at a time, dropped on invalidate or a session change).
+  - A 409 `pds-credential-unavailable` shows "Connect your Community account" (`components/ConnectCommunity.tsx`). That does one full password sign-in, hands it to `POST /auth/ao/pds-credential` (runtime branch `sig/rollout-p5-custody`), then ends it with `deleteSession`. The password and the full session are never stored.
+- **Tests:**
+  - aoSignature + brand/scripts suites: 23 suites, 225 tests, all pass (new: `community.test.ts`, `androidAppLabel.test.js`; enrollment cases added to session and shell tests).
+  - Full jest: 2747 pass, 1 fail. The failure is `src/lib/lexicon` (`group/post.json` hash vs the spike copy), and it fails identically on the base with these changes stashed.
+  - `tsgo` (tsconfig.check) and `tsc` (tsconfig.communities) are clean; eslint and prettier are clean on the changed files.
+- **Open:**
+  1. **Feeding the brokered token into the atproto session agent.** The timeline view still uses the app's normal PDS login. The broker and connect flow are built and tested, but the session store needs an accessJwt-only account that refreshes through the broker rather than a refresh token. Next integration step.
+  2. **Janus clients.** Community iOS/Android/web Dev client ids aren't issued yet (draft Beau ask, not sent).
+  3. **"Community" as `CFBundleDisplayName`** could still hit ITMS-90129 at upload. If so, it's a one-line swap in brand.json.
+  4. **`CFBundleName`** derives from `expo.name` ("Signature Community", 19 characters). Apple suggests ≤ 15; that's a warning only.
+
+### P5 review fixes (after review `edcf058f8`, round 419)
+The review (`review/edcf058f8-sig-p5-r419`) found HIGH 3, MED 3, LOW 4. Every HIGH and every MED is fixed below. Each fix has a test that goes RED when the fix is reverted.
+
+| Finding | Fix | Test that goes RED on revert |
+|---|---|---|
+| **H1** no committed test for the terms or self-mint screens | New render tests in `__tests__/screens.test.tsx`. The UI kit is stubbed with host elements that keep a toggle's value, a button's disabled state and a field's text, so the screens' own state and handlers are under test. A Shell test covers the order | `every box starts UNTICKED and Continue is disabled`; `one tick is not enough…`; `the press handler itself refuses without both ticks…`; `never self-mints on mount…`; `self-mint runs only on press, only with a handle AND a password…`; `Shell order: an unenrolled person WITH an agent sees Community's terms, never the self-mint screen` |
+| **H2** a PDS-session person with an agent never reached the terms | `hooks.ts`: the same-DID condition is now `!r.enrolled \|\| r.needsAgent` | `gate (review edcf058f8 H2)` (both cases) |
+| **H3** the rename ships with the env empty | Recorded below, with no code change | — |
+| **M1** a 403 `enrollment-required` on the self-mint screen didn't return to the terms | `ConnectCommunity.tsx` calls `noteAOEnrollmentRequired(record.token)`, both on load and on connect | `review M1: …` (both) |
+| **M2** the marketing tick survived a stale reload | `Enrollment.tsx` resets `consents` alongside terms and privacy | `review M2: a stale accept reloads the NEWER terms with EVERY box unticked, marketing included` |
+| **M3** other enrollment paths untested | Tests for decode fail-closed and the `agentsClient` send-back. `AgentPicker`'s send-back was not tested separately: it is the same `noteAOEnrollmentRequired` call, and `agentsClient` now pins the routing | `review edcf058f8 M3: only an explicit enrolled:true survives a reload…`; `agentsClientEnrollment.test.ts` (2) |
+
+**Mutation run:** 14 scripted reverts, each restored afterwards; all 14 go RED. They are: the terms, privacy and marketing boxes pre-ticked; the accept guard removed; the disabled state removed; the consents reset removed; self-mint on mount; the credential guard removed; M1 on load; M1 on connect; the H2 revert; terms only when `needsAgent`; decode fail-open; the `agentsClient` send-back removed.
+
+**Suites:**
+- aoSignature, scripts and agent-runtime: 54 suites, 689 tests, all pass.
+- Full jest: 2762 pass, 28 todo, 1 fail. The failure is the pre-existing `lexicon.test.ts` hash, confirmed pre-existing by the review.
+- `tsc` (communities) and `tsgo` (check) are clean; eslint and prettier are clean on the changed files.
+
+**LOW (not changed):** L1 (`pdsBroker` has no timeout), L2 (connected-copy wording and Shell docblock), L3 (`ask.app` not checked), L4 (`_(msg)` style).
+
+#### H3: the names are Elliott's decision (2026-11-03)
+Elliott decided on 2026-11-03 (D2, relayed by Dispatch in round 419): App Store name **"Signature Community"**, home-screen name **"Community"**. The rename and Signature ship together (D3).
+
+**What the rename changes in a DARK build.** I resolved `app.config.js` with every `EXPO_PUBLIC_AO_SIGNATURE_*` unset, at `985d2d93b` and at this head, and diffed the full output. Exactly three fields change:
+
+| Field | `985d2d93b` | this head |
+|---|---|---|
+| `expo.name` (store name, Android `app_name` default, iOS `CFBundleName`) | `Authority-One` | `Signature Community` |
+| `expo.ios.infoPlist.CFBundleDisplayName` | `authority-one` | `Community` |
+| `expo.plugins` | — | `+ ["./plugins/withAndroidAppLabelPlugin.js", {"label": "Community"}]` |
+
+- Nothing else differs: bundle and package ids, schemes, entitlements, permissions and every other plugin are the same.
+- The plugin writes only the Android `app_name` string resource, and only when given a label.
+- The JS behaviour is dark: `AO_SIGNATURE_CONFIG` is null, and `dark.test.tsx` passes.
+
+**The display name itself is NOT dark.** A dark build shows "Community" under the icon and carries "Signature Community" as its store and bundle name. It can't be gated on the Signature env without splitting the decision: a dark build would keep the old name, and the arming build would rename it. That contradicts "rename and Signature ship together", so I left it ungated. **Decided by Elliott (2026-11-03):** dark builds carry the new names; see below.
+
+#### Elliott's decision: the display name in dark builds (2026-11-03, relayed by Dispatch)
+**Accepted.** Community's names ("Community" on the home screen, "Signature Community" as the store and bundle name) may show in dark builds. The rename stays ungated, as built; only the sign-in behaviour is dark. No code change.
+

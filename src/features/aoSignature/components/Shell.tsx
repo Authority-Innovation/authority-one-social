@@ -13,6 +13,8 @@ import {Text} from '#/components/Typography'
 import {useAOSignatureState} from '../hooks'
 import {AOAccountActions} from './AccountActions'
 import {AOAgentPicker} from './AgentPicker'
+import {AOConnectCommunity} from './ConnectCommunity'
+import {AOEnrollment} from './Enrollment'
 
 /**
  * What a person signed in ONLY with Authority Signature sees (no PDS session in
@@ -46,7 +48,11 @@ export function AOSignatureShell({gate}: {gate: 'loading' | 'shell'}) {
         paddingTop: insets.top,
         paddingBottom: insets.bottom,
       }}>
-      {record.needsAgent ? (
+      {!record.enrolled ? (
+        // Community's own terms come first (per-app enrollment): keyed by the
+        // session so a new sign-in never inherits an earlier screen's ticks.
+        <AOEnrollment key={record.sid} token={record.token} sid={record.sid} />
+      ) : record.needsAgent ? (
         <AOAgentPicker
           // One picker per AO session: a session swap (new sign-in,
           // reverify) remounts it, so no state or in-flight answer from the
@@ -58,14 +64,9 @@ export function AOSignatureShell({gate}: {gate: 'loading' | 'shell'}) {
       ) : (
         <View style={[a.p_xl, a.gap_lg]}>
           <Text style={[a.text_2xl, a.font_bold]}>
-            <Trans>You're signed in to Authority One</Trans>
+            <Trans>You're signed in to Community</Trans>
           </Text>
-          <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
-            <Trans>
-              Your agent is ready. The social timeline still needs your
-              Authority One handle sign-in for now.
-            </Trans>
-          </Text>
+          <AOConnectCommunity key={record.sid} record={record} />
           <Button
             label={_(msg`Sign in with your handle`)}
             color="primary"

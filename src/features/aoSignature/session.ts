@@ -40,6 +40,7 @@ export function recordFromRedeem(
     needsAgent: r.needsAgent,
     refreshedAt: now,
     reverify: false,
+    enrolled: r.enrolled,
   }
 }
 
@@ -254,6 +255,26 @@ export function noteAONotProvisioned(token: string | null | undefined): void {
   const record = getAOState().record
   if (!record || record.needsAgent || !token || token !== record.token) return
   void patchAORecordIf(sessionRef(record), {needsAgent: true, primary: null})
+}
+
+/**
+ * The runtime answered 403 `enrollment-required` to a call carrying THIS AO
+ * session's bearer (`token`): back to Community's terms screen. A refusal to
+ * another account's token says nothing about this session.
+ */
+export function noteAOEnrollmentRequired(
+  token: string | null | undefined,
+): void {
+  const record = getAOState().record
+  if (!record || !record.enrolled || !token || token !== record.token) return
+  void patchAORecordIf(sessionRef(record), {enrolled: false})
+}
+
+/** Community's terms were accepted for the session `sid` ran for. */
+export async function adoptEnrollment(sid: string): Promise<void> {
+  const record = getAOState().record
+  if (!record || record.sid !== sid) return
+  await patchAORecordIf(sessionRef(record), {enrolled: true})
 }
 
 /** The picker finished: this is the person's primary now — for the session

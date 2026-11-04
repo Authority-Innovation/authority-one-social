@@ -13,6 +13,7 @@ import {type AOClient, createAOClient} from './client'
 import {AO_SIGNATURE_CONFIG} from './config'
 import {getCryptoPort} from './cryptoPort'
 import {AOSignatureError} from './errors'
+import {createPdsBroker, type PdsBroker} from './pdsBroker'
 import {buildAuthorizeUrl, createFlow} from './pkce'
 import {adoptRedeem, onPdsLogout} from './session'
 import {
@@ -27,15 +28,26 @@ import {getAOState} from './store'
 export {captureAOSignatureWebCallback}
 
 let client: AOClient | null = null
+let broker: PdsBroker | null = null
 
 /** The runtime client, or null while dark. */
 export function aoClient(): AOClient | null {
   const cfg = AO_SIGNATURE_CONFIG
   if (!cfg) return null
   if (!client) {
-    client = createAOClient(cfg.runtimeUrl, (url, init) => fetch(url, init))
+    client = createAOClient(cfg.runtimeUrl, (url, init) => fetch(url, init), {
+      sessionPath: cfg.sessionPath,
+    })
   }
   return client
+}
+
+/** The Community PDS-session broker, or null while dark. */
+export function aoPdsBroker(): PdsBroker | null {
+  const c = aoClient()
+  if (!c) return null
+  if (!broker) broker = createPdsBroker(c)
+  return broker
 }
 
 function deps(): AOSignInDeps {

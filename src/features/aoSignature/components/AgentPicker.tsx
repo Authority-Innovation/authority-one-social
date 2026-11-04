@@ -11,8 +11,8 @@ import * as TextField from '#/components/forms/TextField'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {aoClient} from '../controller'
-import {aoPickerErrorWords} from '../errors'
-import {adoptPrimary} from '../session'
+import {aoPickerErrorWords, AOSignatureError} from '../errors'
+import {adoptPrimary, noteAOEnrollmentRequired} from '../session'
 import {usePickerMachine} from './usePickerMachine'
 
 /**
@@ -29,6 +29,19 @@ export function AOAgentPicker({token, sid}: {token: string; sid: string}) {
   useEffect(() => {
     if (state.phase.name === 'done') void adoptPrimary(sid, state.phase.primary)
   }, [state.phase, sid])
+
+  // Per-app enrollment: a picker call refused `enrollment-required` sends the
+  // person back to Community's terms (for THIS session's token only).
+  useEffect(() => {
+    const p = state.phase
+    if (
+      p.name === 'failed' &&
+      p.error instanceof AOSignatureError &&
+      p.error.code === 'enrollment-required'
+    ) {
+      noteAOEnrollmentRequired(token)
+    }
+  }, [state.phase, token])
 
   const phase = state.phase
   const busy = phase.name === 'creating' || phase.name === 'selecting'
