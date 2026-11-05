@@ -10,6 +10,7 @@ import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
+import {canShowMemberContent} from '../access'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
 import {
   useCommunityRosterQueries,
@@ -61,6 +62,16 @@ function MembersRoster({community}: {community: CommunityDescriptor}) {
   const timeline = useCommunityTimelineQuery({community})
   const postIds = topLevelPostIds(timeline.data?.pages)
   const rosters = useCommunityRosterQueries({community, postIds})
+  // A failed refetch keeps the old pages and rosters, so check before using them.
+  const allowed = canShowMemberContent(community, timeline.error?.error)
+
+  if (!allowed) {
+    return (
+      <Text style={[a.px_lg, a.text_md, t.atoms.text_contrast_medium]}>
+        <Trans>Only members can see who else is in this community.</Trans>
+      </Text>
+    )
+  }
 
   const loaded = rosters.flatMap(r => (r.data ? [r.data] : []))
   const rows = toRosterRows(loaded, {

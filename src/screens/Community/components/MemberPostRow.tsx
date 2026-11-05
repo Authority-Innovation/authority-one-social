@@ -20,9 +20,12 @@ import {type MemberPostRowData} from '../memberRows'
 export function MemberPostRow({
   post,
   agentDid,
+  menu,
 }: {
   post: MemberPostRowData
   agentDid?: string
+  /** The post's actions, shown at the end of the header line. */
+  menu?: React.ReactNode
 }) {
   const t = useTheme()
   const {i18n} = useLingui()
@@ -92,6 +95,7 @@ export function MemberPostRow({
               )}
             </TimeElapsed>
           ) : null}
+          {menu ? <View style={[a.ml_auto]}>{menu}</View> : null}
         </View>
         <Text emoji style={[a.text_md, a.leading_snug]}>
           {post.text}

@@ -314,6 +314,23 @@ export default defineConfig(
   },
 
   /**
+   * e2e/clickthrough - the Node-side Playwright harness. Plain CommonJS that
+   * reads untyped JSON (fixtures, runtime responses), so the type-aware
+   * no-unsafe rules only add noise here.
+   */
+  {
+    files: ['e2e/clickthrough/**/*.{js,ts}'],
+    rules: {
+      'import-x/no-nodejs-modules': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+    },
+  },
+
+  /**
    * Test files configuration
    */
   {

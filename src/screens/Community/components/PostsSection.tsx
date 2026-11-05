@@ -1,13 +1,20 @@
+import {useEffect} from 'react'
 import {View} from 'react-native'
 import {Trans} from '@lingui/react/macro'
+import {useQueryClient} from '@tanstack/react-query'
 
+import {useSession} from '#/state/session'
 import {atoms as a, useTheme} from '#/alf'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
+import {canShowMemberContent} from '../access'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
 import {toMemberPostRows} from '../memberRows'
-import {useCommunityTimelineQuery} from '../queries'
+import {withoutBlocked} from '../moderation'
+import {createCommunityQueryKey, useCommunityTimelineQuery} from '../queries'
+import {useBlockedMembers} from '../useBlockedMembers'
+import {MemberPostMenu} from './MemberPostMenu'
 import {MemberPostRow} from './MemberPostRow'
 
 export function PostsSection({community}: {community: CommunityDescriptor}) {
@@ -27,9 +34,25 @@ export function PostsSection({community}: {community: CommunityDescriptor}) {
 }
 
 function MembersTimeline({community}: {community: CommunityDescriptor}) {
-  const {data, isLoading, isError} = useCommunityTimelineQuery({community})
-  const posts = toMemberPostRows(data?.pages)
+  const {data, isLoading, isError, error} = useCommunityTimelineQuery({
+    community,
+  })
+  const {blocked} = useBlockedMembers({communityId: community.id})
+  const queryClient = useQueryClient()
+  const viewer = useSession().currentAccount?.did ?? ''
+  const allowed = canShowMemberContent(community, error?.error)
+  const posts = withoutBlocked(toMemberPostRows(data?.pages), blocked)
 
+  // The door has stopped treating this person as a member, so the cached
+  // descriptor is out of date. Reading it again lets the home catch up.
+  useEffect(() => {
+    if (allowed) return
+    void queryClient.invalidateQueries({
+      queryKey: createCommunityQueryKey({id: community.id, viewer}),
+    })
+  }, [allowed, queryClient, community.id, viewer])
+
+  if (!allowed) return <WallPlaceholder />
   if (isLoading) return <SectionLoader />
   if (isError) return <PostsError />
   if (posts.length === 0) return <EmptyPosts />
@@ -40,6 +63,7 @@ function MembersTimeline({community}: {community: CommunityDescriptor}) {
           key={post.id}
           post={post}
           agentDid={community.agentDid}
+          menu={<MemberPostMenu community={community} post={post} />}
         />
       ))}
     </View>

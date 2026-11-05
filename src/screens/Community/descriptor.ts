@@ -94,9 +94,28 @@ export function parseAccent(v: unknown): string | undefined {
   return raw && HEX.test(raw) ? raw : undefined
 }
 
+/**
+ * Whether the response itself says the caller is a member. The runtime door
+ * sends no `role`; it answers GET /:id to current members only and, with admins
+ * on, always carries `viewer_is_admin` there (`viewerIsAdmin` is set only when
+ * that key is present). With admins off it says nothing, and that is not the
+ * same as "not a member": see `readCommunityHome` in `./access.ts`.
+ * `role` is not in the door contract; it is still read off the raw response, as
+ * before (open item in the e31e0aa7 report).
+ */
+export function doorStatesMembership(community: Community): boolean {
+  const raw: Record<string, unknown> = community
+  return !!raw.role || typeof community.viewerIsAdmin === 'boolean'
+}
+
+/**
+ * `joined` is what the join record says, for a response that doesn't say
+ * itself. It gives membership only, never admin.
+ */
 export function toDescriptor(
   id: string,
   community: Community,
+  {joined = false}: {joined?: boolean} = {},
 ): CommunityDescriptor {
   const raw: Record<string, unknown> = community
   const config = obj(raw.config)
@@ -156,13 +175,7 @@ export function toDescriptor(
     runBy: str(raw.runBy) ?? str(brand?.displayName),
     memberCount:
       typeof raw.memberCount === 'number' ? raw.memberCount : undefined,
-    // The runtime door sends no `role`; it answers GET /:id to current members
-    // only and, with admins on, always carries `viewer_is_admin` there
-    // (`viewerIsAdmin` is set only when that key is present). Either marks a member.
-    // `role` is not in the door contract; it is still read off the raw
-    // response, as before, so this stays a type-only change (open item in the
-    // e31e0aa7 report).
-    isMember: !!raw.role || typeof community.viewerIsAdmin === 'boolean',
+    isMember: doorStatesMembership(community) || joined,
     consentVersion,
     rules: str(raw.rules),
     rulesUrl: str(moderation?.rulesUrl) ?? str(raw.rulesUrl),
@@ -177,7 +190,7 @@ export function toDescriptor(
  * non-member of a walled community gets no read at all.
  */
 export function postsSource(
-  d: CommunityDescriptor,
+  d: Pick<CommunityDescriptor, 'tier' | 'isMember' | 'groupUri'>,
 ): 'runtime' | 'group' | 'none' {
   if (d.tier === 'public') return d.groupUri ? 'group' : 'none'
   return d.isMember ? 'runtime' : 'none'

@@ -71,6 +71,29 @@ export function gateComposerWrite(
   return {allowed: true, route: 'pds'}
 }
 
+/**
+ * Starts a runtime video upload only when the target allows it. The bytes leave
+ * the device the moment the upload starts, so the check has to come first: a
+ * refused publish later would be too late.
+ */
+export function startAuthorityVideoGuarded({
+  resolution,
+  onRefused,
+  start,
+}: {
+  resolution: ResolvedComposerTarget
+  onRefused: (refusal: ComposerWriteGateRefusal) => void
+  start: () => void
+}): boolean {
+  const gate = gateComposerWrite(resolution, {kind: 'select-video'})
+  if (!gate.allowed) {
+    onRefused(gate.refusal)
+    return false
+  }
+  start()
+  return true
+}
+
 type VideoOf<Loaded extends {restoredVideos: Map<number, unknown>}> =
   Loaded['restoredVideos'] extends Map<number, infer V> ? V : never
 

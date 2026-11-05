@@ -6,6 +6,7 @@
  */
 import {
   type InfiniteData,
+  type QueryClient,
   useInfiniteQuery,
   useQueries,
   useQuery,
@@ -16,7 +17,8 @@ import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
 import {useSession} from '#/state/session'
 import {COMMUNITIES_ENABLED} from '#/env'
-import {type CommunityDescriptor, postsSource, toDescriptor} from './descriptor'
+import {readCommunityHome} from './access'
+import {type CommunityDescriptor, postsSource} from './descriptor'
 
 export class CommunityReadError extends Error {
   constructor(public error: communitiesClient.CommunitiesError) {
@@ -44,9 +46,9 @@ export function useCommunityQuery({id}: {id: string}) {
     enabled: COMMUNITIES_ENABLED && !!id,
     staleTime: STALE.MINUTES.ONE,
     async queryFn() {
-      const res = await communitiesClient.getCommunity(id)
+      const res = await readCommunityHome(id)
       if (!res.ok) throw new CommunityReadError(res.error)
-      return toDescriptor(id, res.data)
+      return res.data
     },
   })
 }
@@ -155,4 +157,23 @@ export function useCommunityAgentGrantQuery({
       return res.data.on
     },
   })
+}
+
+/**
+ * Drops what only a member may hold, once the caller has left or the door has
+ * refused them. Leaves the descriptor alone: on a refusal the home is still
+ * watching it, and removing it would refetch, refuse and land here again.
+ */
+export function removeCommunityMemberContent(
+  queryClient: QueryClient,
+  {id, viewer}: {id: string; viewer: string},
+) {
+  queryClient.removeQueries({
+    queryKey: createCommunityTimelineQueryKey({id, viewer}),
+  })
+  queryClient.removeQueries({
+    queryKey: createCommunityAgentGrantQueryKey({id, viewer}),
+  })
+  // Partial on purpose: a roster's key also carries its post id.
+  queryClient.removeQueries({queryKey: ['communityRoster', {id, viewer}]})
 }

@@ -205,6 +205,7 @@ import {
   type ComposerWriteGateRefusal,
   gateComposerWrite,
   restoreDraftGuarded,
+  startAuthorityVideoGuarded,
 } from './state/writeGate'
 import {type TextInputRef} from './text-input/TextInput.types'
 import {getVideoMetadata} from './videos/pickVideo'
@@ -395,7 +396,7 @@ export const ComposePost = ({
     })
   }, [])
 
-  const onSelectAuthorityVideo = useCallback(
+  const startAuthorityVideo = useCallback(
     (asset: ImagePickerAsset) => {
       const filename =
         (asset.fileName && asset.fileName.trim()) || l`your video`
@@ -488,6 +489,16 @@ export const ComposePost = ({
     },
     [l],
   )
+
+  // The upload sends the bytes to the runtime at once, so a target that can't
+  // take a video has to be refused here, before anything leaves the device.
+  const onSelectAuthorityVideo = (asset: ImagePickerAsset) => {
+    startAuthorityVideoGuarded({
+      resolution: targetResolution,
+      onRefused: refusal => setError(writeRefusalMessage(refusal)),
+      start: () => startAuthorityVideo(asset),
+    })
+  }
 
   /**
    * Track when a draft was created so we can measure draft age in metrics.
@@ -1822,6 +1833,7 @@ export const ComposePost = ({
         onSelectVideo={selectVideo}
         authorityVideo={authorityVideo}
         onSelectAuthorityVideo={onSelectAuthorityVideo}
+        authorityVideoRefused={!pdsWriteGate.allowed}
         onClearAuthorityVideo={onClearAuthorityVideo}
         onAddPost={() => {
           composerDispatch({
@@ -2569,6 +2581,7 @@ function ComposerFooter({
   onSelectVideo,
   authorityVideo,
   onSelectAuthorityVideo,
+  authorityVideoRefused,
   onClearAuthorityVideo,
   onAddPost,
   currentLanguages,
@@ -2584,6 +2597,7 @@ function ComposerFooter({
   onSelectVideo: (postId: string, asset: ImagePickerAsset) => void
   authorityVideo: AuthorityVideoState | null
   onSelectAuthorityVideo: (asset: ImagePickerAsset) => void
+  authorityVideoRefused: boolean
   onClearAuthorityVideo: () => void
   onAddPost: () => void
   currentLanguages: string[]
@@ -2691,7 +2705,7 @@ function ComposerFooter({
   // post). When a video is attached, the media/camera/GIF buttons are disabled;
   // when other media is present (or the flag is off), the video button is.
   const hasAuthorityVideo = VIDEO_POSTS_ENABLED && !!authorityVideo
-  const videoBtnDisabled = !!media || hasAuthorityVideo
+  const videoBtnDisabled = !!media || hasAuthorityVideo || authorityVideoRefused
   const otherMediaDisabledByVideo = hasAuthorityVideo
 
   return (

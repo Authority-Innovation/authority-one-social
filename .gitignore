@@ -101,6 +101,11 @@ stats.json
 # environment variables
 .env
 .env.*
+# Clickthrough harness: the devtest credential and the run artifacts. The
+# credential file is covered by .env.* too; it is named here so a change to
+# that rule can't expose it.
+/e2e/clickthrough/.env.local
+/e2e/clickthrough/artifacts/
 
 # Firebase (Android) Google services
 google-services.json

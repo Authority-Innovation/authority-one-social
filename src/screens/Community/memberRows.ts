@@ -12,6 +12,8 @@ export type MemberPostRowData = {
   authorHandle?: string
   /** What the row looks the profile up by: the author DID, else the handle. */
   authorActor?: string
+  /** The door's `authorId`: what a remove or a ban names. */
+  memberId?: string
   author: {did?: string; is_agent?: boolean; avatar?: string}
 }
 
@@ -67,6 +69,7 @@ export function toMemberPostRows(pages: unknown): MemberPostRowData[] {
         authorHandle: handle,
         authorActor:
           did ?? handle ?? (authorId?.startsWith('did:') ? authorId : undefined),
+        memberId: authorId,
         author: {
           did,
           is_agent: rawAuthor.is_agent === true,

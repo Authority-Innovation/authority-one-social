@@ -86,4 +86,10 @@ export type Account = {
    * Recently selected GIFs in the GIF picker. Most recent first, capped at 20.
    */
   recentGifs?: Gif[]
+
+  /**
+   * People this account has blocked in a community, by community id. Local to
+   * this device until the runtime door has a block of its own.
+   */
+  communityBlockedMembers?: Record<string, string[]>
 }

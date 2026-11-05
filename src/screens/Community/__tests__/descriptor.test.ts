@@ -208,6 +208,15 @@ describe('toDescriptor', () => {
     )
   })
 
+  it('takes membership, never admin, from the join record', () => {
+    const joined = toDescriptor('c1', community(), {joined: true})
+    expect(joined.isMember).toBe(true)
+    expect(joined.viewerIsAdmin).toBe(false)
+    expect(toDescriptor('c1', community(), {joined: false}).isMember).toBe(
+      false,
+    )
+  })
+
   it('falls back to the id for a missing name', () => {
     expect(toDescriptor('c1', community({name: ''})).name).toBe('c1')
   })

@@ -3,9 +3,11 @@
  * consent rules can be tested without rendering.
  *
  * Rules this file carries (mockup (d)):
+ * - Joining is open: anyone can join, with no invite and no approval. An
+ *   admission rule, if one is ever added, belongs in `consentGateFor` and
+ *   `agreeAndJoin`, the one path every join takes. The door can still refuse.
  * - Consent comes first. Nothing here calls `join` unless the person ticked
  *   the consent box.
- * - An invite never counts as consent. Nothing here reads an invite.
  * - The consent row stores the wording version. The version is the door's
  *   join-info `wording_version` (GET /:id/join-info, the one community route a
  *   non-member reaches), and join is offered only when this build ships the
@@ -16,19 +18,22 @@
  *   version a member accepted before, so this screen cannot ask an existing
  *   member again when the version moves on. That needs a member accepted
  *   version from the runtime door (open item).
- * - The agent grant is a separate call, made only when the person turned the
- *   toggle on. It is never implied by membership.
+ * - The agent grant is not part of joining. It gives the community's agent
+ *   access to the person's content, and join-info cannot say whether a
+ *   community has an agent, so it is offered only on the community home once
+ *   the person is a member (AgentGrantRow). Version 2 of the wording says so;
+ *   version 1 offered a toggle that named the person's own agent, which the
+ *   grant never touched.
  */
 import {
   type CommunitiesError,
   type CommunityJoinInfo,
   type CommunityJoinResult,
   join,
-  setAgentGrant,
 } from '#/lib/agent-runtime/communitiesClient'
 
 /** The wording version of the consent copy this build ships. */
-export const CONSENT_WORDING_VERSION = '1'
+export const CONSENT_WORDING_VERSION = '2'
 
 /**
  * Consent versions this build has copy for. The screen shows the copy for
@@ -76,35 +81,46 @@ export function consentGateFor(
 }
 
 export type JoinOutcome =
-  | {ok: true; membership: CommunityJoinResult; agentGrantFailed: boolean}
+  | {ok: true; membership: CommunityJoinResult}
   | {ok: false; reason: 'no_consent'}
   | {ok: false; reason: 'unsupported_version'}
+  | {ok: false; reason: 'refused'}
   | {ok: false; reason: 'join_failed'; error: CommunitiesError}
 
 export type JoinClient = {
   join: typeof join
-  setAgentGrant: typeof setAgentGrant
 }
 
-const defaultClient: JoinClient = {join, setAgentGrant}
+const defaultClient: JoinClient = {join}
+
+/**
+ * The door answered and said no, so trying again won't help. 408 and 429 are
+ * 4xx but do clear on a retry. 401 never gets here (the client reads it as
+ * `signed_out`).
+ */
+function isJoinRefusal(error: CommunitiesError): boolean {
+  return (
+    error.kind === 'http' &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429
+  )
+}
 
 /**
  * "Agree and join". Joins with the given consent version, which must be one
- * this build has copy for, then sets the agent grant only if the person turned
- * it on. A failed grant does not undo the membership; the person can turn it
- * on later from the community.
+ * this build has copy for.
  */
 export async function agreeAndJoin(
   {
     id,
     consentVersion,
     consented,
-    agentGrant,
   }: {
     id: string
     consentVersion: string
     consented: boolean
-    agentGrant: boolean
   },
   client: JoinClient = defaultClient,
 ): Promise<JoinOutcome> {
@@ -118,12 +134,11 @@ export async function agreeAndJoin(
   // refuses anything else); supported versions are numeric strings.
   const joined = await client.join(id, Number(consentVersion))
   if (!joined.ok) {
-    return {ok: false, reason: 'join_failed', error: joined.error}
+    return isJoinRefusal(joined.error)
+      ? {ok: false, reason: 'refused'}
+      : {ok: false, reason: 'join_failed', error: joined.error}
   }
-  let agentGrantFailed = false
-  if (agentGrant === true) {
-    const grant = await client.setAgentGrant(id, true)
-    agentGrantFailed = !grant.ok
-  }
-  return {ok: true, membership: joined.data, agentGrantFailed}
+  // A 2xx can still say no, and must not welcome someone who isn't in.
+  if (joined.data.joined !== true) return {ok: false, reason: 'refused'}
+  return {ok: true, membership: joined.data}
 }

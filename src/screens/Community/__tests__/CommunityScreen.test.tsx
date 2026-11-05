@@ -34,6 +34,7 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getCommunity: jest.fn(),
+  listMyCommunities: jest.fn(),
   getTimeline: jest.fn(),
   getAgentGrant: jest.fn(),
   setAgentGrant: jest.fn(),
@@ -123,24 +124,28 @@ jest.mock('#/view/com/util/UserAvatar', () => {
   return {UserAvatar: avatar}
 })
 
-const mockOpenJoin = jest.fn()
 jest.mock('#/components/Dialog', () => ({
   useDialogControl: () => ({
-    id: 'join',
+    id: 'dialog',
     ref: {current: null},
-    open: mockOpenJoin,
+    open: jest.fn(),
     close: jest.fn(),
   }),
 }))
 
-jest.mock('../components/JoinConsentEntry', () => {
-  const entry = () => null
-  return {JoinConsentEntry: entry}
-})
-
 // The real composer entry renders; this records its props, and the composer
 // itself is a mock so a press can be checked for its target.
 const mockComposerEntry = jest.fn((_props: {communityId: string}) => null)
+// These pull in the menu, the prompt and device storage. Their rules are tested
+// in scripts/communities/r474 without rendering.
+jest.mock('../components/MemberPostMenu', () => ({MemberPostMenu: () => null}))
+jest.mock('../components/MemberActionsSection', () => ({
+  MemberActionsSection: () => null,
+}))
+jest.mock('../useBlockedMembers', () => ({
+  useBlockedMembers: () => ({blocked: [], block: () => {}}),
+}))
+
 jest.mock('../components/CommunityComposerEntry', () => {
   const {createElement} = require('react') as typeof import('react')
   const actual = jest.requireActual<{
@@ -185,6 +190,9 @@ import {type DoorItem} from '#/lib/communities/doorContract'
 
 const getCommunity = communitiesClient.getCommunity as jest.Mock<
   typeof communitiesClient.getCommunity
+>
+const listMyCommunities = communitiesClient.listMyCommunities as jest.Mock<
+  typeof communitiesClient.listMyCommunities
 >
 const getTimeline = communitiesClient.getTimeline as jest.Mock<
   typeof communitiesClient.getTimeline
@@ -320,6 +328,7 @@ beforeEach(() => {
   mockViewerHandle = undefined
   mockProfiles = {}
   jest.clearAllMocks()
+  listMyCommunities.mockResolvedValue({ok: true, data: []})
   getThreadRoster.mockImplementation((_id, postId) =>
     Promise.resolve({ok: true, data: {postId, roster: []}}),
   )
@@ -387,12 +396,42 @@ describe('Community home - non-member', () => {
     expect(mockComposerEntry).not.toHaveBeenCalled()
   })
 
-  it('opens the join-consent entry from the join button', async () => {
-    const r = renderScreen()
+  it('goes to the join screen from the join button', async () => {
+    const r = renderScreen({id: 'btb'})
     fireEvent.press(
       await r.findByTestId('communityJoinButton', {}, {timeout: 3000}),
     )
-    expect(mockOpenJoin).toHaveBeenCalledTimes(1)
+    expect(mockNavigate).toHaveBeenCalledWith('CommunityJoin', {id: 'btb'})
+  })
+})
+
+describe('Community home - the door refuses a member read', () => {
+  it.each([403, 404])(
+    'offers the join screen on a %i, and reads nothing else',
+    async status => {
+      getCommunity.mockResolvedValue({
+        ok: false,
+        error: {kind: 'http', status},
+      })
+      const r = renderScreen({id: 'btb'})
+      await r.findByTestId('communityNotMember', {}, {timeout: 3000})
+      expect(r.queryByTestId('communityError')).toBeNull()
+      expect(getTimeline).not.toHaveBeenCalled()
+      fireEvent.press(r.getByTestId('communityJoinButton'))
+      expect(mockNavigate).toHaveBeenCalledWith('CommunityJoin', {id: 'btb'})
+    },
+  )
+
+  it('shows the wall, not posts, when the timeline is refused', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
+    getTimeline.mockResolvedValue({
+      ok: false,
+      error: {kind: 'http', status: 403},
+    })
+    const r = renderScreen({id: 'btb'})
+    await r.findByTestId('communityWallPlaceholder', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityMembersTimeline')).toBeNull()
+    expect(r.queryByTestId('communityPostsError')).toBeNull()
   })
 })
 
@@ -932,6 +971,65 @@ describe('Community home - Admin badge (build 41)', () => {
   })
 })
 
+/**
+ * A1. With its admin role off the door sends no `viewer_is_admin`, so nothing
+ * in GET /:id says the caller is a member. The caller's own list decides.
+ */
+describe('Community home - the door omits viewer_is_admin', () => {
+  function omitted(): Community {
+    const {viewerIsAdmin: _admin, ...noAdminKey} = memberCommunity()
+    return noAdminKey
+  }
+
+  beforeEach(() => {
+    getCommunity.mockResolvedValue({ok: true, data: omitted()})
+  })
+
+  it('a joined member gets the member home, with no wall and no Join button', async () => {
+    const joined = omitted()
+    listMyCommunities.mockResolvedValue({ok: true, data: [joined]})
+    // The route must name the community the list holds ('garden' in
+    // door.json): the app matches the list by id, and another community on
+    // the list is not a membership of this one.
+    const r = renderScreen({id: joined.id})
+    await r.findByTestId('communityMemberBadge', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityJoinButton')).toBeNull()
+    expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
+    expect(r.queryByTestId('communityAdminBadge')).toBeNull()
+    await waitFor(() => expect(getTimeline).toHaveBeenCalled())
+  })
+
+  it('someone their list does not name gets the wall and the Join button', async () => {
+    // Their list holds 'garden', not the 'btb' on the route.
+    listMyCommunities.mockResolvedValue({ok: true, data: [omitted()]})
+    const r = renderScreen()
+    await r.findByTestId('communityJoinButton', {}, {timeout: 3000})
+    expect(r.getByTestId('communityWallPlaceholder')).toBeTruthy()
+    expect(r.queryByTestId('communityMemberBadge')).toBeNull()
+    expect(getTimeline).not.toHaveBeenCalled()
+  })
+
+  // A typed table, not `as const`: jest's it.each rejects readonly tuples.
+  const listFailures: [string, communitiesClient.CommunitiesError][] = [
+    ['a network failure', {kind: 'network'}],
+    // The door also answers 404 on a store failure.
+    ['a 404', {kind: 'http', status: 404}],
+  ]
+  it.each(listFailures)(
+    '%s on the list shows neither wall nor member content',
+    async (_label, error) => {
+      listMyCommunities.mockResolvedValue({ok: false, error})
+      const r = renderScreen()
+      await r.findByTestId('communityError', {}, {timeout: 3000})
+      expect(r.queryByTestId('communityJoinButton')).toBeNull()
+      expect(r.queryByTestId('communityNotMember')).toBeNull()
+      expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
+      expect(r.queryByTestId('communityMemberBadge')).toBeNull()
+      expect(getTimeline).not.toHaveBeenCalled()
+    },
+  )
+})
+
 describe('Community home - accent colour', () => {
   it('appears in the community header only, and the app theme is unchanged', async () => {
     // The app theme as it is with no community on screen.
@@ -1006,10 +1104,10 @@ describe('Community home - flag off', () => {
 })
 
 describe('Community home - errors', () => {
-  it('shows an error state when the runtime refuses', async () => {
+  it('shows an error state when the runtime fails', async () => {
     getCommunity.mockResolvedValue({
       ok: false,
-      error: {kind: 'http', status: 403},
+      error: {kind: 'http', status: 500},
     })
     const r = renderScreen()
     await r.findByTestId('communityError', {}, {timeout: 3000})

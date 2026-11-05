@@ -386,6 +386,69 @@ export async function exportMine(
   }
 }
 
+/*
+ * Moderation. PROPOSED routes (round 474, F2): the door does not have these yet
+ * and answers 404, so every call below fails until the runtime adds them. Their
+ * shape is written down in docs/FIX-communities-r474.md.
+ */
+export const COMMUNITY_REPORT_REASONS = [
+  'harassment',
+  'spam',
+  'other',
+] as const
+
+export type CommunityReportReason = (typeof COMMUNITY_REPORT_REASONS)[number]
+
+/** Report a post to the community's admins. */
+export async function reportPost(
+  id: string,
+  postId: string,
+  reason: CommunityReportReason,
+): Promise<CommunitiesResult<null>> {
+  if (!validId(id)) return invalid('community id is required')
+  if (!validId(postId)) return invalid('post id is required')
+  if (!COMMUNITY_REPORT_REASONS.includes(reason)) {
+    return invalid('report reason is not recognised')
+  }
+  return done(await request('POST', [id, 'posts', postId, 'report'], {reason}))
+}
+
+/** Remove anyone's post. Admin-only: the runtime decides. */
+export async function removePost(
+  id: string,
+  postId: string,
+): Promise<CommunitiesResult<null>> {
+  if (!validId(id)) return invalid('community id is required')
+  if (!validId(postId)) return invalid('post id is required')
+  return done(
+    await request('POST', [id, 'moderation', 'posts', postId, 'remove']),
+  )
+}
+
+/** Remove a member. Admin-only: the runtime decides. */
+export async function removeMember(
+  id: string,
+  memberId: string,
+): Promise<CommunitiesResult<null>> {
+  if (!validId(id)) return invalid('community id is required')
+  if (!validId(memberId)) return invalid('member id is required')
+  return done(
+    await request('POST', [id, 'moderation', 'members', memberId, 'remove']),
+  )
+}
+
+/** Remove a member and refuse them at join from now on. Admin-only. */
+export async function banMember(
+  id: string,
+  memberId: string,
+): Promise<CommunitiesResult<null>> {
+  if (!validId(id)) return invalid('community id is required')
+  if (!validId(memberId)) return invalid('member id is required')
+  return done(
+    await request('POST', [id, 'moderation', 'members', memberId, 'ban']),
+  )
+}
+
 function grantState(
   res: CommunitiesResult<unknown>,
 ): CommunitiesResult<AgentGrantState> {

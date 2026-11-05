@@ -8,36 +8,39 @@
  * `./useCommunitiesDisabledFallback.ts` is a second line for navigation by route name, which skips matchPath, and
  * nothing is fetched while the flag is off.
  */
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
+import {useNavigation} from '@react-navigation/native'
 import {useQueryClient} from '@tanstack/react-query'
 
 import {
   type CommonNavigatorParams,
   type NativeStackScreenProps,
+  type NavigationProp,
 } from '#/lib/routes/types'
 import {useSession} from '#/state/session'
 import {atoms as a, platform, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
-import {useDialogControl} from '#/components/Dialog'
 import * as Layout from '#/components/Layout'
 import {InlineLinkText} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
 import {AgentLaunchControl} from '#/features/communityAgent/AgentLaunchControl'
+import {isMembershipRefusal} from './access'
 import {AgentCard} from './components/AgentCard'
 import {AgentGrantSection} from './components/AgentGrantSection'
 import {CommunityComposerEntry} from './components/CommunityComposerEntry'
 import {CommunityHeader} from './components/CommunityHeader'
-import {JoinConsentEntry} from './components/JoinConsentEntry'
+import {MemberActionsSection} from './components/MemberActionsSection'
 import {MembersSection} from './components/MembersSection'
 import {PostsSection} from './components/PostsSection'
 import {type CommunityDescriptor} from './descriptor'
 import {
   createCommunityAgentGrantQueryKey,
   createCommunityQueryKey,
+  removeCommunityMemberContent,
   useCommunityQuery,
 } from './queries'
 import {useCommunitiesDisabledFallback} from './useCommunitiesDisabledFallback'
@@ -69,7 +72,26 @@ function CommunityHome({id, initialTab}: {id: string; initialTab: Tab}) {
 }
 
 function CommunityHomeInner({id, initialTab}: {id: string; initialTab: Tab}) {
-  const {data: community, isError} = useCommunityQuery({id})
+  const {data: community, isError, error} = useCommunityQuery({id})
+  const queryClient = useQueryClient()
+  const viewer = useSession().currentAccount?.did ?? ''
+  const refused = isMembershipRefusal(error?.error)
+
+  useEffect(() => {
+    if (refused) removeCommunityMemberContent(queryClient, {id, viewer})
+  }, [refused, queryClient, id, viewer])
+
+  // Checked before `community`: a failed refetch keeps the old descriptor.
+  if (refused) {
+    return (
+      <>
+        <SimpleHeader />
+        <Layout.Content centerContent>
+          <NotAMember id={id} />
+        </Layout.Content>
+      </>
+    )
+  }
 
   if (isError) {
     return (
@@ -105,6 +127,39 @@ function CommunityHomeInner({id, initialTab}: {id: string; initialTab: Tab}) {
   return <CommunityHomeLoaded community={community} initialTab={initialTab} />
 }
 
+/**
+ * The door answers GET /:id only to a current member, so this is what a
+ * non-member reaches. It names nothing about the community, and the same answer
+ * comes back for an id that doesn't exist.
+ */
+function NotAMember({id}: {id: string}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const navigation = useNavigation<NavigationProp>()
+  return (
+    <View
+      testID="communityNotMember"
+      style={[a.align_center, a.gap_md, a.p_xl]}>
+      <Text style={[a.text_lg, a.text_center, a.font_bold]}>
+        <Trans>This community is for members</Trans>
+      </Text>
+      <Text style={[a.text_md, a.text_center, t.atoms.text_contrast_medium]}>
+        <Trans>You’ll see what joining shares before you join.</Trans>
+      </Text>
+      <Button
+        testID="communityJoinButton"
+        label={l`Join community`}
+        onPress={() => navigation.navigate('CommunityJoin', {id})}
+        color="primary"
+        size="large">
+        <ButtonText>
+          <Trans>Join community</Trans>
+        </ButtonText>
+      </Button>
+    </View>
+  )
+}
+
 function SimpleHeader({title}: {title?: string}) {
   return (
     <Layout.Header.Outer>
@@ -127,7 +182,7 @@ function CommunityHomeLoaded({
   initialTab: Tab
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
-  const joinControl = useDialogControl()
+  const navigation = useNavigation<NavigationProp>()
   const queryClient = useQueryClient()
   const viewer = useSession().currentAccount?.did ?? ''
 
@@ -149,7 +204,9 @@ function CommunityHomeLoaded({
       <Layout.Content>
         <CommunityHeader
           community={community}
-          onPressJoin={() => joinControl.open()}
+          onPressJoin={() =>
+            navigation.navigate('CommunityJoin', {id: community.id})
+          }
         />
         <AgentCard community={community} />
         <AgentLaunchControl
@@ -172,10 +229,8 @@ function CommunityHomeLoaded({
         ) : (
           <MembersSection community={community} />
         )}
+        <MemberActionsSection community={community} />
       </Layout.Content>
-      {!community.isMember ? (
-        <JoinConsentEntry control={joinControl} community={community} />
-      ) : null}
     </>
   )
 }
