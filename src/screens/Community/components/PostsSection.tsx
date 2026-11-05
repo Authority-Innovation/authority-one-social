@@ -7,7 +7,9 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
 import {toMemberPostRows} from '../memberRows'
+import {withoutBlocked} from '../moderation'
 import {useCommunityTimelineQuery} from '../queries'
+import {useBlockedMembers} from '../useBlockedMembers'
 import {MemberPostMenu} from './MemberPostMenu'
 import {MemberPostRow} from './MemberPostRow'
 
@@ -29,7 +31,8 @@ export function PostsSection({community}: {community: CommunityDescriptor}) {
 
 function MembersTimeline({community}: {community: CommunityDescriptor}) {
   const {data, isLoading, isError} = useCommunityTimelineQuery({community})
-  const posts = toMemberPostRows(data?.pages)
+  const {blocked} = useBlockedMembers({communityId: community.id})
+  const posts = withoutBlocked(toMemberPostRows(data?.pages), blocked)
 
   if (isLoading) return <SectionLoader />
   if (isError) return <PostsError />
