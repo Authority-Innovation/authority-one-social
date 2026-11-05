@@ -1003,11 +1003,13 @@ describe('Community home - the door omits viewer_is_admin', () => {
     expect(getTimeline).not.toHaveBeenCalled()
   })
 
-  it.each([
+  // A typed table, not `as const`: jest's it.each rejects readonly tuples.
+  const listFailures: [string, communitiesClient.CommunitiesError][] = [
     ['a network failure', {kind: 'network'}],
     // The door also answers 404 on a store failure.
     ['a 404', {kind: 'http', status: 404}],
-  ] as const)(
+  ]
+  it.each(listFailures)(
     '%s on the list shows neither wall nor member content',
     async (_label, error) => {
       listMyCommunities.mockResolvedValue({ok: false, error})
