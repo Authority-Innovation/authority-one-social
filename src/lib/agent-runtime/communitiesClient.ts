@@ -244,30 +244,21 @@ export async function getJoinInfo(
   if (!validId(id)) return invalid('community id is required')
   const res = await request('GET', [id, 'join-info'])
   const version = field(res, 'wording_version', isVersion)
-  if (!version.ok) return version
-  // Read as a literal: anything else means the door isn't checking invites.
-  const admission =
-    res.ok && isObject(res.data) && res.data.admission === 'invite'
-      ? ({admission: 'invite'} as const)
-      : {}
-  return {ok: true, data: {wording_version: version.data, ...admission}}
+  return version.ok
+    ? {ok: true, data: {wording_version: version.data}}
+    : version
 }
 
-/**
- * Join, recording consent to the given wording version. The invite is what
- * admits the person (the door decides); it never stands in for the consent.
- */
+/** Join, recording consent to the given wording version. */
 export async function join(
   id: string,
   consentVersion: number,
-  invite: string,
 ): Promise<CommunitiesResult<CommunityJoinResult>> {
   if (!validId(id)) return invalid('community id is required')
   if (typeof consentVersion !== 'number' || !Number.isFinite(consentVersion)) {
     return invalid('consent version is required')
   }
-  if (!validId(invite)) return invalid('invite is required')
-  const res = await request('POST', [id, 'join'], {consentVersion, invite})
+  const res = await request('POST', [id, 'join'], {consentVersion})
   if (!res.ok) return res
   const data = res.data
   if (!isObject(data) || !isObject(data.community) || !isBool(data.joined)) {
