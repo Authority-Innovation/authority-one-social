@@ -41,10 +41,11 @@ node --import ./scripts/communities/r474/register.mjs --test "scripts/communitie
 | Run | Code | Tests | Pass | Fail |
 | --- | --- | --- | --- | --- |
 | Red | `9321e9003` source, r484 tests only | 26 | 5 | 21 |
-| Green | `f404f242d`, r484 tests only | 26 | 26 | 0 |
-| Green, with round 474 | `c8020121c`, r484 and r474 tests | 48 | 48 | 0 |
+| Green, with round 474 | `f404f242d`, r484 and r474 tests | 48 | 48 | 0 |
+| Green, with round 474 | Working tree before `c8020121c`, r484 and r474 tests | 48 | 48 | 0 |
+| Green | `26a689238`, r484 tests only | 26 | 26 | 0 |
 
-The green count for r484 alone comes from the same run as the 48: all 48 passed, and 22 of those are r474.
+Of the 48, 26 are r484 and 22 are r474.
 
 ### How much the red results prove
 
