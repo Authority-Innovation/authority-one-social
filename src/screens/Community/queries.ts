@@ -17,7 +17,8 @@ import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
 import {useSession} from '#/state/session'
 import {COMMUNITIES_ENABLED} from '#/env'
-import {type CommunityDescriptor, postsSource, toDescriptor} from './descriptor'
+import {readCommunityHome} from './access'
+import {type CommunityDescriptor, postsSource} from './descriptor'
 
 export class CommunityReadError extends Error {
   constructor(public error: communitiesClient.CommunitiesError) {
@@ -45,9 +46,9 @@ export function useCommunityQuery({id}: {id: string}) {
     enabled: COMMUNITIES_ENABLED && !!id,
     staleTime: STALE.MINUTES.ONE,
     async queryFn() {
-      const res = await communitiesClient.getCommunity(id)
+      const res = await readCommunityHome(id)
       if (!res.ok) throw new CommunityReadError(res.error)
-      return toDescriptor(id, res.data)
+      return res.data
     },
   })
 }

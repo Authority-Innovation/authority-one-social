@@ -34,6 +34,7 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('#/lib/agent-runtime/communitiesClient', () => ({
   getCommunity: jest.fn(),
+  listMyCommunities: jest.fn(),
   getTimeline: jest.fn(),
   getAgentGrant: jest.fn(),
   setAgentGrant: jest.fn(),
@@ -190,6 +191,9 @@ import {type DoorItem} from '#/lib/communities/doorContract'
 const getCommunity = communitiesClient.getCommunity as jest.Mock<
   typeof communitiesClient.getCommunity
 >
+const listMyCommunities = communitiesClient.listMyCommunities as jest.Mock<
+  typeof communitiesClient.listMyCommunities
+>
 const getTimeline = communitiesClient.getTimeline as jest.Mock<
   typeof communitiesClient.getTimeline
 >
@@ -324,6 +328,7 @@ beforeEach(() => {
   mockViewerHandle = undefined
   mockProfiles = {}
   jest.clearAllMocks()
+  listMyCommunities.mockResolvedValue({ok: true, data: []})
   getThreadRoster.mockImplementation((_id, postId) =>
     Promise.resolve({ok: true, data: {postId, roster: []}}),
   )
@@ -963,6 +968,53 @@ describe('Community home - Admin badge (build 41)', () => {
     const r = renderScreen()
     await r.findByTestId('communityAgentCard', {}, {timeout: 3000})
     expect(r.queryByTestId('communityAdminBadge')).toBeNull()
+  })
+})
+
+/**
+ * A1. With its admin role off the door sends no `viewer_is_admin`, so nothing
+ * in GET /:id says the caller is a member. The caller's own list decides.
+ */
+describe('Community home - the door omits viewer_is_admin', () => {
+  function omitted(): Community {
+    const {viewerIsAdmin: _admin, ...noAdminKey} = memberCommunity()
+    return noAdminKey
+  }
+
+  beforeEach(() => {
+    getCommunity.mockResolvedValue({ok: true, data: omitted()})
+  })
+
+  it('a joined member gets the member home, with no wall and no Join button', async () => {
+    listMyCommunities.mockResolvedValue({ok: true, data: [omitted()]})
+    const r = renderScreen()
+    await r.findByTestId('communityMemberBadge', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityJoinButton')).toBeNull()
+    expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
+    expect(r.queryByTestId('communityAdminBadge')).toBeNull()
+    await waitFor(() => expect(getTimeline).toHaveBeenCalled())
+  })
+
+  it('someone their list does not name gets the wall and the Join button', async () => {
+    const r = renderScreen()
+    await r.findByTestId('communityJoinButton', {}, {timeout: 3000})
+    expect(r.getByTestId('communityWallPlaceholder')).toBeTruthy()
+    expect(r.queryByTestId('communityMemberBadge')).toBeNull()
+    expect(getTimeline).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a network failure', {kind: 'network'}],
+    ['a 404, which a door store failure also answers', {kind: 'http', status: 404}],
+  ] as const)('%s on the list shows neither wall nor member content', async (_label, error) => {
+    listMyCommunities.mockResolvedValue({ok: false, error})
+    const r = renderScreen()
+    await r.findByTestId('communityError', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityJoinButton')).toBeNull()
+    expect(r.queryByTestId('communityNotMember')).toBeNull()
+    expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
+    expect(r.queryByTestId('communityMemberBadge')).toBeNull()
+    expect(getTimeline).not.toHaveBeenCalled()
   })
 })
 

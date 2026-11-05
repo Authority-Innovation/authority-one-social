@@ -15,7 +15,8 @@ nothing is fetched.
 - `queries.ts` - TanStack Query hooks. No writes.
 - `roster.ts` - pure helpers that turn the runtime's thread rosters into the
   Members tab's rows.
-- `access.ts` - pure rules for who may see member content on the client.
+- `access.ts` - rules for who may see member content on the client, and the
+  home's read, which settles membership.
 - `components/` - header, agent card, posts, members, and a slot for work owned
   by another task (`CommunityComposerEntry` for T17).
 
@@ -27,6 +28,9 @@ nothing is fetched.
 - Joining is open: no invite and no approval, but always through the consent
   step on the join screen. A 403 or 404 on a member read means "not a member":
   it hides member content even if cached, and the home offers the join screen.
+- With its admin role off the door doesn't say whether the caller is a member,
+  so the home reads the caller's own community list to find out. If that read
+  fails the home shows its error state: no member content, wall or Join button.
 - Public-tier posts and members are not read yet. They belong to the group
   AppView, but `group.ts` still calls the user's PDS agent (its group-AppView
   proxy is a TODO), so the screen shows a "not available yet" state and makes
