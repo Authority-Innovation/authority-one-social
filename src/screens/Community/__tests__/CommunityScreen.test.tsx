@@ -141,6 +141,16 @@ jest.mock('../components/JoinConsentEntry', () => {
 // The real composer entry renders; this records its props, and the composer
 // itself is a mock so a press can be checked for its target.
 const mockComposerEntry = jest.fn((_props: {communityId: string}) => null)
+// These pull in the menu, the prompt and device storage. Their rules are tested
+// in scripts/communities/r474 without rendering.
+jest.mock('../components/MemberPostMenu', () => ({MemberPostMenu: () => null}))
+jest.mock('../components/MemberActionsSection', () => ({
+  MemberActionsSection: () => null,
+}))
+jest.mock('../useBlockedMembers', () => ({
+  useBlockedMembers: () => ({blocked: [], block: () => {}}),
+}))
+
 jest.mock('../components/CommunityComposerEntry', () => {
   const {createElement} = require('react') as typeof import('react')
   const actual = jest.requireActual<{

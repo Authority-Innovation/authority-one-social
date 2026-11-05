@@ -24,7 +24,11 @@ import * as Toast from '#/components/Toast'
 import {type CommunityDescriptor} from '../descriptor'
 import {isOwnPost} from '../memberActions'
 import {type MemberPostRowData} from '../memberRows'
-import {blockKeysFor, moderationActionsFor, moderationOutcome} from '../moderation'
+import {
+  blockKeysFor,
+  moderationActionsFor,
+  moderationOutcome,
+} from '../moderation'
 import {createCommunityTimelineQueryKey} from '../queries'
 import {useBlockedMembers} from '../useBlockedMembers'
 
@@ -155,7 +159,7 @@ export function MemberPostMenu({
     },
     'remove-member': {
       title: l`Remove this member?`,
-      description: l`They will lose access to this community. They could come back with a new invite.`,
+      description: l`They will lose access to this community.`,
       cta: l`Remove`,
     },
     ban: {

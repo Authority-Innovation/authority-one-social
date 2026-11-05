@@ -425,7 +425,7 @@ export async function removePost(
   )
 }
 
-/** Remove a member, who may come back with a new invite. Admin-only. */
+/** Remove a member. Admin-only: the runtime decides. */
 export async function removeMember(
   id: string,
   memberId: string,

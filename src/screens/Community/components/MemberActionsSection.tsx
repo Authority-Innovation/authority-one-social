@@ -15,7 +15,10 @@ import {Text} from '#/components/Typography'
 import {createMyCommunitiesQueryKey} from '#/features/communities/switcher/useMyCommunitiesQuery'
 import {type CommunityDescriptor} from '../descriptor'
 import {exportText, leaveCommunity} from '../memberActions'
-import {createCommunityQueryKey, createCommunityTimelineQueryKey} from '../queries'
+import {
+  createCommunityQueryKey,
+  createCommunityTimelineQueryKey,
+} from '../queries'
 
 /**
  * Export and leave, for a member. Deleting one post is on the post's own menu
@@ -33,9 +36,9 @@ export function MemberActionsSection({
   const viewer = useSession().currentAccount?.did ?? ''
   const leavePrompt = Prompt.usePromptControl()
   const [pending, setPending] = useState(false)
-  const [failure, setFailure] = useState<
-    'export' | 'grant' | 'leave' | null
-  >(null)
+  const [failure, setFailure] = useState<'export' | 'grant' | 'leave' | null>(
+    null,
+  )
 
   if (!community.isMember) return null
 
