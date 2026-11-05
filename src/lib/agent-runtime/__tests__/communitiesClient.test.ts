@@ -139,10 +139,10 @@ const CASES: Case[] = [
   },
   {
     name: 'join',
-    run: () => join('c1', 2),
+    run: () => join('c1', 2, 'inv'),
     method: 'POST',
     path: '/app/communities/c1/join',
-    body: {consentVersion: 2},
+    body: {consentVersion: 2, invite: 'inv'},
     response: {community: COMMUNITY, joined: true},
     data: {community: COMMUNITY, joined: true},
   },
@@ -278,7 +278,7 @@ describe('communitiesClient requests', () => {
     const results = await Promise.all([
       getCommunity(bad),
       getJoinInfo(bad),
-      join(bad, 1),
+      join(bad, 1, 'inv'),
       leave(bad),
       getTimeline(bad),
       getTimeline('c1', bad),
@@ -443,8 +443,9 @@ describe('communitiesClient errors never throw', () => {
   it('invalid arguments are rejected locally without a request', async () => {
     const results = await Promise.all([
       getCommunity(''),
-      join('c1', '2' as unknown as number),
-      join('c1', NaN),
+      join('c1', '2' as unknown as number, 'inv'),
+      join('c1', NaN, 'inv'),
+      join('c1', 2, ''),
       leave(' '),
       getTimeline(''),
       post('c1', '   '),

@@ -170,11 +170,13 @@ i18n.loadAndActivate({locale: 'en', messages: {}})
 
 // Wording version 2, the only version this build has copy for. The Dev capture
 // (DEV_RUNTIME.joininfo) still names version 1, which is now refused.
-const JOIN_INFO = {wording_version: 2}
+const JOIN_INFO = {wording_version: 2, admission: 'invite'}
 // door.json's community, as the join answers it (`{community, joined}`).
 const JOINED = {community: asClientCommunity(doorCommunity()), joined: true}
 
-function renderScreen(params: {id: string; invite?: string} = {id: 'btb'}) {
+function renderScreen(
+  params: {id: string; invite?: string} = {id: 'btb', invite: 'abc123'},
+) {
   const queryClient = new QueryClient({
     defaultOptions: {queries: {retry: false}},
   })
@@ -275,7 +277,7 @@ describe('CommunityJoinScreen', () => {
     fireEvent.press(await r.findByTestId(CONSENT_BOX))
     fireEvent.press(r.getByTestId('communityJoinAgreeButton'))
     await waitFor(() => expect(mockJoin).toHaveBeenCalled())
-    expect(mockJoin).toHaveBeenCalledWith('btb', 2)
+    expect(mockJoin).toHaveBeenCalledWith('btb', 2, 'abc123')
     await r.findByText('You’re in.')
     // The join's own answer names the community.
     r.getByText(`Welcome to ${JOINED.community.name}.`)
@@ -308,6 +310,33 @@ describe('CommunityJoinScreen', () => {
     expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
     expect(r.queryByTestId('communityJoinAgreeButton')).toBeNull()
     expect(mockJoin).not.toHaveBeenCalled()
+  })
+
+  it('offers no consent box without an invite', async () => {
+    const r = renderScreen({id: 'btb'})
+    await r.findByTestId('communityJoinInviteRequired')
+    expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
+    expect(r.queryByTestId('communityJoinAgreeButton')).toBeNull()
+    expect(mockJoin).not.toHaveBeenCalled()
+  })
+
+  it('offers no join while the door does not check invites', async () => {
+    mockGetJoinInfo.mockResolvedValue({ok: true, data: {wording_version: 2}})
+    const r = renderScreen()
+    await r.findByTestId('communityJoinNotOpen')
+    expect(r.queryByTestId(CONSENT_BOX)).toBeNull()
+    expect(mockJoin).not.toHaveBeenCalled()
+  })
+
+  it('says the invite is not valid when the door refuses it', async () => {
+    mockJoin.mockResolvedValue({
+      ok: false,
+      error: {kind: 'http', status: 403},
+    })
+    const r = renderScreen()
+    fireEvent.press(await r.findByTestId(CONSENT_BOX))
+    fireEvent.press(r.getByTestId('communityJoinAgreeButton'))
+    await r.findByTestId('communityJoinInviteRefused')
   })
 
   it('does not call join when opened from an invite link', async () => {
@@ -374,7 +403,7 @@ describe('agreeAndJoin', () => {
 
   it('never calls join without consent', async () => {
     const out = await agreeAndJoin(
-      {id: 'btb', consentVersion: '2', consented: false},
+      {id: 'btb', consentVersion: '2', consented: false, invite: 'abc123'},
       client,
     )
     expect(out).toEqual({ok: false, reason: 'no_consent'})
@@ -383,7 +412,7 @@ describe('agreeAndJoin', () => {
 
   it('never calls join with a version this build has no copy for', async () => {
     const out = await agreeAndJoin(
-      {id: 'btb', consentVersion: '3', consented: true},
+      {id: 'btb', consentVersion: '3', consented: true, invite: 'abc123'},
       client,
     )
     expect(out).toEqual({ok: false, reason: 'unsupported_version'})

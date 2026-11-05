@@ -5,7 +5,11 @@
  * Rules this file carries (mockup (d)):
  * - Consent comes first. Nothing here calls `join` unless the person ticked
  *   the consent box.
- * - An invite never counts as consent. Nothing here reads an invite.
+ * - An invite never counts as consent: it admits, and the box still has to be
+ *   ticked. Joining needs both (decision D1, invite only).
+ * - The door decides admission. Join is offered only when join-info says the
+ *   door checks invites; without that, any string would get through while the
+ *   screens still say "Members only".
  * - The consent row stores the wording version. The version is the door's
  *   join-info `wording_version` (GET /:id/join-info, the one community route a
  *   non-member reaches), and join is offered only when this build ships the
@@ -77,9 +81,38 @@ export function consentGateFor(
   return {kind: 'ok', version}
 }
 
+const MAX_INVITE_LENGTH = 512
+
+/**
+ * The invite from the link, or null when there is no usable one. It comes from
+ * a URL, so it is checked rather than trusted, and never logged.
+ */
+export function normalizeInvite(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const invite = raw.trim()
+  if (!invite || invite.length > MAX_INVITE_LENGTH) return null
+  return /\s/.test(invite) ? null : invite
+}
+
+export type AdmissionGate =
+  | {kind: 'ok'; invite: string}
+  | {kind: 'invite_required'}
+  | {kind: 'door_not_enforcing'}
+
+/** Whether the join screen may offer join to this person. */
+export function admissionGateFor(
+  info: Pick<CommunityJoinInfo, 'admission'> | undefined,
+  invite: string | null | undefined,
+): AdmissionGate {
+  if (info?.admission !== 'invite') return {kind: 'door_not_enforcing'}
+  return invite ? {kind: 'ok', invite} : {kind: 'invite_required'}
+}
+
 export type JoinOutcome =
   | {ok: true; membership: CommunityJoinResult}
   | {ok: false; reason: 'no_consent'}
+  | {ok: false; reason: 'no_invite'}
+  | {ok: false; reason: 'invite_refused'}
   | {ok: false; reason: 'unsupported_version'}
   | {ok: false; reason: 'join_failed'; error: CommunitiesError}
 
@@ -98,14 +131,17 @@ export async function agreeAndJoin(
     id,
     consentVersion,
     consented,
+    invite,
   }: {
     id: string
     consentVersion: string
     consented: boolean
+    invite?: string
   },
   client: JoinClient = defaultClient,
 ): Promise<JoinOutcome> {
   if (consented !== true) return {ok: false, reason: 'no_consent'}
+  if (!invite) return {ok: false, reason: 'no_invite'}
   // Belt and braces for the screen's gate: never record a version this build
   // has no copy for.
   if (!isSupportedConsentVersion(consentVersion)) {
@@ -113,8 +149,15 @@ export async function agreeAndJoin(
   }
   // The door's join takes the version as a number (communitiesClient.join
   // refuses anything else); supported versions are numeric strings.
-  const joined = await client.join(id, Number(consentVersion))
+  const joined = await client.join(id, Number(consentVersion), invite)
   if (!joined.ok) {
+    // One answer for all of these, so a person can't tell which ids exist.
+    if (
+      joined.error.kind === 'http' &&
+      [403, 404, 410].includes(joined.error.status)
+    ) {
+      return {ok: false, reason: 'invite_refused'}
+    }
     return {ok: false, reason: 'join_failed', error: joined.error}
   }
   return {ok: true, membership: joined.data}

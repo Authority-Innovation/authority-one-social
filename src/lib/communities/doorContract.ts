@@ -110,8 +110,18 @@ export type DoorCommunityList = {communities: DoorCommunity[]}
 /** GET /:id */
 export type DoorCommunityResponse = {community: DoorCommunity}
 
-/** GET /:id/join-info. The same body for every id. */
-export type DoorJoinInfo = {wording_version: number | null}
+/**
+ * GET /:id/join-info. The same body for every id.
+ *
+ * `admission` is PROPOSED (round 474, F1) and the door does not send it yet:
+ * `'invite'` means the join commit refuses a missing or invalid invite. Until
+ * the door says so the app offers no join, because an invite it does not check
+ * would leave "Members only" untrue.
+ */
+export type DoorJoinInfo = {
+  wording_version: number | null
+  admission?: 'invite'
+}
 
 /** POST /:id/posts and POST /:id/posts/:postId/replies */
 export type DoorItemResponse = {item: DoorItem}

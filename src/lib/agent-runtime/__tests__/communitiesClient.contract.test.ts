@@ -176,19 +176,19 @@ const CONTRACTS: Contract[] = [
   },
   {
     name: 'POST /:id/join -> 201 {community, joined}',
-    run: () => join(ID, 3),
+    run: () => join(ID, 3, 'inv'),
     method: 'POST',
     path: `/app/communities/${ID}/join`,
-    body: {consentVersion: 3},
+    body: {consentVersion: 3, invite: 'inv'},
     status: 201,
     envelope: {community: CONFIG_FLAG_OFF, joined: true},
   },
   {
     name: 'POST /:id/join -> 200 {community, joined} (already a member)',
-    run: () => join(ID, 3),
+    run: () => join(ID, 3, 'inv'),
     method: 'POST',
     path: `/app/communities/${ID}/join`,
-    body: {consentVersion: 3},
+    body: {consentVersion: 3, invite: 'inv'},
     status: 200,
     envelope: {community: CONFIG_FLAG_OFF, joined: true},
   },
@@ -330,7 +330,7 @@ describe('communitiesClient against the door contract', () => {
     mockFetch.mockResolvedValueOnce(
       doorReply({community: CONFIG_AGENT_ON, joined: true}, 201),
     )
-    expect(await join(ID, 3)).toEqual({
+    expect(await join(ID, 3, 'inv')).toEqual({
       ok: true,
       data: {community: CONFIG_AGENT_ON, joined: true},
     })
@@ -345,7 +345,7 @@ describe('communitiesClient against the door contract', () => {
     mockFetch.mockResolvedValueOnce(
       doorReply({community: CONFIG_FLAG_OFF, joined: true}, 201),
     )
-    await join(ID, info.data.wording_version)
+    await join(ID, info.data.wording_version, 'inv')
     const sent = lastCall().body as {consentVersion: unknown}
     expect(typeof sent.consentVersion).toBe('number')
   })
@@ -369,7 +369,7 @@ describe('communitiesClient against the door contract', () => {
         error: 'not_found',
         hint: 'GET /app/communities/:id/join-info',
       },
-      run: id => join(id, 1),
+      run: id => join(id, 1, 'inv'),
     },
     {
       name: '400 bad_text',

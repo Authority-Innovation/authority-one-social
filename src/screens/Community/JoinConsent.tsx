@@ -6,8 +6,10 @@
  * id), so the screen knows the community id and the wording version and
  * nothing else: no name, agent or rules until the join answers. The person
  * sees what joining shares, then ticks the consent box. Only "Agree and join" calls `join`, and only once the box is
- * ticked. Opening this screen from an invite link (`?invite=...`) changes
- * nothing: an invite never counts as consent.
+ * ticked. Communities are invite only: without an invite in the link
+ * (`?invite=...`) no consent box is shown, and an invite never counts as
+ * consent, so the box still starts unticked. Join is not offered at all until
+ * the door says it checks invites (see `./consent.ts`).
  *
  * There is no agent toggle here. The grant is for the community's agent, and
  * join-info cannot say whether there is one, so it is offered on the community
@@ -47,7 +49,12 @@ import * as Layout from '#/components/Layout'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
-import {agreeAndJoin, consentGateFor} from './consent'
+import {
+  admissionGateFor,
+  agreeAndJoin,
+  consentGateFor,
+  normalizeInvite,
+} from './consent'
 import {useCommunitiesDisabledFallback} from './useCommunitiesDisabledFallback'
 
 const communityJoinInfoQueryKeyRoot = 'communityJoinInfo'
@@ -71,15 +78,15 @@ export function CommunityJoinScreen({
   route,
 }: NativeStackScreenProps<CommonNavigatorParams, 'CommunityJoin'>) {
   useCommunitiesDisabledFallback()
-  // `route.params.invite` is deliberately never read: an invite is not consent.
   const id = route.params?.id ?? ''
+  const invite = normalizeInvite(route.params?.invite)
 
   if (!COMMUNITIES_ENABLED) return null
 
-  return <JoinConsent id={id} />
+  return <JoinConsent id={id} invite={invite} />
 }
 
-function JoinConsent({id}: {id: string}) {
+function JoinConsent({id, invite}: {id: string; invite: string | null}) {
   const {t: l} = useLingui()
   const t = useTheme()
   const navigation = useNavigation<NavigationProp>()
@@ -92,26 +99,33 @@ function JoinConsent({id}: {id: string}) {
 
   const [consented, setConsented] = useState(false)
   const [pending, setPending] = useState(false)
-  const [joinFailed, setJoinFailed] = useState(false)
+  const [joinFailure, setJoinFailure] = useState<
+    'invite_refused' | 'failed' | null
+  >(null)
   const [joined, setJoined] = useState<{name: string} | null>(null)
 
   const gate = consentGateFor(joinInfo)
+  const admission = admissionGateFor(joinInfo, invite)
 
   const onAgreeAndJoin = async () => {
     if (!consented || pending || gate.kind !== 'ok') return
+    if (admission.kind !== 'ok') return
     setPending(true)
-    setJoinFailed(false)
+    setJoinFailure(null)
     const outcome = await agreeAndJoin({
       id,
       consentVersion: gate.version,
       consented,
+      invite: admission.invite,
     })
     setPending(false)
     if (outcome.ok) {
       // The join answers with the community, the first time its name is known.
       setJoined({name: outcome.membership.community.name})
     } else {
-      setJoinFailed(true)
+      setJoinFailure(
+        outcome.reason === 'invite_refused' ? 'invite_refused' : 'failed',
+      )
     }
   }
 
@@ -180,6 +194,18 @@ function JoinConsent({id}: {id: string}) {
               </ButtonText>
             </Button>
           </View>
+        ) : !joined && admission.kind === 'door_not_enforcing' ? (
+          <JoinNotOffered testID="communityJoinNotOpen" onNotNow={onNotNow}>
+            <Trans>Joining isn’t open yet.</Trans>
+          </JoinNotOffered>
+        ) : !joined && admission.kind === 'invite_required' ? (
+          <JoinNotOffered
+            testID="communityJoinInviteRequired"
+            onNotNow={onNotNow}>
+            <Trans>
+              This community is invite only. Ask a member for an invite link.
+            </Trans>
+          </JoinNotOffered>
         ) : joined ? (
           <JoinedState
             name={joined.name}
@@ -247,7 +273,15 @@ function JoinConsent({id}: {id: string}) {
               </Text>
             </View>
 
-            {joinFailed ? (
+            {joinFailure === 'invite_refused' ? (
+              <Text
+                testID="communityJoinInviteRefused"
+                style={[a.text_sm, {color: t.palette.negative_500}]}>
+                <Trans>
+                  This invite isn’t valid. Ask a member for a new invite link.
+                </Trans>
+              </Text>
+            ) : joinFailure === 'failed' ? (
               <Text style={[a.text_sm, {color: t.palette.negative_500}]}>
                 <Trans>Couldn’t join right now. Please try again.</Trans>
               </Text>
@@ -280,6 +314,36 @@ function JoinConsent({id}: {id: string}) {
         )}
       </Layout.Content>
     </Layout.Screen>
+  )
+}
+
+function JoinNotOffered({
+  testID,
+  onNotNow,
+  children,
+}: {
+  testID: string
+  onNotNow: () => void
+  children: React.ReactNode
+}) {
+  const {t: l} = useLingui()
+  const t = useTheme()
+  return (
+    <View testID={testID} style={[a.gap_md, a.p_xl, a.align_center]}>
+      <Text style={[a.text_md, a.text_center, t.atoms.text_contrast_high]}>
+        {children}
+      </Text>
+      <Button
+        testID="communityJoinNotNowButton"
+        label={l`Not now`}
+        onPress={onNotNow}
+        color="secondary"
+        size="small">
+        <ButtonText>
+          <Trans>Not now</Trans>
+        </ButtonText>
+      </Button>
+    </View>
   )
 }
 
