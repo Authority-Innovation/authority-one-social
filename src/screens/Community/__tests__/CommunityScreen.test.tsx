@@ -986,8 +986,12 @@ describe('Community home - the door omits viewer_is_admin', () => {
   })
 
   it('a joined member gets the member home, with no wall and no Join button', async () => {
-    listMyCommunities.mockResolvedValue({ok: true, data: [omitted()]})
-    const r = renderScreen()
+    const joined = omitted()
+    listMyCommunities.mockResolvedValue({ok: true, data: [joined]})
+    // The route must name the community the list holds ('garden' in
+    // door.json): the app matches the list by id, and another community on
+    // the list is not a membership of this one.
+    const r = renderScreen({id: joined.id})
     await r.findByTestId('communityMemberBadge', {}, {timeout: 3000})
     expect(r.queryByTestId('communityJoinButton')).toBeNull()
     expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
@@ -996,6 +1000,8 @@ describe('Community home - the door omits viewer_is_admin', () => {
   })
 
   it('someone their list does not name gets the wall and the Join button', async () => {
+    // Their list holds 'garden', not the 'btb' on the route.
+    listMyCommunities.mockResolvedValue({ok: true, data: [omitted()]})
     const r = renderScreen()
     await r.findByTestId('communityJoinButton', {}, {timeout: 3000})
     expect(r.getByTestId('communityWallPlaceholder')).toBeTruthy()
