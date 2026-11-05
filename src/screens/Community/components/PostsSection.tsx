@@ -8,6 +8,7 @@ import {Text} from '#/components/Typography'
 import {type CommunityDescriptor, postsSource} from '../descriptor'
 import {toMemberPostRows} from '../memberRows'
 import {useCommunityTimelineQuery} from '../queries'
+import {MemberPostMenu} from './MemberPostMenu'
 import {MemberPostRow} from './MemberPostRow'
 
 export function PostsSection({community}: {community: CommunityDescriptor}) {
@@ -40,6 +41,7 @@ function MembersTimeline({community}: {community: CommunityDescriptor}) {
           key={post.id}
           post={post}
           agentDid={community.agentDid}
+          menu={<MemberPostMenu community={community} post={post} />}
         />
       ))}
     </View>

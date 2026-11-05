@@ -32,6 +32,7 @@ import {AgentGrantSection} from './components/AgentGrantSection'
 import {CommunityComposerEntry} from './components/CommunityComposerEntry'
 import {CommunityHeader} from './components/CommunityHeader'
 import {JoinConsentEntry} from './components/JoinConsentEntry'
+import {MemberActionsSection} from './components/MemberActionsSection'
 import {MembersSection} from './components/MembersSection'
 import {PostsSection} from './components/PostsSection'
 import {type CommunityDescriptor} from './descriptor'
@@ -172,6 +173,7 @@ function CommunityHomeLoaded({
         ) : (
           <MembersSection community={community} />
         )}
+        <MemberActionsSection community={community} />
       </Layout.Content>
       {!community.isMember ? (
         <JoinConsentEntry control={joinControl} community={community} />
