@@ -123,20 +123,14 @@ jest.mock('#/view/com/util/UserAvatar', () => {
   return {UserAvatar: avatar}
 })
 
-const mockOpenJoin = jest.fn()
 jest.mock('#/components/Dialog', () => ({
   useDialogControl: () => ({
-    id: 'join',
+    id: 'dialog',
     ref: {current: null},
-    open: mockOpenJoin,
+    open: jest.fn(),
     close: jest.fn(),
   }),
 }))
-
-jest.mock('../components/JoinConsentEntry', () => {
-  const entry = () => null
-  return {JoinConsentEntry: entry}
-})
 
 // The real composer entry renders; this records its props, and the composer
 // itself is a mock so a press can be checked for its target.
@@ -397,12 +391,42 @@ describe('Community home - non-member', () => {
     expect(mockComposerEntry).not.toHaveBeenCalled()
   })
 
-  it('opens the join-consent entry from the join button', async () => {
-    const r = renderScreen()
+  it('goes to the join screen from the join button', async () => {
+    const r = renderScreen({id: 'btb'})
     fireEvent.press(
       await r.findByTestId('communityJoinButton', {}, {timeout: 3000}),
     )
-    expect(mockOpenJoin).toHaveBeenCalledTimes(1)
+    expect(mockNavigate).toHaveBeenCalledWith('CommunityJoin', {id: 'btb'})
+  })
+})
+
+describe('Community home - the door refuses a member read', () => {
+  it.each([403, 404])(
+    'offers the join screen on a %i, and reads nothing else',
+    async status => {
+      getCommunity.mockResolvedValue({
+        ok: false,
+        error: {kind: 'http', status},
+      })
+      const r = renderScreen({id: 'btb'})
+      await r.findByTestId('communityNotMember', {}, {timeout: 3000})
+      expect(r.queryByTestId('communityError')).toBeNull()
+      expect(getTimeline).not.toHaveBeenCalled()
+      fireEvent.press(r.getByTestId('communityJoinButton'))
+      expect(mockNavigate).toHaveBeenCalledWith('CommunityJoin', {id: 'btb'})
+    },
+  )
+
+  it('shows the wall, not posts, when the timeline is refused', async () => {
+    getCommunity.mockResolvedValue({ok: true, data: memberCommunity()})
+    getTimeline.mockResolvedValue({
+      ok: false,
+      error: {kind: 'http', status: 403},
+    })
+    const r = renderScreen({id: 'btb'})
+    await r.findByTestId('communityWallPlaceholder', {}, {timeout: 3000})
+    expect(r.queryByTestId('communityMembersTimeline')).toBeNull()
+    expect(r.queryByTestId('communityPostsError')).toBeNull()
   })
 })
 
@@ -1016,10 +1040,10 @@ describe('Community home - flag off', () => {
 })
 
 describe('Community home - errors', () => {
-  it('shows an error state when the runtime refuses', async () => {
+  it('shows an error state when the runtime fails', async () => {
     getCommunity.mockResolvedValue({
       ok: false,
-      error: {kind: 'http', status: 403},
+      error: {kind: 'http', status: 500},
     })
     const r = renderScreen()
     await r.findByTestId('communityError', {}, {timeout: 3000})

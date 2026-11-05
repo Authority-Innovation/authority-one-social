@@ -136,9 +136,10 @@ join then reports `already-member` and the join flow is not exercised. The
 report's notes say which mode the run used.
 
 Join: the app's own way in is tried first (the Join button on the community
-home). While that button still opens the holding sheet (`JoinConsentEntry`),
-the harness notes it in the report and joins through the join screen at
-`/c/ao-dev-test/join` - the real join UI, never an API call.
+home), which opens the join screen - the real join UI, never an API call. The
+harness still has a branch for the old holding sheet, for runs against an older
+build. A door whose join-info names a consent version other than 2 stops the
+join at `communityJoinNeedsUpdate`.
 
 An action that fails stops the flow (later steps: `not run`). A hard-check
 failure fails its step and the flow goes on.
