@@ -1005,17 +1005,21 @@ describe('Community home - the door omits viewer_is_admin', () => {
 
   it.each([
     ['a network failure', {kind: 'network'}],
-    ['a 404, which a door store failure also answers', {kind: 'http', status: 404}],
-  ] as const)('%s on the list shows neither wall nor member content', async (_label, error) => {
-    listMyCommunities.mockResolvedValue({ok: false, error})
-    const r = renderScreen()
-    await r.findByTestId('communityError', {}, {timeout: 3000})
-    expect(r.queryByTestId('communityJoinButton')).toBeNull()
-    expect(r.queryByTestId('communityNotMember')).toBeNull()
-    expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
-    expect(r.queryByTestId('communityMemberBadge')).toBeNull()
-    expect(getTimeline).not.toHaveBeenCalled()
-  })
+    // The door also answers 404 on a store failure.
+    ['a 404', {kind: 'http', status: 404}],
+  ] as const)(
+    '%s on the list shows neither wall nor member content',
+    async (_label, error) => {
+      listMyCommunities.mockResolvedValue({ok: false, error})
+      const r = renderScreen()
+      await r.findByTestId('communityError', {}, {timeout: 3000})
+      expect(r.queryByTestId('communityJoinButton')).toBeNull()
+      expect(r.queryByTestId('communityNotMember')).toBeNull()
+      expect(r.queryByTestId('communityWallPlaceholder')).toBeNull()
+      expect(r.queryByTestId('communityMemberBadge')).toBeNull()
+      expect(getTimeline).not.toHaveBeenCalled()
+    },
+  )
 })
 
 describe('Community home - accent colour', () => {
