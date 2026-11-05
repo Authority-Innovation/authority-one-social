@@ -177,7 +177,7 @@ export function toDescriptor(
  * non-member of a walled community gets no read at all.
  */
 export function postsSource(
-  d: CommunityDescriptor,
+  d: Pick<CommunityDescriptor, 'tier' | 'isMember' | 'groupUri'>,
 ): 'runtime' | 'group' | 'none' {
   if (d.tier === 'public') return d.groupUri ? 'group' : 'none'
   return d.isMember ? 'runtime' : 'none'

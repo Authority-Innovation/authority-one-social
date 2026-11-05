@@ -6,6 +6,7 @@
  */
 import {
   type InfiniteData,
+  type QueryClient,
   useInfiniteQuery,
   useQueries,
   useQuery,
@@ -155,4 +156,23 @@ export function useCommunityAgentGrantQuery({
       return res.data.on
     },
   })
+}
+
+/**
+ * Drops what only a member may hold, once the caller has left or the door has
+ * refused them. Leaves the descriptor alone: on a refusal the home is still
+ * watching it, and removing it would refetch, refuse and land here again.
+ */
+export function removeCommunityMemberContent(
+  queryClient: QueryClient,
+  {id, viewer}: {id: string; viewer: string},
+) {
+  queryClient.removeQueries({
+    queryKey: createCommunityTimelineQueryKey({id, viewer}),
+  })
+  queryClient.removeQueries({
+    queryKey: createCommunityAgentGrantQueryKey({id, viewer}),
+  })
+  // Partial on purpose: a roster's key also carries its post id.
+  queryClient.removeQueries({queryKey: ['communityRoster', {id, viewer}]})
 }

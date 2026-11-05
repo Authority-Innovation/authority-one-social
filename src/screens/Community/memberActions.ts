@@ -25,17 +25,18 @@ const defaultClient: LeaveClient = {leave, setAgentGrant}
  * grant after a leave, so otherwise the community agent could go on reading a
  * former member's posts. If the grant can't be turned off the person stays a
  * member, and can still see and change it. A 404 means the runtime's agent
- * route is off, so there is no grant to turn off.
+ * route is off, so there is no grant to turn off. A success that still says the
+ * grant is on has not turned it off.
  */
 export async function leaveCommunity(
   id: string,
   client: LeaveClient = defaultClient,
 ): Promise<LeaveOutcome> {
   const grant = await client.setAgentGrant(id, false)
-  if (
-    !grant.ok &&
-    !(grant.error.kind === 'http' && grant.error.status === 404)
-  ) {
+  const grantIsOff = grant.ok
+    ? grant.data.on === false
+    : grant.error.kind === 'http' && grant.error.status === 404
+  if (!grantIsOff) {
     return {ok: false, reason: 'grant_off_failed'}
   }
   const left = await client.leave(id)

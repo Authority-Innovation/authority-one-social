@@ -52,6 +52,8 @@ export function AgentGrantSection({
         <Trans>Your settings</Trans>
       </Text>
       <AgentGrantRow
+        // The row holds its value in state; a new cached value has to reach it.
+        key={String(on)}
         communityId={community.id}
         initialValue={on}
         onSaved={next =>

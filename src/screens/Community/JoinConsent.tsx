@@ -6,11 +6,12 @@
  * id), so the screen knows the community id and the wording version and
  * nothing else: no name, agent or rules until the join answers. The person
  * sees what joining shares, then ticks the consent box. Only "Agree and join" calls `join`, and only once the box is
- * ticked. Opening this screen from an invite link (`?invite=...`) changes
- * nothing: an invite never counts as consent.
+ * ticked. Joining is open: no invite and no approval is asked for, and a
+ * `?invite=...` in the link changes nothing.
  *
- * The agent toggle is a separate grant, off by default, for this community
- * only. It is sent after the join succeeds and only when turned on.
+ * There is no agent toggle here. The grant is for the community's agent, and
+ * join-info cannot say whether there is one, so it is offered on the community
+ * home once the person is a member (see `./consent.ts`).
  *
  * Join is offered only when join-info names a wording version this build has
  * copy for (see `./consent.ts`). A missing version shows the load-error state;
@@ -23,7 +24,7 @@ import {useState} from 'react'
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
-import {useQuery} from '@tanstack/react-query'
+import {useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {
   type CommunityJoinInfo,
@@ -35,8 +36,8 @@ import {
   type NavigationProp,
 } from '#/lib/routes/types'
 import {STALE} from '#/state/queries'
-import {useOwnerAgentsQuery} from '#/state/queries/agents'
 import {createQueryKey} from '#/state/queries/util'
+import {useSession} from '#/state/session'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import * as Toggle from '#/components/forms/Toggle'
@@ -47,7 +48,9 @@ import * as Layout from '#/components/Layout'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {COMMUNITIES_ENABLED} from '#/env'
+import {createMyCommunitiesQueryKey} from '#/features/communities/switcher/useMyCommunitiesQuery'
 import {agreeAndJoin, consentGateFor} from './consent'
+import {createCommunityQueryKey} from './queries'
 import {useCommunitiesDisabledFallback} from './useCommunitiesDisabledFallback'
 
 const communityJoinInfoQueryKeyRoot = 'communityJoinInfo'
@@ -71,7 +74,6 @@ export function CommunityJoinScreen({
   route,
 }: NativeStackScreenProps<CommonNavigatorParams, 'CommunityJoin'>) {
   useCommunitiesDisabledFallback()
-  // `route.params.invite` is deliberately never read: an invite is not consent.
   const id = route.params?.id ?? ''
 
   if (!COMMUNITIES_ENABLED) return null
@@ -89,41 +91,38 @@ function JoinConsent({id}: {id: string}) {
     isError,
     refetch,
   } = useCommunityJoinInfoQuery({id})
-  const {data: ownerAgents} = useOwnerAgentsQuery()
-  const myAgent = ownerAgents?.agents[0]
-  const myAgentName = myAgent?.displayName || myAgent?.handle
+  const queryClient = useQueryClient()
+  const viewer = useSession().currentAccount?.did ?? ''
 
   const [consented, setConsented] = useState(false)
-  const [agentGrant, setAgentGrant] = useState(false)
   const [pending, setPending] = useState(false)
-  const [joinFailed, setJoinFailed] = useState(false)
-  const [joined, setJoined] = useState<{
-    name: string
-    agentGrantFailed: boolean
-  } | null>(null)
+  const [joinError, setJoinError] = useState<'refused' | 'failed' | null>(null)
+  const [joined, setJoined] = useState<{name: string} | null>(null)
 
   const gate = consentGateFor(joinInfo)
 
   const onAgreeAndJoin = async () => {
     if (!consented || pending || gate.kind !== 'ok') return
     setPending(true)
-    setJoinFailed(false)
+    setJoinError(null)
     const outcome = await agreeAndJoin({
       id,
       consentVersion: gate.version,
       consented,
-      // Only send a grant the person can see and turned on.
-      agentGrant: !!myAgentName && agentGrant,
     })
     setPending(false)
     if (outcome.ok) {
-      // The join answers with the community, the first time its name is known.
-      setJoined({
-        name: outcome.membership.community.name,
-        agentGrantFailed: outcome.agentGrantFailed,
+      // The home may hold a refusal or a non-member answer from before the join.
+      void queryClient.invalidateQueries({
+        queryKey: createCommunityQueryKey({id, viewer}),
       })
+      void queryClient.invalidateQueries({
+        queryKey: createMyCommunitiesQueryKey({did: viewer}),
+      })
+      // The join answers with the community, the first time its name is known.
+      setJoined({name: outcome.membership.community.name})
     } else {
-      setJoinFailed(true)
+      setJoinError(outcome.reason === 'refused' ? 'refused' : 'failed')
     }
   }
 
@@ -193,12 +192,7 @@ function JoinConsent({id}: {id: string}) {
             </Button>
           </View>
         ) : joined ? (
-          <JoinedState
-            name={joined.name}
-            agentName={myAgentName}
-            agentGrantFailed={joined.agentGrantFailed}
-            onGoToCommunity={onGoToCommunity}
-          />
+          <JoinedState name={joined.name} onGoToCommunity={onGoToCommunity} />
         ) : (
           <View style={[a.gap_xl, a.p_lg]}>
             <CommunityCard id={id} />
@@ -230,45 +224,12 @@ function JoinConsent({id}: {id: string}) {
                 title={l`A public record that you joined`}
                 detail={l`Your membership is not written to the open network.`}
               />
+              <ShareRow
+                shared={false}
+                title={l`Access for this community’s agent`}
+                detail={l`If this community has an agent, it gets no access to your content when you join. You can choose to give it access in the community afterwards.`}
+              />
             </View>
-
-            {myAgentName ? (
-              <View style={[a.gap_sm]}>
-                <SectionTitleText>
-                  <Trans>Your own agent (optional)</Trans>
-                </SectionTitleText>
-                <Toggle.Item
-                  name="community_agent_grant"
-                  value={agentGrant}
-                  onChange={setAgentGrant}
-                  label={l`Let ${myAgentName} read this community for me`}
-                  style={[
-                    a.w_full,
-                    a.p_md,
-                    a.rounded_lg,
-                    a.border,
-                    t.atoms.border_contrast_low,
-                    t.atoms.bg_contrast_25,
-                  ]}>
-                  <View style={[a.flex_1, a.gap_2xs]}>
-                    <Toggle.LabelText style={[a.text_md, a.font_medium]}>
-                      <Trans>
-                        Let {myAgentName} read this community for me
-                      </Trans>
-                    </Toggle.LabelText>
-                    <Text
-                      emoji
-                      style={[a.text_sm, t.atoms.text_contrast_medium]}>
-                      <Trans>
-                        {myAgentName} can give you recaps of threads you can
-                        already see. You can turn it off any time.
-                      </Trans>
-                    </Text>
-                  </View>
-                  <Toggle.Platform />
-                </Toggle.Item>
-              </View>
-            ) : null}
 
             <RulesAndLinks />
 
@@ -294,8 +255,19 @@ function JoinConsent({id}: {id: string}) {
               </Text>
             </View>
 
-            {joinFailed ? (
-              <Text style={[a.text_sm, {color: t.palette.negative_500}]}>
+            {joinError === 'refused' ? (
+              <Text
+                testID="communityJoinRefused"
+                style={[a.text_sm, {color: t.palette.negative_500}]}>
+                <Trans>
+                  This community didn’t accept your request, so you haven’t
+                  joined.
+                </Trans>
+              </Text>
+            ) : joinError === 'failed' ? (
+              <Text
+                testID="communityJoinFailed"
+                style={[a.text_sm, {color: t.palette.negative_500}]}>
                 <Trans>Couldn’t join right now. Please try again.</Trans>
               </Text>
             ) : null}
@@ -416,13 +388,9 @@ function RulesAndLinks() {
 
 function JoinedState({
   name,
-  agentName,
-  agentGrantFailed,
   onGoToCommunity,
 }: {
   name: string
-  agentName?: string
-  agentGrantFailed: boolean
   onGoToCommunity: () => void
 }) {
   const {t: l} = useLingui()
@@ -435,14 +403,6 @@ function JoinedState({
       <Text emoji style={[a.text_md, t.atoms.text_contrast_high]}>
         <Trans>Welcome to {name}.</Trans>
       </Text>
-      {agentGrantFailed && agentName ? (
-        <Text emoji style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          <Trans>
-            {agentName} couldn’t be turned on for this community. You can try
-            again from the community.
-          </Trans>
-        </Text>
-      ) : null}
       <Button
         testID="communityJoinGoButton"
         label={l`Go to the community`}

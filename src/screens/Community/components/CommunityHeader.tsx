@@ -106,7 +106,7 @@ export function CommunityHeader({
               </ButtonText>
             </Button>
             <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-              <Trans>You choose what to share before you join.</Trans>
+              <Trans>You’ll see what joining shares before you join.</Trans>
             </Text>
           </View>
         ) : null}

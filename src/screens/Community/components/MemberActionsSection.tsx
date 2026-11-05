@@ -16,8 +16,9 @@ import {createMyCommunitiesQueryKey} from '#/features/communities/switcher/useMy
 import {type CommunityDescriptor} from '../descriptor'
 import {exportText, leaveCommunity} from '../memberActions'
 import {
+  createCommunityAgentGrantQueryKey,
   createCommunityQueryKey,
-  createCommunityTimelineQueryKey,
+  removeCommunityMemberContent,
 } from '../queries'
 
 /**
@@ -62,13 +63,18 @@ export function MemberActionsSection({
     const res = await leaveCommunity(community.id)
     setPending(false)
     if (!res.ok) {
+      if (res.reason === 'leave_failed') {
+        // The grant did go off before the leave failed, so the row must say so.
+        queryClient.setQueryData(
+          createCommunityAgentGrantQueryKey({id: community.id, viewer}),
+          false,
+        )
+      }
       setFailure(res.reason === 'grant_off_failed' ? 'grant' : 'leave')
       return
     }
     // Members-tier bodies must not outlive the membership in this cache.
-    queryClient.removeQueries({
-      queryKey: createCommunityTimelineQueryKey({id: community.id, viewer}),
-    })
+    removeCommunityMemberContent(queryClient, {id: community.id, viewer})
     queryClient.removeQueries({
       queryKey: createCommunityQueryKey({id: community.id, viewer}),
     })
@@ -124,7 +130,10 @@ export function MemberActionsSection({
               access, so we didn’t leave. Please try again.
             </Trans>
           ) : (
-            <Trans>Couldn’t leave right now. Please try again.</Trans>
+            <Trans>
+              You’re still a member, and the community agent’s access is off.
+              Couldn’t leave right now. Please try again.
+            </Trans>
           )}
         </Text>
       ) : null}
