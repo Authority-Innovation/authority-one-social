@@ -5,7 +5,6 @@ class VisibilityViewManager {
 
   private let views = NSHashTable<VisibilityView>(options: .weakMemory)
   private var currentlyActiveView: VisibilityView?
-  private var screenHeight: CGFloat = UIScreen.main.bounds.height
   private var prevCount = 0
 
   func addView(_ view: VisibilityView) {
@@ -26,13 +25,14 @@ class VisibilityViewManager {
     DispatchQueue.main.async {
       var activeView: VisibilityView?
 
-      if self.views.count == 1 {
-        let view = self.views.allObjects[0]
+      // One snapshot of the live views: a weak table's `count` can still include entries
+      // that were released, so it may say 1 while `allObjects` is empty - never index by it.
+      let views = self.views.allObjects
+      if views.count == 1, let view = views.first {
         if view.isViewableEnough() {
           activeView = view
         }
-      } else if self.views.count > 1 {
-        let views = self.views.allObjects
+      } else if views.count > 1 {
         var mostVisibleView: VisibilityView?
         var mostVisiblePosition: CGRect?
 
