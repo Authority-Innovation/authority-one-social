@@ -112,7 +112,7 @@ describe('SOC-01 Context Engine across an account switch', () => {
     await waitFor(() => expect(result.current.active).toBe(true))
 
     mockDid = DID_B
-    await act(async () => {
+    act(() => {
       rerender({})
     })
     await act(async () => {
@@ -125,7 +125,7 @@ describe('SOC-01 Context Engine across an account switch', () => {
 
     // Partitioned, not wiped: switching back restores A's own data.
     mockDid = DID_A
-    await act(async () => {
+    act(() => {
       rerender({})
     })
     await waitFor(() => expect(result.current.events).toHaveLength(1))

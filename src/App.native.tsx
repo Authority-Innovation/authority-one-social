@@ -25,6 +25,7 @@ import {
   Provider as AppConfigProvider,
 } from '#/state/appConfig'
 import {Provider as MutedThreadsProvider} from '#/state/cache/thread-mutes'
+import {ContextEngineProvider} from '#/state/contextEngine/ContextEngineProvider'
 import {Provider as DialogStateProvider} from '#/state/dialogs'
 import {Provider as EmailVerificationProvider} from '#/state/email-verification'
 import {listenSessionDropped} from '#/state/events'
@@ -180,9 +181,12 @@ function InnerApp() {
                                                           <GlobalGestureEventsProvider>
                                                             <IntentDialogProvider>
                                                               <TranslateOnDeviceProvider>
-                                                                <TestCtrls />
-                                                                <Shell />
-                                                                <ToastOutlet />
+                                                                {/* SOC-01: inside the per-DID keyed subtree so it resets on account switch */}
+                                                                <ContextEngineProvider>
+                                                                  <TestCtrls />
+                                                                  <Shell />
+                                                                  <ToastOutlet />
+                                                                </ContextEngineProvider>
                                                               </TranslateOnDeviceProvider>
                                                             </IntentDialogProvider>
                                                           </GlobalGestureEventsProvider>

@@ -13,6 +13,7 @@ import {
 
 // In-memory AsyncStorage (prefix `mock` so jest's factory may reference it).
 const mockStore = new Map<string, string>()
+const DID = 'did:plc:testaccount'
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
@@ -47,16 +48,16 @@ function ev(id: string, at: number): ContextEvent {
 
 describe('prefs', () => {
   it('defaults to OFF when nothing is stored', async () => {
-    expect(await loadPrefs()).toEqual(DEFAULT_PREFS)
-    expect((await loadPrefs()).enabled).toBe(false)
+    expect(await loadPrefs(DID)).toEqual(DEFAULT_PREFS)
+    expect((await loadPrefs(DID)).enabled).toBe(false)
   })
 
   it('round-trips enabled + anchors', async () => {
-    await savePrefs({
+    await savePrefs(DID, {
       enabled: true,
       home: {lat: 1, lng: 2, label: 'Home'},
     })
-    expect(await loadPrefs()).toEqual({
+    expect(await loadPrefs(DID)).toEqual({
       enabled: true,
       backgroundEnabled: false,
       home: {lat: 1, lng: 2, label: 'Home'},
@@ -66,7 +67,7 @@ describe('prefs', () => {
   })
 
   it('round-trips labeled places (sanitizing malformed rows)', async () => {
-    await savePrefs({
+    await savePrefs(DID, {
       enabled: true,
       places: [
         {id: 'p1', name: 'School', lat: 1, lon: 2, radiusM: 150},
@@ -74,21 +75,21 @@ describe('prefs', () => {
         {id: 'bad', name: 'X'} as never,
       ],
     })
-    const out = await loadPrefs()
+    const out = await loadPrefs(DID)
     expect(out.places).toEqual([
       {id: 'p1', name: 'School', lat: 1, lon: 2, radiusM: 150},
     ])
   })
 
   it('preserves savedAt when present, omits it when absent', async () => {
-    await savePrefs({
+    await savePrefs(DID, {
       enabled: true,
       places: [
         {id: 'p1', name: 'Library', lat: 1, lon: 2, radiusM: 150, savedAt: 42},
         {id: 'p2', name: 'Gym', lat: 3, lon: 4, radiusM: 150},
       ],
     })
-    const out = await loadPrefs()
+    const out = await loadPrefs(DID)
     expect(out.places).toEqual([
       {id: 'p1', name: 'Library', lat: 1, lon: 2, radiusM: 150, savedAt: 42},
       {id: 'p2', name: 'Gym', lat: 3, lon: 4, radiusM: 150},
@@ -98,26 +99,26 @@ describe('prefs', () => {
 
 describe('events', () => {
   it('appends newest-first and lists them', async () => {
-    await appendEvent(ev('a', 1))
-    const after = await appendEvent(ev('b', 2))
+    await appendEvent(DID, ev('a', 1))
+    const after = await appendEvent(DID, ev('b', 2))
     expect(after.map(e => e.id)).toEqual(['b', 'a'])
-    expect((await loadEvents()).map(e => e.id)).toEqual(['b', 'a'])
+    expect((await loadEvents(DID)).map(e => e.id)).toEqual(['b', 'a'])
   })
 
   it('deletes a single entry by id', async () => {
-    await appendEvent(ev('a', 1))
-    await appendEvent(ev('b', 2))
-    const after = await deleteEvent('a')
+    await appendEvent(DID, ev('a', 1))
+    await appendEvent(DID, ev('b', 2))
+    const after = await deleteEvent(DID, 'a')
     expect(after.map(e => e.id)).toEqual(['b'])
   })
 
   it('clears all entries', async () => {
-    await appendEvent(ev('a', 1))
-    await clearEvents()
-    expect(await loadEvents()).toEqual([])
+    await appendEvent(DID, ev('a', 1))
+    await clearEvents(DID)
+    expect(await loadEvents(DID)).toEqual([])
   })
 
   it('returns [] when nothing is stored', async () => {
-    expect(await loadEvents()).toEqual([])
+    expect(await loadEvents(DID)).toEqual([])
   })
 })

@@ -14,6 +14,7 @@ import {
   type NormalizedGeocode,
 } from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
+import * as persisted from '#/state/persisted'
 import {
   appendEvent,
   clearOpenDwell,
@@ -87,13 +88,16 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
   try {
     // DEFENCE IN DEPTH: re-check the opt-in inside the task. If the user turned
     // background context off after the OS queued this wake, capture nothing.
-    const prefs = await loadPrefs()
+    // SOC-01: the stateless task reads the signed-in account from the persisted
+    // session; with no account the store returns defaults and nothing is captured.
+    const did = persisted.get('session')?.currentAccount?.did
+    const prefs = await loadPrefs(did)
     if (prefs.backgroundEnabled !== true) return
 
     const last = locations[locations.length - 1]
     const coords = {lat: last.coords.latitude, lng: last.coords.longitude}
     const now = Date.now()
-    const open = await loadOpenDwell()
+    const open = await loadOpenDwell(did)
 
     // In transit -> nothing will be logged, so SKIP the (battery/cost-heavy) reverse-
     // geocode entirely. Motion is judged from GPS speed, falling back to displacement
@@ -129,11 +133,11 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({data, error}) => {
       newId,
     )
     for (const event of events) {
-      await appendEvent(event)
+      await appendEvent(did, event)
       void postContextEvents([event]) // best-effort cross-channel sync; no-ops if unreachable
     }
-    if (nextOpen) await saveOpenDwell(nextOpen)
-    else await clearOpenDwell()
+    if (nextOpen) await saveOpenDwell(did, nextOpen)
+    else await clearOpenDwell(did)
   } catch (e) {
     logger.warn('contextEngine: background task failed', {
       safeMessage: String(e),
