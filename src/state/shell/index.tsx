@@ -1,4 +1,3 @@
-import {ContextEngineProvider} from '#/state/contextEngine/ContextEngineProvider'
 import {Provider as SkinProvider} from '#/state/skin'
 import {Provider as ColorModeProvider} from './color-mode'
 import {Provider as DrawerOpenProvider} from './drawer-open'
@@ -28,9 +27,7 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
           <MinimalModeProvider>
             <ColorModeProvider>
               <SkinProvider>
-                <ContextEngineProvider>
-                  <TickEveryMinuteProvider>{children}</TickEveryMinuteProvider>
-                </ContextEngineProvider>
+                <TickEveryMinuteProvider>{children}</TickEveryMinuteProvider>
               </SkinProvider>
             </ColorModeProvider>
           </MinimalModeProvider>

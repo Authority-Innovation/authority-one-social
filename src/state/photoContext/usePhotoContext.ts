@@ -12,6 +12,7 @@ import {
   type PhotoContextPrefs,
 } from '#/lib/photoContext/types'
 import {logger} from '#/logger'
+import {useSession} from '#/state/session'
 import {IS_NATIVE} from '#/env'
 import {
   getPhotoPermission,
@@ -22,6 +23,7 @@ import {
   resolvePlace,
 } from './mediaQuery'
 import {
+  adoptLegacyPhotoData,
   DEFAULT_PHOTO_PREFS,
   loadLastConclusion,
   loadPhotoPrefs,
@@ -54,6 +56,9 @@ export interface UsePhotoContext {
  * permitted. Resilient: a missing endpoint / denied permission degrades gracefully.
  */
 export function usePhotoContext(): UsePhotoContext {
+  // SOC-01: all Photo Context data is scoped to the signed-in account. Screens using
+  // this hook live under the per-DID keyed subtree, so they remount on a switch.
+  const did = useSession().currentAccount?.did
   const [prefs, setPrefs] = useState<PhotoContextPrefs>(DEFAULT_PHOTO_PREFS)
   const [permission, setPermission] = useState<PhotoPermission>('unavailable')
   const [lastConclusion, setLastConclusion] =
@@ -110,7 +115,7 @@ export function usePhotoContext(): UsePhotoContext {
         })
         if (conclusion) {
           setLastConclusion(conclusion)
-          await saveLastConclusion(conclusion)
+          await saveLastConclusion(did, conclusion)
           void postPhotoContext(conclusion) // best-effort sync; no-ops if unreachable
         }
       } catch (e) {
@@ -120,15 +125,16 @@ export function usePhotoContext(): UsePhotoContext {
         setScanning(false)
       }
     })()
-  }, [])
+  }, [did])
 
   // Mount: load prefs + last conclusion; check permission; auto-scan when active.
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      await adoptLegacyPhotoData(did)
       const [p, last] = await Promise.all([
-        loadPhotoPrefs(),
-        loadLastConclusion(),
+        loadPhotoPrefs(did),
+        loadLastConclusion(did),
       ])
       if (cancelled) return
       setPrefs(p)
@@ -154,11 +160,11 @@ export function usePhotoContext(): UsePhotoContext {
         }
         const next: PhotoContextPrefs = {enabled: on}
         setPrefs(next)
-        await savePhotoPrefs(next)
+        await savePhotoPrefs(did, next)
         if (on) scanNow() // scan right after enabling
       })()
     },
-    [supported, scanNow],
+    [did, supported, scanNow],
   )
 
   return {

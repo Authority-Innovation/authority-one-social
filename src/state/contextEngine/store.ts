@@ -22,6 +22,42 @@ const EVENTS_KEY = '@authorityOne/contextEngine/events'
 const OPEN_DWELL_KEY = '@authorityOne/contextEngine/openDwell'
 const MAX_EVENTS = 200
 
+/**
+ * SOC-01: every key is namespaced by the account DID (as agent-config.ts does), so one
+ * account's opt-in, places and history are never visible to another account on the
+ * same device. With no signed-in account there is no key: reads return defaults and
+ * writes are dropped.
+ */
+function scoped(base: string, did: string | undefined): string | null {
+  return did ? `${base}:${did}` : null
+}
+
+/**
+ * One-time migration of data written under the old device-wide keys: the first
+ * account to load adopts it (never overwriting its own), then the legacy keys are
+ * removed so no other account can pick it up.
+ */
+export async function adoptLegacyContextData(
+  did: string | undefined,
+): Promise<void> {
+  if (!did) return
+  for (const base of [PREFS_KEY, EVENTS_KEY, OPEN_DWELL_KEY]) {
+    try {
+      const raw = await AsyncStorage.getItem(base)
+      if (raw == null) continue
+      const key = `${base}:${did}`
+      if ((await AsyncStorage.getItem(key)) == null) {
+        await AsyncStorage.setItem(key, raw)
+      }
+      await AsyncStorage.removeItem(base)
+    } catch (e) {
+      logger.warn('contextEngine: adoptLegacyContextData failed', {
+        safeMessage: String(e),
+      })
+    }
+  }
+}
+
 export const DEFAULT_PREFS: ContextPrefs = {
   enabled: false,
   backgroundEnabled: false,
@@ -55,9 +91,11 @@ function sanitizePlaces(raw: unknown): LabeledPlace[] {
   return out
 }
 
-export async function loadPrefs(): Promise<ContextPrefs> {
+export async function loadPrefs(did: string | undefined): Promise<ContextPrefs> {
+  const key = scoped(PREFS_KEY, did)
+  if (!key) return DEFAULT_PREFS
   try {
-    const raw = await AsyncStorage.getItem(PREFS_KEY)
+    const raw = await AsyncStorage.getItem(key)
     if (!raw) return DEFAULT_PREFS
     const p = JSON.parse(raw) as Partial<ContextPrefs>
     return {
@@ -72,17 +110,26 @@ export async function loadPrefs(): Promise<ContextPrefs> {
   }
 }
 
-export async function savePrefs(prefs: ContextPrefs): Promise<void> {
+export async function savePrefs(
+  did: string | undefined,
+  prefs: ContextPrefs,
+): Promise<void> {
+  const key = scoped(PREFS_KEY, did)
+  if (!key) return
   try {
-    await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+    await AsyncStorage.setItem(key, JSON.stringify(prefs))
   } catch (e) {
     logger.warn('contextEngine: savePrefs failed', {safeMessage: String(e)})
   }
 }
 
-export async function loadEvents(): Promise<ContextEvent[]> {
+export async function loadEvents(
+  did: string | undefined,
+): Promise<ContextEvent[]> {
+  const key = scoped(EVENTS_KEY, did)
+  if (!key) return []
   try {
-    const raw = await AsyncStorage.getItem(EVENTS_KEY)
+    const raw = await AsyncStorage.getItem(key)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? (parsed as ContextEvent[]) : []
@@ -91,9 +138,14 @@ export async function loadEvents(): Promise<ContextEvent[]> {
   }
 }
 
-async function saveEvents(events: ContextEvent[]): Promise<void> {
+async function saveEvents(
+  did: string | undefined,
+  events: ContextEvent[],
+): Promise<void> {
+  const key = scoped(EVENTS_KEY, did)
+  if (!key) return
   try {
-    await AsyncStorage.setItem(EVENTS_KEY, JSON.stringify(events))
+    await AsyncStorage.setItem(key, JSON.stringify(events))
   } catch (e) {
     logger.warn('contextEngine: saveEvents failed', {safeMessage: String(e)})
   }
@@ -101,22 +153,29 @@ async function saveEvents(events: ContextEvent[]): Promise<void> {
 
 /** Prepend a new conclusion (newest-first), capped at MAX_EVENTS. */
 export async function appendEvent(
+  did: string | undefined,
   event: ContextEvent,
 ): Promise<ContextEvent[]> {
-  const events = [event, ...(await loadEvents())].slice(0, MAX_EVENTS)
-  await saveEvents(events)
+  if (!did) return []
+  const events = [event, ...(await loadEvents(did))].slice(0, MAX_EVENTS)
+  await saveEvents(did, events)
   return events
 }
 
-export async function deleteEvent(id: string): Promise<ContextEvent[]> {
-  const events = (await loadEvents()).filter(e => e.id !== id)
-  await saveEvents(events)
+export async function deleteEvent(
+  did: string | undefined,
+  id: string,
+): Promise<ContextEvent[]> {
+  const events = (await loadEvents(did)).filter(e => e.id !== id)
+  await saveEvents(did, events)
   return events
 }
 
-export async function clearEvents(): Promise<void> {
+export async function clearEvents(did: string | undefined): Promise<void> {
+  const key = scoped(EVENTS_KEY, did)
+  if (!key) return
   try {
-    await AsyncStorage.removeItem(EVENTS_KEY)
+    await AsyncStorage.removeItem(key)
   } catch (e) {
     logger.warn('contextEngine: clearEvents failed', {safeMessage: String(e)})
   }
@@ -132,9 +191,13 @@ function asCoords(v: unknown): {lat: number; lng: number} | undefined {
     : undefined
 }
 
-export async function loadOpenDwell(): Promise<OpenDwell | null> {
+export async function loadOpenDwell(
+  did: string | undefined,
+): Promise<OpenDwell | null> {
+  const key = scoped(OPEN_DWELL_KEY, did)
+  if (!key) return null
   try {
-    const raw = await AsyncStorage.getItem(OPEN_DWELL_KEY)
+    const raw = await AsyncStorage.getItem(key)
     if (!raw) return null
     const d = JSON.parse(raw) as Partial<OpenDwell>
     if (typeof d?.place !== 'string' || typeof d?.startAt !== 'number')
@@ -154,17 +217,24 @@ export async function loadOpenDwell(): Promise<OpenDwell | null> {
   }
 }
 
-export async function saveOpenDwell(dwell: OpenDwell): Promise<void> {
+export async function saveOpenDwell(
+  did: string | undefined,
+  dwell: OpenDwell,
+): Promise<void> {
+  const key = scoped(OPEN_DWELL_KEY, did)
+  if (!key) return
   try {
-    await AsyncStorage.setItem(OPEN_DWELL_KEY, JSON.stringify(dwell))
+    await AsyncStorage.setItem(key, JSON.stringify(dwell))
   } catch (e) {
     logger.warn('contextEngine: saveOpenDwell failed', {safeMessage: String(e)})
   }
 }
 
-export async function clearOpenDwell(): Promise<void> {
+export async function clearOpenDwell(did: string | undefined): Promise<void> {
+  const key = scoped(OPEN_DWELL_KEY, did)
+  if (!key) return
   try {
-    await AsyncStorage.removeItem(OPEN_DWELL_KEY)
+    await AsyncStorage.removeItem(key)
   } catch (e) {
     logger.warn('contextEngine: clearOpenDwell failed', {
       safeMessage: String(e),

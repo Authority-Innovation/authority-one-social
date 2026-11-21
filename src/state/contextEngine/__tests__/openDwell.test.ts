@@ -11,6 +11,7 @@ import {
 
 // In-memory AsyncStorage (prefix `mock` so jest's factory may reference it).
 const mockStore = new Map<string, string>()
+const DID = 'did:plc:testaccount'
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
@@ -33,14 +34,14 @@ beforeEach(() => {
 
 describe('background prefs round-trip', () => {
   it('persists and reloads backgroundEnabled (defaults false)', async () => {
-    expect((await loadPrefs()).backgroundEnabled).toBe(false)
-    await savePrefs({enabled: false, backgroundEnabled: true})
-    expect((await loadPrefs()).backgroundEnabled).toBe(true)
+    expect((await loadPrefs(DID)).backgroundEnabled).toBe(false)
+    await savePrefs(DID, {enabled: false, backgroundEnabled: true})
+    expect((await loadPrefs(DID)).backgroundEnabled).toBe(true)
   })
 
   it('coerces a missing backgroundEnabled to false', async () => {
-    await savePrefs({enabled: true})
-    expect((await loadPrefs()).backgroundEnabled).toBe(false)
+    await savePrefs(DID, {enabled: true})
+    expect((await loadPrefs(DID)).backgroundEnabled).toBe(false)
   })
 })
 
@@ -53,22 +54,22 @@ describe('open-dwell persistence', () => {
   }
 
   it('returns null when nothing is stored', async () => {
-    expect(await loadOpenDwell()).toBeNull()
+    expect(await loadOpenDwell(DID)).toBeNull()
   })
 
   it('round-trips a saved open dwell', async () => {
-    await saveOpenDwell(dwell)
-    expect(await loadOpenDwell()).toEqual(dwell)
+    await saveOpenDwell(DID, dwell)
+    expect(await loadOpenDwell(DID)).toEqual(dwell)
   })
 
   it('clears the open dwell', async () => {
-    await saveOpenDwell(dwell)
-    await clearOpenDwell()
-    expect(await loadOpenDwell()).toBeNull()
+    await saveOpenDwell(DID, dwell)
+    await clearOpenDwell(DID)
+    expect(await loadOpenDwell(DID)).toBeNull()
   })
 
   it('returns null for a malformed stored value', async () => {
-    mockStore.set('@authorityOne/contextEngine/openDwell', '{"place":123}')
-    expect(await loadOpenDwell()).toBeNull()
+    mockStore.set(`@authorityOne/contextEngine/openDwell:${DID}`, '{"place":123}')
+    expect(await loadOpenDwell(DID)).toBeNull()
   })
 })

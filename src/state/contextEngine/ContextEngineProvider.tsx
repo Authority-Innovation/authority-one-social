@@ -28,6 +28,7 @@ import {
   type OpenDwell,
 } from '#/lib/contextEngine/types'
 import {logger} from '#/logger'
+import {useSession} from '#/state/session'
 import {IS_NATIVE} from '#/env'
 import {
   backgroundLocationSupported,
@@ -37,6 +38,7 @@ import {
   stopBackgroundUpdates,
 } from './backgroundLocation'
 import {
+  adoptLegacyContextData,
   appendEvent,
   clearEvents,
   DEFAULT_PREFS,
@@ -132,6 +134,10 @@ function normalizeGeocode(
 }
 
 export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
+  // SOC-01: everything is scoped to the signed-in account. This provider is mounted
+  // inside the subtree keyed by the account DID (App.native/App.web), so a switch or
+  // sign-out unmounts it and drops in-memory events, the capture loop and open dwell.
+  const did = useSession().currentAccount?.did
   const [prefs, setPrefs] = useState<ContextPrefs>(DEFAULT_PREFS)
   const [events, setEvents] = useState<ContextEvent[]>([])
   const [permissionGranted, setPermissionGranted] = useState(false)
@@ -153,7 +159,8 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const [p, ev] = await Promise.all([loadPrefs(), loadEvents()])
+      await adoptLegacyContextData(did)
+      const [p, ev] = await Promise.all([loadPrefs(did), loadEvents(did)])
       if (cancelled) return
       setPrefs(p)
       setEvents(ev)
@@ -171,7 +178,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
       if (mig.clearPref) {
         const cleared: ContextPrefs = {...p, backgroundEnabled: false}
         if (!cancelled) setPrefs(cleared)
-        await savePrefs(cleared)
+        await savePrefs(did, cleared)
       }
       // Phase 1.5 (only if ever shipped again): re-check Always permission and
       // (re)start the background updates so they survive an app/device restart.
@@ -185,7 +192,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [did])
 
   const active = shouldCapture({enabled: prefs.enabled, permissionGranted})
   const backgroundActive = shouldCaptureBackground({
@@ -195,7 +202,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
 
   const recordEvent = (ev: ContextEvent) => {
     void (async () => {
-      const next = await appendEvent(ev)
+      const next = await appendEvent(did, ev)
       setEvents(next)
       void postContextEvents([ev]) // best-effort sync; no-ops if unreachable
     })()
@@ -289,7 +296,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
       }
       const next: ContextPrefs = {...prefsRef.current, enabled: on}
       setPrefs(next)
-      await savePrefs(next)
+      await savePrefs(did, next)
     })()
   }
 
@@ -307,7 +314,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
       }
       const next: ContextPrefs = {...prefsRef.current, backgroundEnabled: on}
       setPrefs(next)
-      await savePrefs(next)
+      await savePrefs(did, next)
     })()
   }
 
@@ -333,7 +340,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
           },
         }
         setPrefs(next)
-        await savePrefs(next)
+        await savePrefs(did, next)
       } catch (e) {
         logger.warn('contextEngine: setAnchor failed', {safeMessage: String(e)})
       }
@@ -374,7 +381,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
         places: [...(prefsRef.current.places ?? []), place],
       }
       setPrefs(next)
-      await savePrefs(next)
+      await savePrefs(did, next)
       return {ok: true, name: label}
     } catch (e) {
       logger.warn('contextEngine: addLabeledPlace failed', {
@@ -391,13 +398,13 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
         places: (prefsRef.current.places ?? []).filter(p => p.id !== id),
       }
       setPrefs(next)
-      await savePrefs(next)
+      await savePrefs(did, next)
     })()
   }
 
   const deleteEvent = (id: string) => {
     void (async () => {
-      const next = await deleteEventFromStore(id)
+      const next = await deleteEventFromStore(did, id)
       setEvents(next)
       void deleteContextEvent(id)
     })()
@@ -405,8 +412,8 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
 
   const clearAll = () => {
     void (async () => {
-      const current = await loadEvents()
-      await clearEvents()
+      const current = await loadEvents(did)
+      await clearEvents(did)
       setEvents([])
       for (const e of current) void deleteContextEvent(e.id)
     })()
@@ -415,7 +422,7 @@ export function ContextEngineProvider({children}: React.PropsWithChildren<{}>) {
   const refresh = () => {
     void (async () => {
       const [local, remote] = await Promise.all([
-        loadEvents(),
+        loadEvents(did),
         fetchRecentContext(),
       ])
       const byId = new Map<string, ContextEvent>()
