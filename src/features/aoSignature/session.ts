@@ -248,7 +248,7 @@ export async function adoptRedeem(
 
 /**
  * The runtime answered 403 `not-provisioned` to an /app/* call. The session
- * has no primary: the agent offer shows again (it is never a gate) — but
+ * has no primary: the agent offer shows again (it is never a gate) - but
  * ONLY when that call carried THIS AO session's bearer (`token`):
  * a refusal answered to another account's PDS token says nothing about it.
  */

@@ -157,6 +157,10 @@ import {
 import {useAnalytics} from '#/analytics'
 import {setNavigationMetadata} from '#/analytics/metadata'
 import {IS_LIQUID_GLASS, IS_NATIVE, IS_WEB} from '#/env'
+import {
+  AO_SIGNATURE_HTTPS_CALLBACK_PATH,
+  isAOSignatureArmed,
+} from '#/features/aoSignature/config'
 import {InviteScannerScreen} from '#/features/inviteFriends'
 import {router} from '#/routes'
 import {Referrer} from '../modules/expo-bluesky-swiss-army'
@@ -1001,6 +1005,19 @@ const LINKING = {
     // react-navigation strips the `bluesky://` prefix and passes the path
     // without a leading slash, so normalize before matching.
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
+    // Signature (armed only): the claimed sign-in callback is normally handed
+    // by the OS to the in-app auth session. A stray open of it (a link tapped
+    // elsewhere) carries nothing usable without that session's PKCE verifier,
+    // so it opens Home rather than NotFound.
+    if (
+      isAOSignatureArmed() &&
+      normalizedPath.split('?')[0] === AO_SIGNATURE_HTTPS_CALLBACK_PATH
+    ) {
+      if (IS_NATIVE) {
+        return buildStateObject('HomeTab', 'Home', {})
+      }
+      return buildStateObject('Flat', 'Home', {})
+    }
     if (CHAT_INVITE_CODE_REGEX.test(normalizedPath.split('?')[0])) {
       if (IS_NATIVE) {
         return buildStateObject('HomeTab', 'Home', params)

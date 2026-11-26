@@ -1,7 +1,7 @@
 // Native authorize leg, by callback mode:
-//  · https (Community iOS, the claimed callback): the local expo-ao-auth-session
+//  - https (Community iOS, the claimed callback): the local expo-ao-auth-session
 //    module - ASWebAuthenticationSession with Callback.https (iOS 17.4+);
-//  · bounce (legacy): expo-web-browser's auth session (ASWebAuthenticationSession
+//  - bounce (legacy): expo-web-browser's auth session (ASWebAuthenticationSession
 //    on iOS, a Custom Tab + the app's scheme intent on Android).
 // Non-ephemeral either way, so Janus's own browser session (Google, one tap)
 // carries over. Each native module is loaded only once a sign-in starts.

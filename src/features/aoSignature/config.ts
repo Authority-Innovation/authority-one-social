@@ -21,13 +21,13 @@
 //   iOS:     EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS
 //   Android: EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID
 //   native:  EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI   (https), one of:
-//            · the CLAIMED callback (iOS only, preferred):
+//            - the CLAIMED callback (iOS only, preferred):
 //                https://<host>/auth/janus/community/app-callback
 //              with EXPO_PUBLIC_AO_SIGNATURE_SCHEME UNSET. The in-app browser
 //              session waits for that exact https URL (iOS 17.4
 //              ASWebAuthenticationSession.Callback.https, the local
 //              expo-ao-auth-session module); no custom scheme, no bounce.
-//            · the legacy runtime bounce: .../auth/janus/app-callback (or
+//            - the legacy runtime bounce: .../auth/janus/app-callback (or
 //              android-callback) with EXPO_PUBLIC_AO_SIGNATURE_SCHEME =
 //              community | community-dev.
 //   web:     EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_WEB
@@ -60,8 +60,8 @@ const AO_SIGNATURE_BOUNCE_PATHS = [
 ]
 
 /** How the native in-app browser session learns the authorize leg ended:
- *  `https` — the claimed callback itself (iOS 17.4+);
- *  `bounce` — the runtime bounces to `<scheme>://auth/janus/app-callback`. */
+ *  `https` - the claimed callback itself (iOS 17.4+);
+ *  `bounce` - the runtime bounces to `<scheme>://auth/janus/app-callback`. */
 export type AOSignatureCallbackMode = 'https' | 'bounce'
 
 export type AOSignaturePlatform = 'ios' | 'android' | 'web'

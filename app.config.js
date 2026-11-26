@@ -64,15 +64,15 @@ const HURRICANES_FONT_PRESENT = fs.existsSync(
 // that TS module, so a parity test
 // (src/features/aoSignature/__tests__/appConfigParity.test.ts) runs both over
 // the same env matrix and requires them to agree. Any mismatch or partial
-// config ⇒ unarmed ⇒ the scheme stays exactly 'one', no extra associated
+// config => unarmed => the scheme stays exactly 'one', no extra associated
 // domain, and the iOS floor stays 17.0.
 //   `platform`: EAS_BUILD_PLATFORM ('ios' | 'android'); unset (a local
 //   prebuild) ⇒ armed if EITHER native platform's config is complete.
 // Two native callback modes (config.ts AOSignatureCallbackMode):
-//   · https  - the CLAIMED callback /auth/janus/community/app-callback, iOS only,
+//   - https  - the CLAIMED callback /auth/janus/community/app-callback, iOS only,
 //              no scheme: needs applinks:/webcredentials: for its host and iOS
 //              17.4 (ASWebAuthenticationSession.Callback.https);
-//   · bounce - the legacy runtime bounce to community(-dev)://.
+//   - bounce - the legacy runtime bounce to community(-dev)://.
 // ─────────────────────────────────────────────────────────────────────────────
 const AO_SIGNATURE_DEFAULT_RUNTIME =
   'https://authority-one-agent-runtime.e-479.workers.dev' // = AGENT_RUNTIME_SERVICE
