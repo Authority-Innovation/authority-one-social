@@ -42,6 +42,7 @@ jest.mock('#/components/Button', () => {
           onPress={onPress}
           accessibilityRole="button"
           accessibilityLabel={label}
+          accessibilityHint={label}
         />
       ) : null,
     ButtonText: () => null,
