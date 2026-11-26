@@ -13,6 +13,11 @@ jest.mock('expo-crypto', () => {
   mockRequired.push('expo-crypto')
   return {}
 })
+// The claimed https callback's native session (Community iOS, 2026-11-26).
+jest.mock('../../../../modules/expo-ao-auth-session', () => {
+  mockRequired.push('expo-ao-auth-session')
+  return {}
+})
 jest.mock('#/state/persisted', () => ({
   ...jest.requireActual<object>('#/state/persisted'),
   get: jest.fn(() => ({

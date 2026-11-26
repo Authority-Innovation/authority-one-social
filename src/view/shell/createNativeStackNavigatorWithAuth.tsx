@@ -121,7 +121,8 @@ function NativeStackNavigator({
   const {showLoggedOut} = useLoggedOutView()
   const {setShowLoggedOut} = useLoggedOutViewControls()
   // Signature sign-in (dark unless armed ⇒ always null): a Signature-only
-  // person, or an AO session that still needs its first agent.
+  // person, or an AO session that still needs Community's terms (an agent is
+  // optional, never gated).
   const aoGate = useAOSignatureGate(hasSession, currentAccount?.did)
   const {isMobile} = useWebMediaQueries()
   const {leftNavMinimal} = useLayoutBreakpoints()

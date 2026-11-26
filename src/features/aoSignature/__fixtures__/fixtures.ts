@@ -14,9 +14,23 @@ export const IOS_CFG: AOSignatureConfig = {
   redirectUri: 'https://app-dev.test/auth/janus/app-callback',
   scheme: 'community-dev',
   callbackUrl: 'community-dev://auth/janus/app-callback',
+  callbackMode: 'bounce',
   sessionPath: '/auth/janus/community-ios/session',
   audience: null,
   scopes: 'openid email',
+}
+
+/** The claimed https callback (Community iOS, 2026-11-26): no scheme, no
+ *  bounce; the session waits for the registered https URL itself. */
+export const COMMUNITY_HTTPS_CALLBACK =
+  'https://app-dev.authority-one.com/auth/janus/community/app-callback'
+
+export const IOS_HTTPS_CFG: AOSignatureConfig = {
+  ...IOS_CFG,
+  redirectUri: COMMUNITY_HTTPS_CALLBACK,
+  scheme: null,
+  callbackUrl: COMMUNITY_HTTPS_CALLBACK,
+  callbackMode: 'https',
 }
 
 function b64url(s: string): string {

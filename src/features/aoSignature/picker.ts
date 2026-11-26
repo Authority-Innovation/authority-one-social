@@ -1,8 +1,8 @@
-// First-run agent picker: a PURE state machine (tested) plus the runner that
-// drives it against the runtime. Shown when the AO session has no primary
-// agent (`needsAgent`), and again whenever the runtime answers 403
-// `not-provisioned` (every /app/* route but the three picker routes refuses
-// until a primary exists).
+// Agent picker: a PURE state machine (tested) plus the runner that drives it
+// against the runtime. OFFERED (never forced: Community members are
+// person-only) when the AO session has no primary agent (`needsAgent`); a 403
+// `not-provisioned` from an agent route sets `needsAgent` again, so the offer
+// reappears.
 import {type AOClient} from './client'
 import {AOSignatureError} from './errors'
 import {type AOPickerAgent, type AOPickerList} from './wire'

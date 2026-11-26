@@ -10,7 +10,13 @@ const appConfig = require('../../../../app.config.js') as {
     env: Record<string, string | undefined>,
     platform?: string,
   ) => string | null
+  aoSignatureHttpsCallbackHost: (
+    env: Record<string, string | undefined>,
+    platform?: string,
+  ) => string | null
 }
+
+const HTTPS_CB = 'https://app-dev.test/auth/janus/community/app-callback'
 
 const RT = 'https://authority-one-agent-runtime.e-479.workers.dev'
 const full: Record<string, string> = {
@@ -111,6 +117,46 @@ const cases: Array<[string, Record<string, string | undefined>]> = [
       EXPO_PUBLIC_AO_SIGNATURE_AUTHORIZE_BASE: 'https://signature.test/auth/v1',
     },
   ],
+  // The claimed https callback (Community iOS, 2026-11-26).
+  [
+    'https callback',
+    {
+      ...full,
+      EXPO_PUBLIC_AO_SIGNATURE_SCHEME: undefined,
+      EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI: HTTPS_CB,
+    },
+  ],
+  [
+    'https callback + a scheme (mixed)',
+    {...full, EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI: HTTPS_CB},
+  ],
+  [
+    'https callback with a port',
+    {
+      ...full,
+      EXPO_PUBLIC_AO_SIGNATURE_SCHEME: '',
+      EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI:
+        'https://app-dev.test:8443/auth/janus/community/app-callback',
+    },
+  ],
+  [
+    'https callback, Android client only',
+    {
+      ...full,
+      EXPO_PUBLIC_AO_SIGNATURE_SCHEME: '',
+      EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS: '',
+      EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI: HTTPS_CB,
+    },
+  ],
+  [
+    'https callback, http issuer',
+    {
+      ...full,
+      EXPO_PUBLIC_AO_SIGNATURE_SCHEME: '',
+      EXPO_PUBLIC_AO_SIGNATURE_ISSUER: 'http://janus.test/auth/v1',
+      EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI: HTTPS_CB,
+    },
+  ],
 ]
 
 const D = 'community-dev'
@@ -135,6 +181,20 @@ const expected: Record<string, readonly (string | null)[]> = {
   'bad scheme': OFF,
   'bad authorize base': OFF,
   'good authorize base': [D, D, D],
+  // https mode never registers a scheme.
+  'https callback': OFF,
+  'https callback + a scheme (mixed)': OFF,
+  'https callback with a port': OFF,
+  'https callback, Android client only': OFF,
+  'https callback, http issuer': OFF,
+}
+
+const H = 'app-dev.test'
+/** The EXPECTED claimed-callback host (associated domain + the 17.4 floor)
+ *  per case: [iOS build, Android build, local prebuild]. */
+const expectedHttpsHost: Record<string, readonly (string | null)[]> = {
+  ...Object.fromEntries(Object.keys(expected).map(k => [k, OFF])),
+  'https callback': [H, null, H],
 }
 
 describe('app.config.js scheme registration mirrors config.ts', () => {
@@ -161,5 +221,25 @@ describe('app.config.js scheme registration mirrors config.ts', () => {
     expect(appConfig.aoSignatureNativeScheme(raw, undefined)).toBe(
       either?.scheme ?? null,
     )
+  })
+
+  it.each(cases)('%s: claimed-callback host', (name, raw) => {
+    const [ios, android, local] = expectedHttpsHost[name]
+    expect(appConfig.aoSignatureHttpsCallbackHost(raw, 'ios')).toBe(ios)
+    expect(appConfig.aoSignatureHttpsCallbackHost(raw, 'android')).toBe(
+      android,
+    )
+    expect(appConfig.aoSignatureHttpsCallbackHost(raw, undefined)).toBe(local)
+    // Parity: the host is set exactly when config.ts arms iOS in https mode.
+    const agentRuntime = raw.EXPO_PUBLIC_AGENT_RUNTIME_URL ?? RT
+    const ts = parseAOSignatureConfig(toEnv(raw), 'ios', agentRuntime)
+    expect(appConfig.aoSignatureHttpsCallbackHost(raw, 'ios')).toBe(
+      ts?.callbackMode === 'https' ? new URL(ts.redirectUri).hostname : null,
+    )
+    // Android never runs the https mode.
+    expect(
+      parseAOSignatureConfig(toEnv(raw), 'android', agentRuntime)
+        ?.callbackMode ?? null,
+    ).not.toBe('https')
   })
 })

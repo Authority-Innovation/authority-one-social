@@ -25,7 +25,9 @@ export type AOGate = 'loading' | 'shell' | null
  * What the navigator should render instead of the social app, if anything:
  *  · 'shell'  — signed in with Signature but not to the social app (no PDS
  *               session), or the AO session that speaks for this account
- *               still needs Community's terms or its first agent;
+ *               still needs Community's terms. NOT for a missing agent:
+ *               Community members are person-only, so the picker is an
+ *               offer (AOOptionalAgent), never a gate;
  *  · 'loading'— armed, no PDS session, and the device store is still being read;
  *  · null     — carry on exactly as before (always, while dark).
  */
@@ -40,8 +42,9 @@ export function useAOSignatureGate(
   if (!r) return null
   if (!hasSession) return 'shell'
   // The AO session that speaks for THIS account must hold Community's terms
-  // (per-app enrollment) and an agent before the social app renders.
-  if (currentDid === r.did && (!r.enrolled || r.needsAgent)) return 'shell'
+  // (per-app enrollment) before the social app renders. An agent is not
+  // required (person-only members).
+  if (currentDid === r.did && !r.enrolled) return 'shell'
   return null
 }
 

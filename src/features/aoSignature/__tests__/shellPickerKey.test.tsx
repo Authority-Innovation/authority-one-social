@@ -1,8 +1,15 @@
 import {StrictMode} from 'react'
 import {describe, expect, it, jest} from '@jest/globals'
-import {act, render, renderHook} from '@testing-library/react-native'
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from '@testing-library/react-native'
 
-// The Shell remounts the picker per AO session (key={record.sid}).
+// The Shell remounts the agent offer (and its picker) per AO session, and
+// never forces the picker: Community members are person-only (2026-11-26).
 jest.mock('../config', () => ({
   isAOSignatureArmed: () => true,
   AO_SIGNATURE_CONFIG: {platform: 'ios', runtimeUrl: 'https://runtime.test'},
@@ -17,10 +24,14 @@ jest.mock('#/alf', () => ({
   atoms: new Proxy({}, {get: () => ({})}),
   useTheme: () => ({atoms: new Proxy({}, {get: () => ({})})}),
 }))
-jest.mock('#/components/Button', () => ({
-  Button: () => null,
-  ButtonText: () => null,
-}))
+jest.mock('#/components/Button', () => {
+  const {Pressable} = require('react-native')
+  return {
+    Button: ({testID, onPress}: {testID?: string; onPress: () => void}) =>
+      testID ? <Pressable testID={testID} onPress={onPress} /> : null,
+    ButtonText: () => null,
+  }
+})
 jest.mock('#/components/Loader', () => ({Loader: () => null}))
 jest.mock('#/components/Typography', () => ({Text: () => null}))
 jest.mock('@lingui/react', () => ({
@@ -89,16 +100,58 @@ function needsAgent(sid: string) {
 }
 
 describe('Shell picker per session', () => {
-  it('a session swap remounts the picker (no state carries over)', async () => {
-    await setAORecord(needsAgent('sid-a'))
+  it('person-only: no agent shows the community and an OFFER, never the picker by itself', async () => {
+    mockRenders.length = 0
+    mockConnectRenders.length = 0
+    await act(async () => {
+      await setAORecord(needsAgent('sid-p'))
+    })
+    render(<AOSignatureShell gate="shell" />)
+    expect(mockConnectRenders).toContain('sid-p')
+    expect(screen.getByTestId('aoOptionalAgentOpen')).toBeTruthy()
+    expect(mockRenders.filter(r => r.sid === 'sid-p')).toEqual([])
+    // Opened on request, closed again with "Not now".
+    fireEvent.press(screen.getByTestId('aoOptionalAgentOpen'))
+    expect(mockRenders.filter(r => r.sid === 'sid-p').length).toBeGreaterThan(
+      0,
+    )
+    const before = mockRenders.length
+    fireEvent.press(screen.getByTestId('aoOptionalAgentClose'))
+    expect(screen.getByTestId('aoOptionalAgentOpen')).toBeTruthy()
+    expect(mockRenders.length).toBe(before)
+  })
+
+  it('with a primary there is no offer at all', async () => {
+    await act(async () => {
+      await setAORecord({
+        ...needsAgent('sid-q'),
+        needsAgent: false,
+        primary: 'agent',
+      })
+    })
+    render(<AOSignatureShell gate="shell" />)
+    expect(screen.queryByTestId('aoOptionalAgentOpen')).toBeNull()
+    expect(screen.queryByTestId('aoOptionalAgent')).toBeNull()
+  })
+
+  it('a session swap remounts the offer: an open picker never carries over (no state carries over)', async () => {
+    mockRenders.length = 0
+    await act(async () => {
+      await setAORecord(needsAgent('sid-a'))
+    })
     render(
       <StrictMode>
         <AOSignatureShell gate="shell" />
       </StrictMode>,
     )
+    fireEvent.press(screen.getByTestId('aoOptionalAgentOpen'))
     await act(async () => {
       await setAORecord(needsAgent('sid-b'))
     })
+    // The new session starts CLOSED: the picker is not shown for sid-b
+    // until this person asks for it.
+    expect(mockRenders.filter(r => r.sid === 'sid-b')).toEqual([])
+    fireEvent.press(screen.getByTestId('aoOptionalAgentOpen'))
     const idsFor = (sid: string) =>
       new Set(mockRenders.filter(r => r.sid === sid).map(r => r.id))
     const a = idsFor('sid-a')
@@ -160,6 +213,26 @@ describe('gate (review edcf058f8 H2)', () => {
     })
     const {result} = renderHook(() => useAOSignatureGate(true, DID))
     expect(result.current).toBe('shell')
+  })
+  it('person-only: enrolled with NO agent, the social app renders (the picker is never a gate)', async () => {
+    await act(async () => {
+      await setAORecord(needsAgent('sid-n'))
+    })
+    expect(renderHook(() => useAOSignatureGate(true, DID)).result.current).toBe(
+      null,
+    )
+    // Signed in with Signature only: the shell (the community + the offer).
+    expect(
+      renderHook(() => useAOSignatureGate(false, undefined)).result.current,
+    ).toBe('shell')
+  })
+  it('person-only but NOT enrolled: still the shell (terms first)', async () => {
+    await act(async () => {
+      await setAORecord({...needsAgent('sid-m'), enrolled: false})
+    })
+    expect(renderHook(() => useAOSignatureGate(true, DID)).result.current).toBe(
+      'shell',
+    )
   })
   it('enrolled with an agent, the social app renders; another account is never gated by this session', async () => {
     await act(async () => {

@@ -13,6 +13,7 @@ import {AO_SIGNATURE_CONFIG} from '../config'
 import {startAOSignature} from '../controller'
 import {useAOSignatureState, usePdsPort} from '../hooks'
 import {AOAccountActions} from './AccountActions'
+import {AOOptionalAgent} from './OptionalAgent'
 import {useAOAction} from './useAOAction'
 
 /**
@@ -43,8 +44,11 @@ function ArmedAccountSection() {
       <Text style={[a.text_lg, a.font_bold]}>
         <Trans>Authority Signature</Trans>
       </Text>
-      {linkedHere ? (
-        <AOAccountActions />
+      {linkedHere && record ? (
+        <>
+          <AOOptionalAgent key={`agent-${record.sid}`} record={record} />
+          <AOAccountActions />
+        </>
       ) : (
         <>
           <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>

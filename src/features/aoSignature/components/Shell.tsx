@@ -12,15 +12,17 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {useAOSignatureState} from '../hooks'
 import {AOAccountActions} from './AccountActions'
-import {AOAgentPicker} from './AgentPicker'
 import {AOConnectCommunity} from './ConnectCommunity'
 import {AOEnrollment} from './Enrollment'
+import {AOOptionalAgent} from './OptionalAgent'
 
 /**
  * What a person signed in ONLY with Authority Signature sees (no PDS session in
- * the social app), and the first-run picker for anyone whose AO session has no
- * agent yet. The social timeline needs the person's PDS session, which this
- * lane deliberately never hands to the device (see the P2b report, open items).
+ * the social app), and Community's terms for an AO session that has not
+ * accepted them. An agent is optional (person-only members): it is offered,
+ * never required. The social timeline needs the person's PDS session, which
+ * this lane deliberately never hands to the device (see the P2b report, open
+ * items).
  */
 export function AOSignatureShell({gate}: {gate: 'loading' | 'shell'}) {
   const t = useTheme()
@@ -52,21 +54,21 @@ export function AOSignatureShell({gate}: {gate: 'loading' | 'shell'}) {
         // Community's own terms come first (per-app enrollment): keyed by the
         // session so a new sign-in never inherits an earlier screen's ticks.
         <AOEnrollment key={record.sid} token={record.token} sid={record.sid} />
-      ) : record.needsAgent ? (
-        <AOAgentPicker
-          // One picker per AO session: a session swap (new sign-in,
-          // reverify) remounts it, so no state or in-flight answer from the
-          // previous session survives.
-          key={record.sid}
-          token={record.token}
-          sid={record.sid}
-        />
       ) : (
+        // Community members are person-only: no primary agent is NOT a
+        // gate. The community comes first; the picker is an offer.
         <View style={[a.p_xl, a.gap_lg]}>
           <Text style={[a.text_2xl, a.font_bold]}>
             <Trans>You're signed in to Community</Trans>
           </Text>
           <AOConnectCommunity key={record.sid} record={record} />
+          <AOOptionalAgent
+            // One offer (and picker) per AO session: a session swap (new
+            // sign-in, reverify) remounts it, so no state or in-flight answer
+            // from the previous session survives.
+            key={`agent-${record.sid}`}
+            record={record}
+          />
           <Button
             label={_(msg`Sign in with your handle`)}
             color="primary"

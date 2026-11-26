@@ -16,9 +16,10 @@ import {adoptPrimary, noteAOEnrollmentRequired} from '../session'
 import {usePickerMachine} from './usePickerMachine'
 
 /**
- * First-run agent picker: "Create my agent" or "Use an agent you've been
- * given" (an agent an operator attached to this person — the Steve case).
- * Shown until the runtime has a primary for this person.
+ * Agent picker: "Create my agent" or "Use an agent you've been given" (an
+ * agent an operator attached to this person — the Steve case). Opened from
+ * AOOptionalAgent while the runtime has no primary for this person; never a
+ * gate (Community members are person-only).
  */
 export function AOAgentPicker({token, sid}: {token: string; sid: string}) {
   const t = useTheme()
