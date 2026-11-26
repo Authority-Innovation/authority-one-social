@@ -58,25 +58,35 @@ const HURRICANES_FONT_PRESENT = fs.existsSync(
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Signature sign-in (P2b, dark): the native bounce scheme to register, or null.
+// Signature sign-in (P2b, dark): what the native build must carry, or nothing.
 // It MIRRORS parseAOSignatureConfig (src/features/aoSignature/config.ts) for the
 // native platforms: this file runs in plain node at build time and can't import
 // that TS module, so a parity test
 // (src/features/aoSignature/__tests__/appConfigParity.test.ts) runs both over
 // the same env matrix and requires them to agree. Any mismatch or partial
-// config ⇒ null ⇒ the scheme stays exactly 'one'.
+// config ⇒ unarmed ⇒ the scheme stays exactly 'one', no extra associated
+// domain, and the iOS floor stays 17.0.
 //   `platform`: EAS_BUILD_PLATFORM ('ios' | 'android'); unset (a local
 //   prebuild) ⇒ armed if EITHER native platform's config is complete.
+// Two native callback modes (config.ts AOSignatureCallbackMode):
+//   · https  - the CLAIMED callback /auth/janus/community/app-callback, iOS only,
+//              no scheme: needs applinks:/webcredentials: for its host and iOS
+//              17.4 (ASWebAuthenticationSession.Callback.https);
+//   · bounce - the legacy runtime bounce to community(-dev)://.
 // ─────────────────────────────────────────────────────────────────────────────
 const AO_SIGNATURE_DEFAULT_RUNTIME =
   'https://authority-one-agent-runtime.e-479.workers.dev' // = AGENT_RUNTIME_SERVICE
+const AO_SIGNATURE_HTTPS_CALLBACK_PATH = '/auth/janus/community/app-callback'
+/** The iOS floor an https-armed build needs (Callback.https). */
+const AO_SIGNATURE_HTTPS_IOS_FLOOR = '17.4'
 
 /**
+ * One native platform's armed lane, or null.
  * @param {Record<string, string | undefined>} rawEnv
- * @param {string | undefined} platform
- * @returns {string | null}
+ * @param {'ios' | 'android'} platform
+ * @returns {{mode: 'https', scheme: null, host: string} | {mode: 'bounce', scheme: string, host: null} | null}
  */
-function aoSignatureNativeScheme(rawEnv, platform) {
+function aoSignatureNativeLane(rawEnv, platform) {
   /** @param {string} k */
   const env = k => String(rawEnv[k] ?? '').trim()
   /** @param {string} raw @returns {URL | null} */
@@ -109,23 +119,61 @@ function aoSignatureNativeScheme(rawEnv, platform) {
   if (runtime.origin !== originOf(agentRuntime)) return null
   const authorizeBase = env('EXPO_PUBLIC_AO_SIGNATURE_AUTHORIZE_BASE')
   if (authorizeBase && !httpsUrl(authorizeBase)) return null
-  const scheme = env('EXPO_PUBLIC_AO_SIGNATURE_SCHEME')
-  if (!['community', 'community-dev'].includes(scheme)) return null
+  const clientId = env(
+    platform === 'ios'
+      ? 'EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS'
+      : 'EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID',
+  )
+  if (!clientId || /\s|,/.test(clientId)) return null
   const redirect = httpsUrl(env('EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI'))
+  if (!redirect) return null
+  const scheme = env('EXPO_PUBLIC_AO_SIGNATURE_SCHEME')
+  if (redirect.pathname === AO_SIGNATURE_HTTPS_CALLBACK_PATH) {
+    if (platform !== 'ios' || scheme) return null
+    if (redirect.port || redirect.username || redirect.password) return null
+    return {mode: 'https', scheme: null, host: redirect.hostname}
+  }
+  if (!['community', 'community-dev'].includes(scheme)) return null
   if (
-    !redirect ||
-    (redirect.pathname !== '/auth/janus/app-callback' &&
-      redirect.pathname !== '/auth/janus/android-callback')
+    redirect.pathname !== '/auth/janus/app-callback' &&
+    redirect.pathname !== '/auth/janus/android-callback'
   ) {
     return null
   }
-  /** @param {string} id */
-  const clientOk = id => Boolean(id) && !/\s|,/.test(id)
-  const ios = clientOk(env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS'))
-  const android = clientOk(env('EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID'))
-  const armed =
-    platform === 'ios' ? ios : platform === 'android' ? android : ios || android
-  return armed ? scheme : null
+  return {mode: 'bounce', scheme, host: null}
+}
+
+/** @param {string | undefined} platform @returns {Array<'ios' | 'android'>} */
+function aoSignatureNativePlatforms(platform) {
+  return platform === 'ios' || platform === 'android'
+    ? [platform]
+    : ['ios', 'android']
+}
+
+/**
+ * The bounce scheme to register, or null (https mode registers none).
+ * @param {Record<string, string | undefined>} rawEnv
+ * @param {string | undefined} platform
+ * @returns {string | null}
+ */
+function aoSignatureNativeScheme(rawEnv, platform) {
+  for (const p of aoSignatureNativePlatforms(platform)) {
+    const lane = aoSignatureNativeLane(rawEnv, p)
+    if (lane?.scheme) return lane.scheme
+  }
+  return null
+}
+
+/**
+ * The claimed callback's host (iOS https mode), or null. When set the iOS
+ * build gets applinks:/webcredentials: for it and the 17.4 floor.
+ * @param {Record<string, string | undefined>} rawEnv
+ * @param {string | undefined} platform
+ * @returns {string | null}
+ */
+function aoSignatureHttpsCallbackHost(rawEnv, platform) {
+  if (platform === 'android') return null
+  return aoSignatureNativeLane(rawEnv, 'ios')?.host ?? null
 }
 
 /**
@@ -162,6 +210,11 @@ function appConfigForBrand(BRAND) {
   const IS_TESTFLIGHT = process.env.EXPO_PUBLIC_ENV === 'testflight'
   // Signature sign-in (P2b, dark): see aoSignatureNativeScheme below.
   const AO_SIGNATURE_SCHEME = aoSignatureNativeScheme(
+    process.env,
+    process.env.EAS_BUILD_PLATFORM,
+  )
+  // Signature sign-in, claimed https callback (iOS, dark unless armed).
+  const AO_SIGNATURE_HTTPS_HOST = aoSignatureHttpsCallbackHost(
     process.env,
     process.env.EAS_BUILD_PLATFORM,
   )
@@ -202,6 +255,16 @@ function appConfigForBrand(BRAND) {
   const ASSOCIATED_DOMAINS = PAID_SIGNING
     ? [
         ...BRAND.associatedDomains,
+        // Signature (armed https callback only): ASWebAuthenticationSession's
+        // Callback.https needs the app associated with the callback host; the
+        // host's AASA must list com.authorityone.app for the callback path
+        // (applinks) and as a webcredentials app.
+        ...(AO_SIGNATURE_HTTPS_HOST
+          ? [
+              `applinks:${AO_SIGNATURE_HTTPS_HOST}`,
+              `webcredentials:${AO_SIGNATURE_HTTPS_HOST}`,
+            ]
+          : []),
         // When testing local services, enter an ngrok (et al) domain here. It must use a standard HTTP/HTTPS port.
         ...(IS_DEV || IS_TESTFLIGHT ? [] : []),
       ]
@@ -497,7 +560,11 @@ function appConfigForBrand(BRAND) {
           'expo-build-properties',
           {
             ios: {
-              deploymentTarget: '17.0',
+              // 17.0, or 17.4 when the Signature https callback is armed
+              // (ASWebAuthenticationSession.Callback.https is 17.4+).
+              deploymentTarget: AO_SIGNATURE_HTTPS_HOST
+                ? AO_SIGNATURE_HTTPS_IOS_FLOOR
+                : '17.0',
               buildReactNativeFromSource: true,
               ccacheEnabled: IS_DEV,
               cxxLanguageStandard: 'c++23',
@@ -682,5 +749,6 @@ function appConfigForBrand(BRAND) {
 }
 
 appConfig.aoSignatureNativeScheme = aoSignatureNativeScheme
+appConfig.aoSignatureHttpsCallbackHost = aoSignatureHttpsCallbackHost
 appConfig.appConfigForBrand = appConfigForBrand
 module.exports = appConfig

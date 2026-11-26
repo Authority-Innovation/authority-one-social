@@ -49,7 +49,8 @@ const STATE_RANDOM_RE = /^[A-Za-z0-9_-]{1,128}$/
 /**
  * The state the runtime bounce recognises: `as.<scheme>.<random>` on native
  * (janus-bounce.js markedScheme — exactly three dot parts, allow-listed
- * scheme). Web has no bounce, so its state is the bare random part.
+ * scheme). Web and the claimed https callback have no bounce, so their state
+ * is the bare random part.
  */
 export function mintState(
   cfg: Pick<AOSignatureConfig, 'scheme'>,

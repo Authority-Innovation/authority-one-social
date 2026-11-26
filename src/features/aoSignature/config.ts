@@ -20,8 +20,16 @@
 //                                            is only ever sent there)
 //   iOS:     EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_IOS
 //   Android: EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_ANDROID
-//   native:  EXPO_PUBLIC_AO_SIGNATURE_SCHEME       community | community-dev
-//            EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI   the runtime bounce (https)
+//   native:  EXPO_PUBLIC_AO_SIGNATURE_APP_REDIRECT_URI   (https), one of:
+//            · the CLAIMED callback (iOS only, preferred):
+//                https://<host>/auth/janus/community/app-callback
+//              with EXPO_PUBLIC_AO_SIGNATURE_SCHEME UNSET. The in-app browser
+//              session waits for that exact https URL (iOS 17.4
+//              ASWebAuthenticationSession.Callback.https, the local
+//              expo-ao-auth-session module); no custom scheme, no bounce.
+//            · the legacy runtime bounce: .../auth/janus/app-callback (or
+//              android-callback) with EXPO_PUBLIC_AO_SIGNATURE_SCHEME =
+//              community | community-dev.
 //   web:     EXPO_PUBLIC_AO_SIGNATURE_CLIENT_ID_WEB
 //            EXPO_PUBLIC_AO_SIGNATURE_WEB_REDIRECT_URI   this web app's callback (https)
 // Optional:
@@ -38,6 +46,23 @@ import {AGENT_RUNTIME_BASE_URL} from '#/lib/agent-runtime/config'
  *  app (ex-Studio). */
 export const AO_SIGNATURE_SCHEMES = ['community', 'community-dev'] as const
 export type AOSignatureScheme = (typeof AO_SIGNATURE_SCHEMES)[number]
+
+/** The claimed (universal-link) callback Janus redirects to for the Community
+ *  iOS client. The runtime's AASA ties this path to com.authorityone.app only,
+ *  so no other app can receive the code (no shared bounce). */
+export const AO_SIGNATURE_HTTPS_CALLBACK_PATH =
+  '/auth/janus/community/app-callback'
+
+/** The legacy bounce paths (the runtime swaps the origin for the scheme). */
+const AO_SIGNATURE_BOUNCE_PATHS = [
+  '/auth/janus/app-callback',
+  '/auth/janus/android-callback',
+]
+
+/** How the native in-app browser session learns the authorize leg ended:
+ *  `https` — the claimed callback itself (iOS 17.4+);
+ *  `bounce` — the runtime bounces to `<scheme>://auth/janus/app-callback`. */
+export type AOSignatureCallbackMode = 'https' | 'bounce'
 
 export type AOSignaturePlatform = 'ios' | 'android' | 'web'
 
@@ -62,13 +87,16 @@ export interface AOSignatureConfig {
   clientId: string
   runtimeUrl: string
   /** The exact https redirect Janus allow-lists (and the runtime's
-   *  JANUS_AO_REDIRECT_URIS must contain): the bounce on native, the web
-   *  app's own callback on web. */
+   *  JANUS_AO_REDIRECT_URIS must contain): the claimed callback or the
+   *  bounce on native, the web app's own callback on web. */
   redirectUri: string
-  /** Native only: the custom scheme the runtime bounces to. */
+  /** Native bounce mode only: the custom scheme the runtime bounces to. */
   scheme: AOSignatureScheme | null
-  /** Native only: what the in-app browser session waits for. */
+  /** Native only: what the in-app browser session waits for (the claimed
+   *  https callback itself, or the bounce's scheme URL). */
   callbackUrl: string | null
+  /** Native only (null on web). */
+  callbackMode: AOSignatureCallbackMode | null
   /** The runtime session door this platform redeems at. */
   sessionPath: string
   audience: string | null
@@ -168,23 +196,33 @@ export function parseAOSignatureConfig(
   let redirectUri: string | null
   let scheme: AOSignatureScheme | null = null
   let callbackUrl: string | null = null
+  let callbackMode: AOSignatureCallbackMode | null = null
   if (platform === 'web') {
     redirectUri = httpsUrl(clean(env.webRedirectUri))
   } else {
     redirectUri = httpsUrl(clean(env.appRedirectUri))
+    if (!redirectUri) return null
     const s = clean(env.scheme)
-    if (!(AO_SIGNATURE_SCHEMES as readonly string[]).includes(s)) return null
-    scheme = s as AOSignatureScheme
-    // The runtime bounce keeps the PATH of the https callback it received and
-    // swaps the origin for the scheme (janus-bounce.js bounceTarget).
-    const path = redirectUri ? new URL(redirectUri).pathname : ''
-    if (
-      path !== '/auth/janus/app-callback' &&
-      path !== '/auth/janus/android-callback'
-    ) {
-      return null
+    const u = new URL(redirectUri)
+    const path = u.pathname
+    if (path === AO_SIGNATURE_HTTPS_CALLBACK_PATH) {
+      // The claimed callback: iOS only (Android keeps the bounce until its
+      // own client + App Links exist). A scheme alongside it is a mixed
+      // config - refused rather than guessed at. The OS matches host + path
+      // only, so a port or credentials could never match: refused too.
+      if (platform !== 'ios' || s) return null
+      if (u.port || u.username || u.password) return null
+      callbackMode = 'https'
+      callbackUrl = redirectUri
+    } else {
+      if (!(AO_SIGNATURE_SCHEMES as readonly string[]).includes(s)) return null
+      scheme = s as AOSignatureScheme
+      // The runtime bounce keeps the PATH of the https callback it received
+      // and swaps the origin for the scheme (janus-bounce.js bounceTarget).
+      if (!AO_SIGNATURE_BOUNCE_PATHS.includes(path)) return null
+      callbackMode = 'bounce'
+      callbackUrl = `${scheme}://auth/janus/app-callback`
     }
-    callbackUrl = `${scheme}://auth/janus/app-callback`
   }
   if (!redirectUri) return null
 
@@ -197,6 +235,7 @@ export function parseAOSignatureConfig(
     redirectUri,
     scheme,
     callbackUrl,
+    callbackMode,
     sessionPath: AO_SIGNATURE_SESSION_PATHS[platform],
     audience,
     scopes: AO_SIGNATURE_SCOPES,

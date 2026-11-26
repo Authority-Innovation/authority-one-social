@@ -142,9 +142,39 @@ export async function signInNative(
   let res: AOBrowserResult
   try {
     res = await browser.authorize(buildAuthorizeUrl(cfg, flow), cfg.callbackUrl)
-  } catch {
-    throw new AOSignatureError('janus')
+  } catch (e) {
+    // The port may already say why (e.g. `not-configured`: this binary or OS
+    // can't run the claimed-callback session); anything else is Janus's leg.
+    throw e instanceof AOSignatureError ? e : new AOSignatureError('janus')
   }
   if (res.type !== 'success') throw new AOSignatureError('cancelled')
+  if (cfg.callbackMode === 'https' && !isClaimedCallback(res.url, cfg)) {
+    throw new AOSignatureError('janus')
+  }
   return redeemCallback(deps, flow, res.url, link)
+}
+
+/**
+ * The claimed callback came back on EXACTLY the registered https origin and
+ * path (the OS matches host + path too; this is the belt). PURE.
+ */
+export function isClaimedCallback(
+  url: string,
+  cfg: Pick<AOSignatureConfig, 'redirectUri'>,
+): boolean {
+  let got: URL
+  let want: URL
+  try {
+    got = new URL(url)
+    want = new URL(cfg.redirectUri)
+  } catch {
+    return false
+  }
+  return (
+    got.protocol === 'https:' &&
+    got.origin === want.origin &&
+    got.pathname === want.pathname &&
+    !got.username &&
+    !got.password
+  )
 }
