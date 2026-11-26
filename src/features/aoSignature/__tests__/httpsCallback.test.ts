@@ -206,7 +206,10 @@ describe('signInNative with the claimed callback', () => {
     const r = await signInNative(h.deps, h.port)
     expect(r.did).toBe(DID)
     expect(h.port.authorize.mock.calls[0][1]).toBe(COMMUNITY_HTTPS_CALLBACK)
-    const [grant] = h.redeem.mock.calls[0] as [Record<string, string>]
+    const grant = (h.redeem.mock.calls[0] as unknown[])[0] as Record<
+      string,
+      string
+    >
     expect(grant.redirect_uri).toBe(COMMUNITY_HTTPS_CALLBACK)
     expect(grant.code).toBe('CODE')
     expect(grant.client_id).toBe(IOS_HTTPS_CFG.clientId)
@@ -256,7 +259,7 @@ describe('signInNative with the claimed callback', () => {
         'https://APP-DEV.authority-one.com/auth/janus/community/app-callback',
         IOS_HTTPS_CFG,
       ),
-    ).toBe(true) // hosts are case-insensitive; URL lowercases them
+    ).toBe(false) // fail-closed: RN's URL polyfill does not lowercase hosts, and Janus redirects to the exact lowercase URI
     expect(
       isClaimedCallback(
         'https://x@app-dev.authority-one.com/auth/janus/community/app-callback',
@@ -309,10 +312,20 @@ describe('the native module wrapper', () => {
     ).resolves.toEqual({type: 'cancel'})
   })
 
-  it.each([
-    ['no-module', () => (mockNativePresent = false)],
-    ['unsupported-os', () => mockNative.isSupported.mockReturnValue(false)],
-  ] as const)('refuses to start: %s', async (reason, arrange) => {
+  it.each<[string, () => void]>([
+    [
+      'no-module',
+      () => {
+        mockNativePresent = false
+      },
+    ],
+    [
+      'unsupported-os',
+      () => {
+        mockNative.isSupported.mockReturnValue(false)
+      },
+    ],
+  ])('refuses to start: %s', async (reason, arrange) => {
     arrange()
     _resetAOAuthSessionForTests()
     const p = authorizeWithHttpsCallback(

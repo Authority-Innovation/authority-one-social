@@ -27,8 +27,23 @@ jest.mock('#/alf', () => ({
 jest.mock('#/components/Button', () => {
   const {Pressable} = require('react-native')
   return {
-    Button: ({testID, onPress}: {testID?: string; onPress: () => void}) =>
-      testID ? <Pressable testID={testID} onPress={onPress} /> : null,
+    Button: ({
+      testID,
+      onPress,
+      label,
+    }: {
+      testID?: string
+      onPress: () => void
+      label?: string
+    }) =>
+      testID ? (
+        <Pressable
+          testID={testID}
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+        />
+      ) : null,
     ButtonText: () => null,
   }
 })
